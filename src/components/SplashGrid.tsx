@@ -22,6 +22,7 @@ export function SplashGrid() {
     const drawPillar = (x: number, y: number, z: number, size: number, gridSize: number) => {
       const tileW = size * 2;
       const tileH = size;
+      const radius = 4; // Roundness radius
       
       // Isometric projection
       // Center the grid on the screen
@@ -38,14 +39,20 @@ export function SplashGrid() {
       
       const normalizedZ = Math.max(0, Math.min(1, z / 60));
       
-      // Top face (lightest)
+      // Top face (lightest) - with rounded corners
       ctx.fillStyle = `hsla(${hue}, 80%, ${90 + normalizedZ * 10}%, 0.9)`;
       ctx.beginPath();
-      ctx.moveTo(screenX, screenY);
-      ctx.lineTo(screenX + tileW / 2, screenY + tileH / 2);
-      ctx.lineTo(screenX, screenY + tileH);
-      ctx.lineTo(screenX - tileW / 2, screenY + tileH / 2);
-      ctx.closePath();
+      const p1 = { x: screenX, y: screenY };
+      const p2 = { x: screenX + tileW / 2, y: screenY + tileH / 2 };
+      const p3 = { x: screenX, y: screenY + tileH };
+      const p4 = { x: screenX - tileW / 2, y: screenY + tileH / 2 };
+      
+      // Start from top and curve to right
+      ctx.moveTo(p1.x + (p2.x - p1.x) * 0.3, p1.y + (p2.y - p1.y) * 0.3);
+      ctx.quadraticCurveTo(p2.x - radius, p2.y - radius, p2.x - (p2.x - p3.x) * 0.3, p2.y + (p3.y - p2.y) * 0.3);
+      ctx.quadraticCurveTo(p3.x + radius, p3.y + radius, p3.x - (p3.x - p4.x) * 0.3, p3.y + (p4.y - p3.y) * 0.3);
+      ctx.quadraticCurveTo(p4.x - radius, p4.y - radius, p4.x + (p1.x - p4.x) * 0.3, p4.y + (p1.y - p4.y) * 0.3);
+      ctx.quadraticCurveTo(p1.x - radius, p1.y - radius, p1.x + (p2.x - p1.x) * 0.3, p1.y + (p2.y - p1.y) * 0.3);
       ctx.fill();
       
       // Add a subtle stroke to define the edges
@@ -56,11 +63,15 @@ export function SplashGrid() {
       // Right face (medium)
       ctx.fillStyle = `hsla(${hue}, 70%, ${75 + normalizedZ * 10}%, 0.85)`;
       ctx.beginPath();
-      ctx.moveTo(screenX, screenY + tileH);
-      ctx.lineTo(screenX + tileW / 2, screenY + tileH / 2);
-      ctx.lineTo(screenX + tileW / 2, screenY + tileH / 2 + 200); // 200 is the base depth
-      ctx.lineTo(screenX, screenY + tileH + 200);
-      ctx.closePath();
+      const rp1 = { x: screenX, y: screenY + tileH };
+      const rp2 = { x: screenX + tileW / 2, y: screenY + tileH / 2 };
+      const rp3 = { x: screenX + tileW / 2, y: screenY + tileH / 2 + 200 };
+      const rp4 = { x: screenX, y: screenY + tileH + 200 };
+      
+      ctx.moveTo(rp1.x, rp1.y + (rp2.y - rp1.y) * 0.3);
+      ctx.quadraticCurveTo(rp2.x + radius, rp2.y, rp2.x + (rp3.x - rp2.x) * 0.3, rp2.y + (rp3.y - rp2.y) * 0.3);
+      ctx.quadraticCurveTo(rp3.x + radius, rp3.y, rp4.x + (rp3.x - rp4.x) * 0.3, rp3.y + (rp4.y - rp3.y) * 0.3);
+      ctx.quadraticCurveTo(rp4.x - radius, rp4.y, rp1.x, rp1.y + (rp2.y - rp1.y) * 0.3);
       ctx.fill();
       ctx.strokeStyle = `hsla(${hue}, 70%, 85%, 0.3)`;
       ctx.stroke();
@@ -68,11 +79,15 @@ export function SplashGrid() {
       // Left face (darkest)
       ctx.fillStyle = `hsla(${hue}, 60%, ${65 + normalizedZ * 10}%, 0.85)`;
       ctx.beginPath();
-      ctx.moveTo(screenX, screenY + tileH);
-      ctx.lineTo(screenX - tileW / 2, screenY + tileH / 2);
-      ctx.lineTo(screenX - tileW / 2, screenY + tileH / 2 + 200);
-      ctx.lineTo(screenX, screenY + tileH + 200);
-      ctx.closePath();
+      const lp1 = { x: screenX, y: screenY + tileH };
+      const lp2 = { x: screenX - tileW / 2, y: screenY + tileH / 2 };
+      const lp3 = { x: screenX - tileW / 2, y: screenY + tileH / 2 + 200 };
+      const lp4 = { x: screenX, y: screenY + tileH + 200 };
+      
+      ctx.moveTo(lp1.x, lp1.y + (lp2.y - lp1.y) * 0.3);
+      ctx.quadraticCurveTo(lp2.x - radius, lp2.y, lp2.x + (lp3.x - lp2.x) * 0.3, lp2.y + (lp3.y - lp2.y) * 0.3);
+      ctx.quadraticCurveTo(lp3.x - radius, lp3.y, lp4.x + (lp3.x - lp4.x) * 0.3, lp3.y + (lp4.y - lp3.y) * 0.3);
+      ctx.quadraticCurveTo(lp4.x + radius, lp4.y, lp1.x, lp1.y + (lp2.y - lp1.y) * 0.3);
       ctx.fill();
       ctx.strokeStyle = `hsla(${hue}, 60%, 75%, 0.3)`;
       ctx.stroke();
