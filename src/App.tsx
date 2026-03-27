@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { Search, Loader2, Sparkles, FileText, Presentation, ExternalLink, Info, Tag, Users, Filter, ChevronDown, Check, Clock, Trash2, Target, Upload, X, RefreshCw, Calendar, Activity } from 'lucide-react';
-import { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport } from './services/ai';
+import { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport } from './services/azure-openai';
 import { generateCulturalMatrix, autoPopulateFields, suggestBrands, askMatrixQuestion, generateDeepDive, generateDeepDivesBatch } from './services/azure-openai';
 import { SplashGrid } from './components/SplashGrid';
 import pptxgen from 'pptxgenjs';
