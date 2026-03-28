@@ -294,3 +294,6 @@ Do not include any commentary outside the JSON structure.`;
 
   return JSON.parse(finalText) as CulturalMatrix;
 }
+
+// Re-export types for convenience
+export type { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport } from "./ai";
