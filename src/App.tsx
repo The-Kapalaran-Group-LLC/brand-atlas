@@ -895,10 +895,10 @@ export default function App() {
                 <Sparkles className="w-12 h-12 text-indigo-500" />
               </div>
               <h1 className="text-5xl md:text-7xl font-black tracking-tight text-zinc-900 mb-6 drop-shadow-sm">
-                Cultural <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">Archeologist</span>
+                Cultural <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">Matrix</span>
               </h1>
               <p className="text-xl md:text-2xl text-zinc-600 max-w-2xl mb-12 font-medium drop-shadow-sm">
-                Generate deep cultural insights and audience analysis in seconds.
+                Generate cultural insights and audience analysis in seconds.
               </p>
             </motion.div>
           </motion.div>
@@ -1147,7 +1147,7 @@ export default function App() {
               Cultural Archeologist
             </h1>
             <p className="text-lg text-zinc-500 max-w-2xl mx-auto leading-relaxed">
-              Deep dive into any audience or culture.
+              Deep dive into any culture or audience.
             </p>
           </motion.div>
 
