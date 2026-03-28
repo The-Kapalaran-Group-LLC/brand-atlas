@@ -9,6 +9,8 @@ interface Particle {
   hue: number;
   opacity: number;
   life: number;
+  originalX: number;
+  originalY: number;
 }
 
 export function SplashGrid() {
@@ -31,85 +33,109 @@ export function SplashGrid() {
     window.addEventListener('resize', resize);
     resize();
 
-    // Create initial particles
-    const createParticle = () => {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 2 + 1;
-      const size = Math.random() * 40 + 10;
+    // Create particles distributed across screen
+    const createParticles = () => {
       const hues = [230, 190, 290, 40, 60]; // Indigo, cyan, fuchsia, orange, red
+      const count = 120;
       
-      return {
-        x: canvas.width / 2 + (Math.random() - 0.5) * canvas.width * 0.3,
-        y: canvas.height / 2 + (Math.random() - 0.5) * canvas.height * 0.3,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        size: size,
-        hue: hues[Math.floor(Math.random() * hues.length)],
-        opacity: Math.random() * 0.6 + 0.3,
-        life: 1
-      };
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2;
+        const distance = Math.random() * 300 + 100;
+        const x = canvas.width / 2 + Math.cos(angle) * distance;
+        const y = canvas.height / 2 + Math.sin(angle) * distance;
+        
+        particles.push({
+          x: x,
+          y: y,
+          originalX: x,
+          originalY: y,
+          vx: (Math.random() - 0.5) * 2,
+          vy: (Math.random() - 0.5) * 2,
+          size: Math.random() * 30 + 15,
+          hue: hues[Math.floor(Math.random() * hues.length)],
+          opacity: Math.random() * 0.5 + 0.3,
+          life: 1
+        });
+      }
     };
 
-    // Initialize particle pool
-    for (let i = 0; i < 60; i++) {
-      particles.push(createParticle());
-    }
+    createParticles();
 
     const render = () => {
-      // Clear with semi-transparent background for motion blur effect
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+      // Semi-transparent background for motion blur
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Update and draw particles
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
+      // Draw connecting lines between nearby particles
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const p1 = particles[i];
+          const p2 = particles[j];
+          const dx = p2.x - p1.x;
+          const dy = p2.y - p1.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // Update position
+          if (distance < 150) {
+            const opacity = (1 - distance / 150) * 0.15;
+            ctx.strokeStyle = `rgba(100, 150, 255, ${opacity})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Update and draw particles
+      particles.forEach((p) => {
+        // Attract toward center with some chaos
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const dx = centerX - p.x;
+        const dy = centerY - p.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // Subtle attraction to center + orbital motion
+        const attraction = 0.0002;
+        p.vx += (dx / (distance + 1)) * attraction + Math.sin(time * 0.01 + p.x * 0.001) * 0.02;
+        p.vy += (dy / (distance + 1)) * attraction + Math.cos(time * 0.01 + p.y * 0.001) * 0.02;
+
+        // Apply velocity
         p.x += p.vx;
         p.y += p.vy;
-
-        // Add some wave motion
-        p.vx += Math.sin(time * 0.02 + p.y * 0.01) * 0.1;
-        p.vy += Math.cos(time * 0.02 + p.x * 0.01) * 0.1;
 
         // Damping
         p.vx *= 0.98;
         p.vy *= 0.98;
 
-        // Fade out
-        p.life -= 0.005;
-        p.opacity *= 0.995;
+        // Wrap around screen edges
+        if (p.x < -100) p.x = canvas.width + 100;
+        if (p.x > canvas.width + 100) p.x = -100;
+        if (p.y < -100) p.y = canvas.height + 100;
+        if (p.y > canvas.height + 100) p.y = -100;
 
-        // Wrap around or regenerate
-        if (p.life < 0 || p.x < -100 || p.x > canvas.width + 100 || p.y < -100 || p.y > canvas.height + 100) {
-          particles[i] = createParticle();
-          continue;
-        }
-
-        // Draw glowing particle
+        // Draw glowing particle with bokeh effect
         const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
-        const alpha = Math.max(0, p.life * p.opacity);
-        
-        gradient.addColorStop(0, `hsla(${p.hue}, 100%, 60%, ${alpha * 0.8})`);
-        gradient.addColorStop(0.5, `hsla(${p.hue}, 100%, 50%, ${alpha * 0.4})`);
+        const alpha = p.opacity * Math.sin(time * 0.005 + p.hue);
+
+        gradient.addColorStop(0, `hsla(${p.hue}, 100%, 60%, ${Math.max(0, alpha * 0.8)})`);
+        gradient.addColorStop(0.4, `hsla(${p.hue}, 100%, 50%, ${Math.max(0, alpha * 0.5)})`);
         gradient.addColorStop(1, `hsla(${p.hue}, 100%, 40%, 0)`);
 
         ctx.fillStyle = gradient;
-        ctx.fillRect(p.x - p.size, p.y - p.size, p.size * 2, p.size * 2);
-
-        // Add core glow
-        ctx.fillStyle = `hsla(${p.hue}, 100%, 70%, ${alpha * 0.3})`;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * 0.3, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
-      }
 
-      // Add occasional new particles with spread
-      if (Math.random() < 0.3) {
-        particles.push(createParticle());
-      }
+        // Bright core
+        ctx.fillStyle = `hsla(${p.hue}, 100%, 80%, ${Math.max(0, alpha * 0.4)})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+      });
 
-      time += 1;
+      time++;
       animationFrameId = requestAnimationFrame(render);
     };
 
@@ -119,6 +145,10 @@ export function SplashGrid() {
       window.removeEventListener('resize', resize);
       cancelAnimationFrame(animationFrameId);
     };
+  }, []);
+
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />;
+}
   }, []);
 
   return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />;
