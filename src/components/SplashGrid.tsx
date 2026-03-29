@@ -3,8 +3,8 @@ import React, { useEffect, useRef } from 'react';
 const TILE_W = 44;
 const TILE_H = 22;
 const ROAD_INTERVAL = 6;
-const CITY_SATURATION_BOOST = 3;
-const CITY_LIGHTNESS_SHIFT = 2;
+const CITY_SATURATION_BOOST = 0;
+const CITY_LIGHTNESS_SHIFT = 20;
 const DISSOLVE_BLEND = 0.28;
 const DISSOLVE_START_DELAY_MS = 220;
 const DISSOLVE_FINAL_HOLD_MS = 180;
@@ -234,10 +234,10 @@ export function SplashGrid() {
 
         if (renderRoad) {
           const roadFill = bridge
-            ? `hsla(${districtHue - 2}, ${sat(12 + colorCycle * 9)}%, ${light(42 - night * 14 + pulseLift * 0.3)}%, 0.88)`
+            ? `hsla(0, 0%, 72%, 0.88)`
             : arterialRoad
-              ? `hsla(${districtHue - 10}, ${sat(14 + colorCycle * 10)}%, ${light(33 - night * 10 + pulseLift * 0.25)}%, 0.92)`
-              : `hsla(${districtHue - 6}, ${sat(11 + colorCycle * 8)}%, ${light(39 - night * 12 + pulseLift * 0.25)}%, 0.88)`;
+              ? `hsla(0, 0%, 64%, 0.92)`
+              : `hsla(0, 0%, 68%, 0.88)`;
           drawPoly([top, right, bottom, left], roadFill);
 
           if (arterialRoad) {
@@ -327,7 +327,8 @@ export function SplashGrid() {
         const districtBoost = district === 'commercial' ? 54 : district === 'industrial' ? 18 : 0;
         const contextScale = inLandmarkRing && !isLandmark ? 0.7 : 1;
         const baseHeight = (20 + zoneCenter * 118 + districtBoost + hash(x * 3, y * 2) * 20) * contextScale;
-        const h = (isLandmark ? baseHeight * 1.52 : baseHeight) * heightScale;
+        const breathe = 1 + Math.sin(time * 1.35 + hash(x * 1.7, y * 2.3) * Math.PI * 2) * 0.07;
+        const h = (isLandmark ? baseHeight * 1.52 : baseHeight) * heightScale * breathe;
 
         const spread = district === 'commercial' ? 0.84 : district === 'industrial' ? 0.79 : 0.7;
         const footprint = spread - hash(x + 9, y - 4) * 0.1;
@@ -440,10 +441,6 @@ export function SplashGrid() {
 
         ctx.restore();
       }
-
-      // Keep a subtle daytime lift over the scene.
-      ctx.fillStyle = `rgba(255, 255, 255, ${0.1 * (1 - night) * cityVisibility})`;
-      ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
       ctx.restore();
 

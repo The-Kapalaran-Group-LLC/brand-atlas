@@ -991,13 +991,13 @@ export default function App() {
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5, duration: 0.8 }}
+              transition={{ delay: 0.12, duration: 0.8 }}
               className="relative z-20 flex flex-col items-center text-center px-4 py-6 pointer-events-none"
             >
-              <div className="inline-flex items-center justify-center p-2.5 bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/50 mb-8">
-                <Sparkles className="w-7 h-7 text-[#7c3aed]" />
+              <div className="inline-flex items-center justify-center p-2.5 bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 rounded-2xl shadow-md border border-white/20 mb-8">
+                <Sparkles className="w-7 h-7 text-white" />
               </div>
-              <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-zinc-950 mb-5 drop-shadow-[0_2px_8px_rgba(255,255,255,0.5)] select-none">
+              <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-zinc-950 mb-5 select-none">
                 Cultural{' '}
                 <motion.span
                   initial={{ color: '#09090b' }}
@@ -1008,7 +1008,7 @@ export default function App() {
                   Archeologist
                 </motion.span>
               </h1>
-              <p className="text-xl md:text-2xl text-zinc-950 max-w-2xl mb-6 font-semibold drop-shadow-[0_1px_4px_rgba(255,255,255,0.5)] select-none">
+              <p className="text-xl md:text-2xl text-zinc-950 max-w-2xl mb-6 font-semibold select-none">
                 Generate cultural insights and audience analysis in seconds.
               </p>
             </motion.div>
