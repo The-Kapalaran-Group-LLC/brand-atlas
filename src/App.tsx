@@ -892,7 +892,15 @@ export default function App() {
                 <Sparkles className="w-12 h-12 text-indigo-500" />
               </div>
               <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-zinc-900 mb-5 drop-shadow-[0_2px_10px_rgba(255,255,255,0.45)]">
-                Cultural <span className="text-zinc-900">Archeologist</span>
+                Cultural{' '}
+                <motion.span
+                  initial={{ color: '#18181b' }}
+                  animate={{ color: '#18181b' }}
+                  exit={{ color: '#d946ef' }}
+                  transition={{ duration: 0.8, ease: 'easeInOut' }}
+                >
+                  Archeologist
+                </motion.span>
               </h1>
               <p className="text-xl md:text-2xl text-white max-w-2xl mb-10 font-semibold drop-shadow-[0_1px_8px_rgba(0,0,0,0.35)]">
                 Generate cultural insights and audience analysis in seconds.
