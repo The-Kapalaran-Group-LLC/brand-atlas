@@ -161,8 +161,8 @@ export function SplashGrid() {
         const renderRoad = road && !outsideCity;
         const bridge = water && renderRoad;
 
-        const downtown = Math.max(0, 1 - Math.hypot(x + 1, y - 1) / (radius * 0.9));
-        const midtown = Math.max(0, 1 - Math.hypot(x - 7, y + 6) / (radius * 1.2));
+        const downtown = Math.max(0, 1 - Math.hypot(x + 1, y - 1) / (radiusX * 0.9));
+        const midtown = Math.max(0, 1 - Math.hypot(x - 7, y + 6) / (radiusX * 1.2));
         const zoneCenter = Math.max(downtown, midtown * 0.72);
 
         let district: 'residential' | 'commercial' | 'industrial' = 'residential';
@@ -421,10 +421,10 @@ export function SplashGrid() {
         // Fast global fade to make the dissolve feel snappy.
         ctx.fillStyle = `rgba(0, 0, 0, ${0.26 * dissolveProgress})`;
         ctx.fillRect(
-          originX - radius * tileW,
-          originY - radius * tileH,
-          radius * tileW * 2,
-          radius * tileH * 2
+          originX - radiusX * tileW,
+          originY - radiusY * tileH,
+          radiusX * tileW * 2,
+          radiusY * tileH * 2
         );
 
         // Deterministic speckle erase for a dissolve effect instead of a plain fade.
@@ -433,8 +433,8 @@ export function SplashGrid() {
         for (let i = 0; i < particleCount; i++) {
           const rx = hash(i * 3.17 + timeSeed * 0.1, i * 7.91);
           const ry = hash(i * 5.11, i * 2.73 + timeSeed * 0.07);
-          const px = originX + (rx * 2 - 1) * radius * tileW * 0.9;
-          const py = originY + (ry * 2 - 1) * radius * tileH * 0.84;
+          const px = originX + (rx * 2 - 1) * radiusX * tileW * 0.9;
+          const py = originY + (ry * 2 - 1) * radiusY * tileH * 0.84;
           const pr = 0.7 + hash(i * 1.3, i * 9.2) * 2.4;
 
           ctx.beginPath();
