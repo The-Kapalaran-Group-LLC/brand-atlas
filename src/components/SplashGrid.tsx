@@ -2,6 +2,12 @@ import React, { useEffect, useRef } from 'react';
 
 export function SplashGrid() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const nightTargetRef = useRef(0);
+  const nightProgressRef = useRef(0);
+  const buildingHitAreasRef = useRef<Array<Array<{ x: number; y: number }>>>([]);
+  const transformRef = useRef({ originX: 0, originY: 0, cityScale: 1 });
+  const colorCycleUntilRef = useRef(0);
+  const colorCycleProgressRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -33,6 +39,33 @@ export function SplashGrid() {
       return s - Math.floor(s);
     };
 
+    const pointInPolygon = (px: number, py: number, polygon: Array<{ x: number; y: number }>) => {
+      let inside = false;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i].x;
+        const yi = polygon[i].y;
+        const xj = polygon[j].x;
+        const yj = polygon[j].y;
+
+        const intersects = ((yi > py) !== (yj > py))
+          && (px < (xj - xi) * (py - yi) / ((yj - yi) || 1e-6) + xi);
+        if (intersects) inside = !inside;
+      }
+      return inside;
+    };
+
+    const getNightLevelFromLocalTime = () => {
+      const now = new Date();
+      const h = now.getHours() + now.getMinutes() / 60;
+
+      // 0 = day, 1 = night, with blended transitions around dawn/dusk.
+      if (h < 5) return 1;
+      if (h < 7) return 1 - (h - 5) / 2;
+      if (h < 17) return 0;
+      if (h < 19.5) return (h - 17) / 2.5;
+      return 1;
+    };
+
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       canvas.width = window.innerWidth * dpr;
@@ -45,6 +78,25 @@ export function SplashGrid() {
     window.addEventListener('resize', resize);
     resize();
 
+    const handleCanvasClick = (event: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const sx = event.clientX - rect.left;
+      const sy = event.clientY - rect.top;
+
+      const { originX, originY, cityScale } = transformRef.current;
+      const x = originX + (sx - originX) / cityScale;
+      const y = originY + (sy - originY) / cityScale;
+
+      for (let i = buildingHitAreasRef.current.length - 1; i >= 0; i--) {
+        if (pointInPolygon(x, y, buildingHitAreasRef.current[i])) {
+          colorCycleUntilRef.current = Date.now() + 90_000;
+          break;
+        }
+      }
+    };
+
+    canvas.addEventListener('click', handleCanvasClick);
+
     const render = () => {
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
@@ -54,7 +106,23 @@ export function SplashGrid() {
       const originX = window.innerWidth * 0.5;
       const originY = window.innerHeight * 0.5 + 40;
       const cityScale = 0.7;
-      const accentHue = 306;
+      const nightEase = 0.04;
+
+      const localNight = getNightLevelFromLocalTime();
+      nightTargetRef.current = localNight;
+
+      const colorCycleTarget = Date.now() < colorCycleUntilRef.current ? 1 : 0;
+      colorCycleProgressRef.current += (colorCycleTarget - colorCycleProgressRef.current) * 0.05;
+      const colorCycle = Math.max(0, Math.min(1, colorCycleProgressRef.current));
+      const hueShift = colorCycle * (Math.sin(time * 3.1) * 110 + Math.sin(time * 1.55 + 1.2) * 50);
+      const pulseLift = colorCycle * ((Math.sin(time * 3.1) + 1) * 0.5) * 8;
+      const accentHue = 306 + hueShift * 0.6;
+
+      nightProgressRef.current += (nightTargetRef.current - nightProgressRef.current) * nightEase;
+      const night = Math.max(0, Math.min(1, nightProgressRef.current));
+
+      transformRef.current = { originX, originY, cityScale };
+      buildingHitAreasRef.current = [];
 
       ctx.save();
       ctx.translate(originX, originY);
@@ -106,7 +174,7 @@ export function SplashGrid() {
 
         const plaza = !renderRoad && !water && district === 'commercial' && hash(x * 4, y * 3) > 0.84;
         const park = !renderRoad && !water && !plaza && district !== 'industrial' && hash(x + 3, y - 8) > 0.9;
-        const districtHue = 210 + ((x + y + 60) % 8) * 4;
+        const districtHue = 210 + ((x + y + 60) % 8) * 4 + hueShift;
 
         if (outsideCity && !water) {
           return;
@@ -114,8 +182,8 @@ export function SplashGrid() {
 
         if (water && !bridge) {
           const canal = ctx.createLinearGradient(top.x, top.y, bottom.x, bottom.y);
-          canal.addColorStop(0, `hsla(${districtHue + 26}, 62%, 60%, 0.72)`);
-          canal.addColorStop(1, `hsla(${districtHue + 18}, 72%, 38%, 0.72)`);
+          canal.addColorStop(0, `hsla(${districtHue + 26}, ${62 + colorCycle * 14}%, ${60 - night * 18 + pulseLift * 0.35}%, 0.72)`);
+          canal.addColorStop(1, `hsla(${districtHue + 18}, ${72 + colorCycle * 12}%, ${38 - night * 12 + pulseLift * 0.25}%, 0.72)`);
           drawPoly([top, right, bottom, left], canal);
 
           if (hash(x + 13, y - 11) > 0.78) {
@@ -133,7 +201,7 @@ export function SplashGrid() {
         }
 
         if (rail && !renderRoad) {
-          drawPoly([top, right, bottom, left], `hsla(${districtHue - 5}, 12%, 46%, 0.72)`);
+          drawPoly([top, right, bottom, left], `hsla(${districtHue - 5}, ${12 + colorCycle * 10}%, ${46 - night * 16 + pulseLift * 0.3}%, 0.72)`);
           drawPoly(
             [
               { x: left.x + tileW * 0.16, y: left.y - tileH * 0.1 },
@@ -141,7 +209,7 @@ export function SplashGrid() {
               { x: right.x - tileW * 0.22, y: right.y - tileH * 0.03 },
               { x: left.x + tileW * 0.22, y: left.y - tileH * 0.03 },
             ],
-            `hsla(${districtHue + 2}, 18%, 62%, 0.58)`
+            `hsla(${districtHue + 2}, 18%, ${62 - night * 18}%, 0.58)`
           );
           drawPoly(
             [
@@ -150,7 +218,7 @@ export function SplashGrid() {
               { x: right.x - tileW * 0.22, y: right.y + tileH * 0.1 },
               { x: left.x + tileW * 0.22, y: left.y + tileH * 0.1 },
             ],
-            `hsla(${districtHue + 2}, 16%, 56%, 0.56)`
+            `hsla(${districtHue + 2}, 16%, ${56 - night * 16}%, 0.56)`
           );
 
           const trainT = (Math.sin(time * 1.1 + x * 0.28 - y * 0.33) + 1) * 0.5;
@@ -165,10 +233,10 @@ export function SplashGrid() {
 
         if (renderRoad) {
           const roadFill = bridge
-            ? `hsla(${districtHue - 2}, 12%, 42%, 0.88)`
+            ? `hsla(${districtHue - 2}, ${12 + colorCycle * 9}%, ${42 - night * 14 + pulseLift * 0.3}%, 0.88)`
             : arterialRoad
-              ? `hsla(${districtHue - 10}, 14%, 33%, 0.92)`
-              : `hsla(${districtHue - 6}, 11%, 39%, 0.88)`;
+              ? `hsla(${districtHue - 10}, ${14 + colorCycle * 10}%, ${33 - night * 10 + pulseLift * 0.25}%, 0.92)`
+              : `hsla(${districtHue - 6}, ${11 + colorCycle * 8}%, ${39 - night * 12 + pulseLift * 0.25}%, 0.88)`;
           drawPoly([top, right, bottom, left], roadFill);
 
           if (arterialRoad) {
@@ -179,7 +247,7 @@ export function SplashGrid() {
                 { x: bottom.x, y: bottom.y - tileH * 0.19 },
                 { x: left.x + tileW * 0.2, y: left.y },
               ],
-              `hsla(${districtHue + 4}, 14%, 55%, 0.28)`
+              `hsla(${districtHue + 4}, 14%, ${55 - night * 18}%, 0.28)`
             );
 
             for (let k = 0; k < 3; k++) {
@@ -220,12 +288,12 @@ export function SplashGrid() {
         }
 
         if (park) {
-          drawPoly([top, right, bottom, left], `hsla(${districtHue - 42}, 30%, 66%, 0.7)`);
+          drawPoly([top, right, bottom, left], `hsla(${districtHue - 42}, ${30 + colorCycle * 14}%, ${66 - night * 20 + pulseLift * 0.35}%, 0.7)`);
           const trees = 2 + Math.floor(hash(x + 5, y - 2) * 3);
           for (let i = 0; i < trees; i++) {
             const tx = left.x + (i + 1) * (right.x - left.x) / (trees + 1);
             const ty = top.y + tileH * 0.22 + (i % 2) * 2;
-            ctx.fillStyle = `hsla(${districtHue - 36}, 44%, ${34 + i * 5}%, 0.74)`;
+            ctx.fillStyle = `hsla(${districtHue - 36}, 44%, ${Math.max(14, 34 + i * 5 - night * 16)}%, 0.74)`;
             ctx.beginPath();
             ctx.arc(tx, ty, 2.3, 0, Math.PI * 2);
             ctx.fill();
@@ -234,7 +302,7 @@ export function SplashGrid() {
         }
 
         if (plaza) {
-          drawPoly([top, right, bottom, left], `hsla(${districtHue + 8}, 14%, 76%, 0.74)`);
+          drawPoly([top, right, bottom, left], `hsla(${districtHue + 8}, ${14 + colorCycle * 10}%, ${76 - night * 18 + pulseLift * 0.25}%, 0.74)`);
           drawPoly(
             [
               { x: top.x - tileW * 0.08, y: top.y + tileH * 0.2 },
@@ -274,6 +342,10 @@ export function SplashGrid() {
         const bs = { x: basePt.x, y: basePt.y + (tileH * footprint) * 0.5 };
         const bw = { x: basePt.x - (tileW * footprint) * 0.5, y: basePt.y };
 
+        buildingHitAreasRef.current.push([n, e, s, w]);
+        buildingHitAreasRef.current.push([e, s, bs, be]);
+        buildingHitAreasRef.current.push([w, s, bs, bw]);
+
         drawPoly(
           [
             { x: bw.x + tileW * 0.08, y: bw.y + tileH * 0.25 },
@@ -281,45 +353,30 @@ export function SplashGrid() {
             { x: bs.x + tileW * 0.34, y: bs.y + tileH * 0.28 },
             { x: bw.x + tileW * 0.24, y: bw.y + tileH * 0.34 },
           ],
-          `rgba(15,20,34,0.14)`
+          `rgba(15,20,34,${0.14 + night * 0.16})`
         );
 
         const sideEast = district === 'commercial'
-          ? `hsla(${districtHue + 6}, 56%, 42%, 0.9)`
+          ? `hsla(${districtHue + 6}, ${56 + colorCycle * 12}%, ${42 - night * 17 + pulseLift * 0.2}%, 0.9)`
           : district === 'industrial'
-            ? `hsla(${districtHue + 2}, 32%, 40%, 0.9)`
-            : `hsla(${districtHue + 2}, 46%, 44%, 0.88)`;
+            ? `hsla(${districtHue + 2}, ${32 + colorCycle * 10}%, ${40 - night * 14 + pulseLift * 0.2}%, 0.9)`
+            : `hsla(${districtHue + 2}, ${46 + colorCycle * 10}%, ${44 - night * 16 + pulseLift * 0.2}%, 0.88)`;
 
         const sideWest = district === 'commercial'
-          ? `hsla(${districtHue - 2}, 46%, 30%, 0.92)`
+          ? `hsla(${districtHue - 2}, ${46 + colorCycle * 10}%, ${30 - night * 12 + pulseLift * 0.15}%, 0.92)`
           : district === 'industrial'
-            ? `hsla(${districtHue - 4}, 22%, 30%, 0.92)`
-            : `hsla(${districtHue - 4}, 34%, 34%, 0.9)`;
+            ? `hsla(${districtHue - 4}, ${22 + colorCycle * 8}%, ${30 - night * 10 + pulseLift * 0.15}%, 0.92)`
+            : `hsla(${districtHue - 4}, ${34 + colorCycle * 8}%, ${34 - night * 12 + pulseLift * 0.15}%, 0.9)`;
 
         const roofColor = district === 'commercial'
-          ? `hsla(${districtHue + 18}, 78%, 78%, 0.94)`
+          ? `hsla(${districtHue + 18}, ${78 + colorCycle * 10}%, ${78 - night * 28 + pulseLift * 0.22}%, 0.94)`
           : district === 'industrial'
-            ? `hsla(${districtHue + 10}, 34%, 64%, 0.9)`
-            : `hsla(${districtHue + 14}, 56%, 74%, 0.92)`;
+            ? `hsla(${districtHue + 10}, ${34 + colorCycle * 10}%, ${64 - night * 22 + pulseLift * 0.22}%, 0.9)`
+            : `hsla(${districtHue + 14}, ${56 + colorCycle * 10}%, ${74 - night * 24 + pulseLift * 0.22}%, 0.92)`;
 
         drawPoly([e, s, bs, be], sideEast);
         drawPoly([w, s, bs, bw], sideWest);
         drawPoly([n, e, s, w], roofColor);
-
-        const rows = Math.max(2, Math.floor(h / 17));
-        const phase = (Math.sin(time * 0.55) + 1) * 0.5;
-        const active = district === 'commercial' ? 0.78 : district === 'industrial' ? 0.48 : 0.6;
-        for (let i = 0; i < rows; i++) {
-          const lit = hash(x * 5 + i * 11 + Math.floor(time * 2), y * 5 + i * 7) < active * (0.5 + phase * 0.5);
-          if (!lit) continue;
-          const wy = basePt.y - (i + 1) * (h / (rows + 1));
-          ctx.fillStyle = district === 'commercial'
-            ? `hsla(${accentHue}, 80%, 72%, 0.24)`
-            : `hsla(${districtHue + 18}, 86%, 84%, 0.2)`;
-          ctx.beginPath();
-          ctx.arc(basePt.x, wy, 0.86, 0, Math.PI * 2);
-          ctx.fill();
-        }
 
         if (district === 'commercial' && !isLandmark && hash(x - 8, y + 9) > 0.8) {
           drawPoly(
@@ -356,8 +413,8 @@ export function SplashGrid() {
         }
       });
 
-      // Lift overall city brightness for a lighter splash treatment.
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      // Keep daytime lift, but fade it at night.
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.2 * (1 - night)})`;
       ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
       ctx.restore();
@@ -369,10 +426,11 @@ export function SplashGrid() {
     render();
 
     return () => {
+      canvas.removeEventListener('click', handleCanvasClick);
       window.removeEventListener('resize', resize);
       cancelAnimationFrame(animationFrameId);
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />;
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />;
 }

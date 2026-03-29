@@ -949,12 +949,12 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5, duration: 0.8 }}
-              className="relative z-10 flex flex-col items-center text-center px-4 py-6"
+              className="relative z-10 flex flex-col items-center text-center px-4 py-6 pointer-events-none"
             >
               <div className="inline-flex items-center justify-center p-4 bg-white/80 backdrop-blur-md rounded-3xl shadow-xl border border-white/50 mb-8">
                 <Sparkles className="w-12 h-12 text-[#7c3aed]" />
               </div>
-              <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-zinc-900 mb-5 drop-shadow-[0_2px_10px_rgba(255,255,255,0.45)]">
+              <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-zinc-900 mb-5 drop-shadow-[0_2px_10px_rgba(255,255,255,0.45)] select-none">
                 Cultural{' '}
                 <motion.span
                   initial={{ color: '#18181b' }}
@@ -965,7 +965,7 @@ export default function App() {
                   Archeologist
                 </motion.span>
               </h1>
-              <p className="text-xl md:text-2xl text-white max-w-2xl mb-10 font-semibold drop-shadow-[0_1px_8px_rgba(0,0,0,0.35)]">
+              <p className="text-xl md:text-2xl text-white max-w-2xl mb-10 font-semibold drop-shadow-[0_1px_8px_rgba(0,0,0,0.35)] select-none">
                 Generate cultural insights and audience analysis in seconds.
               </p>
             </motion.div>
@@ -1211,10 +1211,10 @@ export default function App() {
             <div className="inline-flex items-center justify-center p-2 bg-white rounded-2xl shadow-sm border border-zinc-200/50 mb-8">
               <Search className="w-5 h-5 text-indigo-500" />
             </div>
-            <h1 className="text-4xl md:text-6xl font-medium tracking-tight text-zinc-900 mb-6">
+            <h1 className="text-4xl md:text-6xl font-medium tracking-tight text-zinc-900 mb-6 select-none">
               Cultural <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">Archeologist</span>
             </h1>
-            <p className="text-lg text-zinc-500 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-lg text-zinc-500 max-w-2xl mx-auto leading-relaxed select-none">
               Deep dive into any culture or audience.
             </p>
           </motion.div>
@@ -1558,7 +1558,7 @@ export default function App() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-[288px] mx-auto px-4 py-4 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-zinc-900/50 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all flex items-center justify-center gap-2 text-lg mt-2"
+              className="w-[288px] mx-auto px-4 py-4 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-zinc-900/50 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all flex items-center justify-center gap-2 text-lg mt-2 select-none"
             >
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Search className="w-5 h-5" /> Generate Insights</>}
             </button>
@@ -1577,7 +1577,7 @@ export default function App() {
           >
             <div className="flex items-center gap-2 mb-6">
               <Clock className="w-5 h-5 text-zinc-400" />
-              <h3 className="text-xl font-semibold text-zinc-900">Your Library</h3>
+              <h3 className="text-xl font-semibold text-zinc-900 select-none">Your Library</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {visibleSavedMatrices.map((sm) => (
