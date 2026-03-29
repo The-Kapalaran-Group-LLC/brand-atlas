@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 
-type CarAnimationState = {
+type MovingBallState = {
   axis: 'x' | 'y';
   fixed: number;
   direction: 1 | -1;
@@ -12,11 +12,13 @@ const TILE_W = 44;
 const TILE_H = 22;
 const ROAD_INTERVAL = 6;
 const CAR_ROUTE_LIMIT = 18;
+const CITY_SATURATION_BOOST = 8;
+const CITY_LIGHTNESS_SHIFT = -7;
 
 export function SplashGrid() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const transformRef = useRef({ originX: 0, originY: 0, cityScale: 1 });
-  const carRef = useRef<CarAnimationState | null>(null);
+  const movingBallRef = useRef<MovingBallState | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -82,7 +84,7 @@ export function SplashGrid() {
       const axis: 'x' | 'y' = Math.abs(gridX - nearestXRoad) < Math.abs(gridY - nearestYRoad) ? 'x' : 'y';
       const fixed = clamp(axis === 'x' ? nearestXRoad : nearestYRoad, -CAR_ROUTE_LIMIT, CAR_ROUTE_LIMIT);
 
-      carRef.current = {
+      movingBallRef.current = {
         axis,
         fixed,
         direction: Math.random() > 0.5 ? 1 : -1,
@@ -123,7 +125,7 @@ export function SplashGrid() {
       ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
       ctx.fill();
 
-      // Specular highlight for a glossy red sphere look.
+      // Specular highlight for a glossy fuchsia sphere look.
       ctx.fillStyle = `rgba(255, 248, 248, ${0.78 - night * 0.2})`;
       ctx.beginPath();
       ctx.arc(center.x - radius * 0.34, center.y - radius * 0.34, radius * 0.22, 0, Math.PI * 2);
@@ -143,7 +145,9 @@ export function SplashGrid() {
       const colorCycle = 0;
       const hueShift = 0;
       const pulseLift = 0;
-      const accentHue = 306 + hueShift * 0.6;
+      const accentHue = 320 + hueShift * 0.6;
+      const sat = (value: number) => clamp(value + CITY_SATURATION_BOOST, 0, 100);
+      const light = (value: number) => clamp(value + CITY_LIGHTNESS_SHIFT, 0, 100);
 
       transformRef.current = { originX, originY, cityScale };
 
@@ -197,7 +201,9 @@ export function SplashGrid() {
 
         const plaza = !renderRoad && !water && district === 'commercial' && hash(x * 4, y * 3) > 0.84;
         const park = !renderRoad && !water && !plaza && district !== 'industrial' && hash(x + 3, y - 8) > 0.9;
-        const districtHue = 210 + ((x + y + 60) % 8) * 4 + hueShift;
+        const gradientMix = clamp((x + y + radius) / (radius * 2), 0, 1);
+        const gradientHue = 228 + gradientMix * 92;
+        const districtHue = gradientHue + ((x + y + 60) % 8) * 2 + hueShift;
 
         if (outsideCity && !water) {
           return;
@@ -205,8 +211,8 @@ export function SplashGrid() {
 
         if (water && !bridge) {
           const canal = ctx.createLinearGradient(top.x, top.y, bottom.x, bottom.y);
-          canal.addColorStop(0, `hsla(${districtHue + 26}, ${62 + colorCycle * 14}%, ${60 - night * 18 + pulseLift * 0.35}%, 0.72)`);
-          canal.addColorStop(1, `hsla(${districtHue + 18}, ${72 + colorCycle * 12}%, ${38 - night * 12 + pulseLift * 0.25}%, 0.72)`);
+          canal.addColorStop(0, `hsla(${districtHue + 26}, ${sat(62 + colorCycle * 14)}%, ${light(60 - night * 18 + pulseLift * 0.35)}%, 0.72)`);
+          canal.addColorStop(1, `hsla(${districtHue + 18}, ${sat(72 + colorCycle * 12)}%, ${light(38 - night * 12 + pulseLift * 0.25)}%, 0.72)`);
           drawPoly([top, right, bottom, left], canal);
 
           if (hash(x + 13, y - 11) > 0.78) {
@@ -224,7 +230,7 @@ export function SplashGrid() {
         }
 
         if (rail && !renderRoad) {
-          drawPoly([top, right, bottom, left], `hsla(${districtHue - 5}, ${12 + colorCycle * 10}%, ${46 - night * 16 + pulseLift * 0.3}%, 0.72)`);
+          drawPoly([top, right, bottom, left], `hsla(${districtHue - 5}, ${sat(12 + colorCycle * 10)}%, ${light(46 - night * 16 + pulseLift * 0.3)}%, 0.72)`);
           drawPoly(
             [
               { x: left.x + tileW * 0.16, y: left.y - tileH * 0.1 },
@@ -256,10 +262,10 @@ export function SplashGrid() {
 
         if (renderRoad) {
           const roadFill = bridge
-            ? `hsla(${districtHue - 2}, ${12 + colorCycle * 9}%, ${42 - night * 14 + pulseLift * 0.3}%, 0.88)`
+            ? `hsla(${districtHue - 2}, ${sat(12 + colorCycle * 9)}%, ${light(42 - night * 14 + pulseLift * 0.3)}%, 0.88)`
             : arterialRoad
-              ? `hsla(${districtHue - 10}, ${14 + colorCycle * 10}%, ${33 - night * 10 + pulseLift * 0.25}%, 0.92)`
-              : `hsla(${districtHue - 6}, ${11 + colorCycle * 8}%, ${39 - night * 12 + pulseLift * 0.25}%, 0.88)`;
+              ? `hsla(${districtHue - 10}, ${sat(14 + colorCycle * 10)}%, ${light(33 - night * 10 + pulseLift * 0.25)}%, 0.92)`
+              : `hsla(${districtHue - 6}, ${sat(11 + colorCycle * 8)}%, ${light(39 - night * 12 + pulseLift * 0.25)}%, 0.88)`;
           drawPoly([top, right, bottom, left], roadFill);
 
           if (arterialRoad) {
@@ -311,7 +317,7 @@ export function SplashGrid() {
         }
 
         if (park) {
-          drawPoly([top, right, bottom, left], `hsla(${districtHue - 42}, ${30 + colorCycle * 14}%, ${66 - night * 20 + pulseLift * 0.35}%, 0.7)`);
+          drawPoly([top, right, bottom, left], `hsla(${districtHue - 42}, ${sat(30 + colorCycle * 14)}%, ${light(66 - night * 20 + pulseLift * 0.35)}%, 0.7)`);
           const trees = 2 + Math.floor(hash(x + 5, y - 2) * 3);
           for (let i = 0; i < trees; i++) {
             const tx = left.x + (i + 1) * (right.x - left.x) / (trees + 1);
@@ -325,7 +331,7 @@ export function SplashGrid() {
         }
 
         if (plaza) {
-          drawPoly([top, right, bottom, left], `hsla(${districtHue + 8}, ${14 + colorCycle * 10}%, ${76 - night * 18 + pulseLift * 0.25}%, 0.74)`);
+          drawPoly([top, right, bottom, left], `hsla(${districtHue + 8}, ${sat(14 + colorCycle * 10)}%, ${light(76 - night * 18 + pulseLift * 0.25)}%, 0.74)`);
           drawPoly(
             [
               { x: top.x - tileW * 0.08, y: top.y + tileH * 0.2 },
@@ -376,22 +382,22 @@ export function SplashGrid() {
         );
 
         const sideEast = district === 'commercial'
-          ? `hsla(${districtHue + 6}, ${56 + colorCycle * 12}%, ${42 - night * 17 + pulseLift * 0.2}%, 0.9)`
+          ? `hsla(${districtHue + 6}, ${sat(56 + colorCycle * 12)}%, ${light(42 - night * 17 + pulseLift * 0.2)}%, 0.9)`
           : district === 'industrial'
-            ? `hsla(${districtHue + 2}, ${32 + colorCycle * 10}%, ${40 - night * 14 + pulseLift * 0.2}%, 0.9)`
-            : `hsla(${districtHue + 2}, ${46 + colorCycle * 10}%, ${44 - night * 16 + pulseLift * 0.2}%, 0.88)`;
+            ? `hsla(${districtHue + 2}, ${sat(32 + colorCycle * 10)}%, ${light(40 - night * 14 + pulseLift * 0.2)}%, 0.9)`
+            : `hsla(${districtHue + 2}, ${sat(46 + colorCycle * 10)}%, ${light(44 - night * 16 + pulseLift * 0.2)}%, 0.88)`;
 
         const sideWest = district === 'commercial'
-          ? `hsla(${districtHue - 2}, ${46 + colorCycle * 10}%, ${30 - night * 12 + pulseLift * 0.15}%, 0.92)`
+          ? `hsla(${districtHue - 2}, ${sat(46 + colorCycle * 10)}%, ${light(30 - night * 12 + pulseLift * 0.15)}%, 0.92)`
           : district === 'industrial'
-            ? `hsla(${districtHue - 4}, ${22 + colorCycle * 8}%, ${30 - night * 10 + pulseLift * 0.15}%, 0.92)`
-            : `hsla(${districtHue - 4}, ${34 + colorCycle * 8}%, ${34 - night * 12 + pulseLift * 0.15}%, 0.9)`;
+            ? `hsla(${districtHue - 4}, ${sat(22 + colorCycle * 8)}%, ${light(30 - night * 10 + pulseLift * 0.15)}%, 0.92)`
+            : `hsla(${districtHue - 4}, ${sat(34 + colorCycle * 8)}%, ${light(34 - night * 12 + pulseLift * 0.15)}%, 0.9)`;
 
         const roofColor = district === 'commercial'
-          ? `hsla(${districtHue + 18}, ${78 + colorCycle * 10}%, ${78 - night * 28 + pulseLift * 0.22}%, 0.94)`
+          ? `hsla(${districtHue + 18}, ${sat(78 + colorCycle * 10)}%, ${light(78 - night * 28 + pulseLift * 0.22)}%, 0.94)`
           : district === 'industrial'
-            ? `hsla(${districtHue + 10}, ${34 + colorCycle * 10}%, ${64 - night * 22 + pulseLift * 0.22}%, 0.9)`
-            : `hsla(${districtHue + 14}, ${56 + colorCycle * 10}%, ${74 - night * 24 + pulseLift * 0.22}%, 0.92)`;
+            ? `hsla(${districtHue + 10}, ${sat(34 + colorCycle * 10)}%, ${light(64 - night * 22 + pulseLift * 0.22)}%, 0.9)`
+            : `hsla(${districtHue + 14}, ${sat(56 + colorCycle * 10)}%, ${light(74 - night * 24 + pulseLift * 0.22)}%, 0.92)`;
 
         drawPoly([e, s, bs, be], sideEast);
         drawPoly([w, s, bs, bw], sideWest);
@@ -432,27 +438,27 @@ export function SplashGrid() {
         }
       });
 
-      const activeCar = carRef.current;
-      if (activeCar) {
-        const elapsed = performance.now() - activeCar.startTime;
-        const progress = elapsed / activeCar.durationMs;
+      const activeBall = movingBallRef.current;
+      if (activeBall) {
+        const elapsed = performance.now() - activeBall.startTime;
+        const progress = elapsed / activeBall.durationMs;
 
         if (progress >= 1) {
-          carRef.current = null;
+          movingBallRef.current = null;
         } else {
           const p = clamp(progress, 0, 1);
-          const travel = (p * 2 - 1) * 19 * activeCar.direction;
+          const travel = (p * 2 - 1) * 19 * activeBall.direction;
 
-          const gridCarX = activeCar.axis === 'y' ? travel : activeCar.fixed;
-          const gridCarY = activeCar.axis === 'x' ? travel : activeCar.fixed;
-          const center = iso(gridCarX, gridCarY, 2, tileW, tileH, originX, originY);
+          const gridBallX = activeBall.axis === 'y' ? travel : activeBall.fixed;
+          const gridBallY = activeBall.axis === 'x' ? travel : activeBall.fixed;
+          const center = iso(gridBallX, gridBallY, 2, tileW, tileH, originX, originY);
 
           drawFuchsiaBall(center, night, tileH);
         }
       }
 
       // Keep daytime lift, but fade it at night.
-      ctx.fillStyle = `rgba(255, 255, 255, ${0.2 * (1 - night)})`;
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.1 * (1 - night)})`;
       ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
       ctx.restore();
