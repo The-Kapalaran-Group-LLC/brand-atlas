@@ -40,7 +40,9 @@ const SOURCES_TYPES = [
 ];
 
 export default function App() {
+  const SPLASH_DURATION_MS = 4000;
   const [showSplash, setShowSplash] = useState(true);
+  const [isSplashHeld, setIsSplashHeld] = useState(false);
   const [brand, setBrand] = useState('');
   const [audience, setAudience] = useState('');
   const [showValidation, setShowValidation] = useState(false);
@@ -94,16 +96,74 @@ export default function App() {
   }, [savedMatrices, deletingIds]);
 
   const deepDiveDragControls = useDragControls();
+  const splashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const splashStartedAtRef = useRef<number | null>(null);
+  const splashRemainingMsRef = useRef<number>(SPLASH_DURATION_MS);
 
-  // Auto-hide splash screen after 3 seconds
+  // Auto-hide splash screen after 4 seconds, with press-and-hold pause.
   useEffect(() => {
-    if (showSplash) {
-      const timer = setTimeout(() => {
-        setShowSplash(false);
-      }, 3000);
-      return () => clearTimeout(timer);
+    if (!showSplash) {
+      return;
     }
-  }, [showSplash]);
+
+    if (isSplashHeld) {
+      if (splashStartedAtRef.current !== null) {
+        const elapsed = Date.now() - splashStartedAtRef.current;
+        splashRemainingMsRef.current = Math.max(0, splashRemainingMsRef.current - elapsed);
+        splashStartedAtRef.current = null;
+      }
+
+      if (splashTimeoutRef.current) {
+        clearTimeout(splashTimeoutRef.current);
+        splashTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    if (splashRemainingMsRef.current <= 0) {
+      setShowSplash(false);
+      return;
+    }
+
+    splashStartedAtRef.current = Date.now();
+    splashTimeoutRef.current = setTimeout(() => {
+      setShowSplash(false);
+    }, splashRemainingMsRef.current);
+
+    return () => {
+      if (splashTimeoutRef.current) {
+        clearTimeout(splashTimeoutRef.current);
+        splashTimeoutRef.current = null;
+      }
+    };
+  }, [showSplash, isSplashHeld]);
+
+  useEffect(() => {
+    if (!showSplash || !isSplashHeld) {
+      return;
+    }
+
+    const releaseSplashHold = () => setIsSplashHeld(false);
+    window.addEventListener('pointerup', releaseSplashHold);
+    window.addEventListener('pointercancel', releaseSplashHold);
+
+    return () => {
+      window.removeEventListener('pointerup', releaseSplashHold);
+      window.removeEventListener('pointercancel', releaseSplashHold);
+    };
+  }, [showSplash, isSplashHeld]);
+
+  const handleSplashHoldStart = () => {
+    if (showSplash) {
+      setIsSplashHeld(true);
+    }
+  };
+
+  const handleSplashHoldEnd = () => {
+    if (showSplash) {
+      setIsSplashHeld(false);
+    }
+  };
 
   // Handle click outside dropdowns
   useEffect(() => {
@@ -877,6 +937,9 @@ export default function App() {
             exit={{ opacity: 0, scale: 1.05 }}
             transition={{ duration: 0.8, ease: "easeInOut" }}
             className="fixed inset-0 z-[100] bg-[#FAFAFA] flex flex-col items-center justify-center overflow-hidden"
+            onPointerDown={handleSplashHoldStart}
+            onPointerUp={handleSplashHoldEnd}
+            onPointerCancel={handleSplashHoldEnd}
           >
             <div className="absolute inset-0 z-0">
               <SplashGrid />
