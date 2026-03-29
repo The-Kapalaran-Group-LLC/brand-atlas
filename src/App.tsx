@@ -40,7 +40,7 @@ const SOURCES_TYPES = [
 ];
 
 export default function App() {
-  const SPLASH_DURATION_MS = 4000;
+  const SPLASH_DURATION_MS = 3000;
   const [showSplash, setShowSplash] = useState(true);
   const [isSplashHeld, setIsSplashHeld] = useState(false);
   const [brand, setBrand] = useState('');
@@ -101,7 +101,7 @@ export default function App() {
   const splashStartedAtRef = useRef<number | null>(null);
   const splashRemainingMsRef = useRef<number>(SPLASH_DURATION_MS);
 
-  // Auto-hide splash screen after 4 seconds, with press-and-hold pause.
+  // Auto-hide splash screen after 3 seconds, with press-and-hold pause.
   useEffect(() => {
     if (!showSplash) {
       return;
