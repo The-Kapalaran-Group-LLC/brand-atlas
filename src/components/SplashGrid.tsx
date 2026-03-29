@@ -21,6 +21,7 @@ export function SplashGrid() {
   const dissolveDelayUntilRef = useRef<number | null>(null);
   const dissolveCompleteDelayUntilRef = useRef<number | null>(null);
 
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     let ctx: CanvasRenderingContext2D | null = null;
