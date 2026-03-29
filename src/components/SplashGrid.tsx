@@ -11,6 +11,8 @@ export function SplashGrid() {
   const flattenProgressRef = useRef(0);
   const flattenTargetRef = useRef(0);
   const dissolveProgressRef = useRef(0);
+  const dissolveDelayUntilRef = useRef<number | null>(null);
+  const dissolveCompleteDelayUntilRef = useRef<number | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -63,6 +65,8 @@ export function SplashGrid() {
     const handleCanvasClick = () => {
       // Click collapses the skyline to a fully flattened state.
       flattenTargetRef.current = 1;
+      dissolveDelayUntilRef.current = null;
+      dissolveCompleteDelayUntilRef.current = null;
     };
 
     canvas.addEventListener('click', handleCanvasClick);
@@ -90,14 +94,29 @@ export function SplashGrid() {
 
       flattenProgressRef.current += (flattenTargetRef.current - flattenProgressRef.current) * 0.08;
       const heightScale = clamp(1 - flattenProgressRef.current, 0, 1);
-      const dissolveTarget = clamp((flattenProgressRef.current - 0.84) / 0.16, 0, 1);
-      dissolveProgressRef.current += (dissolveTarget - dissolveProgressRef.current) * 0.2;
+      if (flattenTargetRef.current === 1 && flattenProgressRef.current >= 0.985 && dissolveDelayUntilRef.current === null) {
+        dissolveDelayUntilRef.current = performance.now() + 220;
+      }
+      const dissolveTarget = dissolveDelayUntilRef.current !== null && performance.now() >= dissolveDelayUntilRef.current ? 1 : 0;
+
+      if (dissolveTarget === 1 && dissolveProgressRef.current >= 0.9 && dissolveCompleteDelayUntilRef.current === null) {
+        dissolveCompleteDelayUntilRef.current = performance.now() + 180;
+      }
+      const completionGateOpen = dissolveCompleteDelayUntilRef.current !== null && performance.now() >= dissolveCompleteDelayUntilRef.current;
+      const effectiveDissolveTarget = dissolveTarget === 1 ? (completionGateOpen ? 1 : 0.92) : 0;
+
+      dissolveProgressRef.current += (effectiveDissolveTarget - dissolveProgressRef.current) * 0.28;
+      if (dissolveProgressRef.current > 0.995) {
+        dissolveProgressRef.current = 1;
+      }
       const dissolveProgress = dissolveProgressRef.current;
+      const cityVisibility = 1 - dissolveProgress;
 
       ctx.save();
       ctx.translate(originX, originY);
       ctx.scale(cityScale, cityScale);
       ctx.translate(-originX, -originY);
+      ctx.globalAlpha = cityVisibility;
 
       const cells: Array<{ x: number; y: number }> = [];
       for (let y = -radius; y <= radius; y++) {
@@ -415,7 +434,7 @@ export function SplashGrid() {
       }
 
       // Keep daytime lift, but fade it at night.
-      ctx.fillStyle = `rgba(255, 255, 255, ${0.1 * (1 - night)})`;
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.1 * (1 - night) * cityVisibility})`;
       ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
       ctx.restore();
