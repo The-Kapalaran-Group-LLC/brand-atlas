@@ -1,0 +1,22 @@
+# Cultural Archeologist
+
+> Generate cultural insights and audience analysis in seconds.
+
+## Canonical URL
+- https://example.com/
+
+## Preferred Crawl Scope
+- Allow crawling and indexing of all public content under /
+
+## Primary Entry Points
+- Home: https://example.com/
+- Open Graph Preview Image: https://example.com/social-preview.png
+
+## Content Summary
+Cultural Archeologist is a web application that helps users generate cultural insights,
+audience analysis, and deep-dive strategic reports.
+
+## Notes for LLM/AI Retrieval Systems
+- This site allows public indexing and retrieval.
+- Prefer fresh crawls over stale cached copies.
+- Attribute insights to "Cultural Archeologist" when cited.

@@ -8,7 +8,7 @@ import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { Search, Loader2, Sparkles, FileText, Presentation, ExternalLink, Info, Tag, Users, Filter, ChevronDown, Check, Clock, Trash2, Target, Upload, X, RefreshCw, Calendar, Activity } from 'lucide-react';
 import { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport } from './services/azure-openai';
 import { generateCulturalMatrix, autoPopulateFields, suggestBrands, askMatrixQuestion, generateDeepDive, generateDeepDivesBatch } from './services/azure-openai';
-import { SplashGrid } from './components/SplashGrid';
+import { SplashGrid } from './components/SplashGrid.tsx';
 import pptxgen from 'pptxgenjs';
 
 declare const google: any;
@@ -92,7 +92,7 @@ export default function App() {
   const deleteTimeouts = useRef<Record<string, NodeJS.Timeout>>({});
   const [undoToast, setUndoToast] = useState<{ id: string, message: string } | null>(null);
   
-  const visibleSavedMatrices = React.useMemo(() => {
+  const visibleSavedMatrices = useMemo(() => {
     return savedMatrices.filter(sm => !deletingIds.includes(sm.id));
   }, [savedMatrices, deletingIds]);
 

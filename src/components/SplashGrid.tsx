@@ -1,12 +1,23 @@
 import React, { useEffect, useRef } from 'react';
 
+type CarAnimationState = {
+  axis: 'x' | 'y';
+  fixed: number;
+  direction: 1 | -1;
+  startTime: number;
+  durationMs: number;
+};
+
+const TILE_W = 44;
+const TILE_H = 22;
+const ROAD_INTERVAL = 6;
+const CAR_ROUTE_LIMIT = 18;
+
 export function SplashGrid() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const nightProgressRef = useRef(0);
-  const buildingHitAreasRef = useRef<Array<Array<{ x: number; y: number }>>>([]);
   const transformRef = useRef({ originX: 0, originY: 0, cityScale: 1 });
-  const colorCycleUntilRef = useRef(0);
-  const colorCycleProgressRef = useRef(0);
+  const carRef = useRef<CarAnimationState | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -38,20 +49,8 @@ export function SplashGrid() {
       return s - Math.floor(s);
     };
 
-    const pointInPolygon = (px: number, py: number, polygon: Array<{ x: number; y: number }>) => {
-      let inside = false;
-      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-        const xi = polygon[i].x;
-        const yi = polygon[i].y;
-        const xj = polygon[j].x;
-        const yj = polygon[j].y;
-
-        const intersects = ((yi > py) !== (yj > py))
-          && (px < (xj - xi) * (py - yi) / ((yj - yi) || 1e-6) + xi);
-        if (intersects) inside = !inside;
-      }
-      return inside;
-    };
+    const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+    const nearestMultiple = (value: number, step: number) => Math.round(value / step) * step;
 
     const getNightLevelFromLocalTime = () => {
       const now = new Date();
@@ -83,24 +82,72 @@ export function SplashGrid() {
       const sy = event.clientY - rect.top;
 
       const { originX, originY, cityScale } = transformRef.current;
-      const x = originX + (sx - originX) / cityScale;
-      const y = originY + (sy - originY) / cityScale;
+      const localX = originX + (sx - originX) / cityScale;
+      const localY = originY + (sy - originY) / cityScale;
 
-      for (let i = buildingHitAreasRef.current.length - 1; i >= 0; i--) {
-        if (pointInPolygon(x, y, buildingHitAreasRef.current[i])) {
-          colorCycleUntilRef.current = Date.now() + 90_000;
-          break;
-        }
-      }
+      const u = (localX - originX) / (TILE_W * 0.5);
+      const v = (localY - originY) / (TILE_H * 0.5);
+      const gridX = (u + v) * 0.5;
+      const gridY = (v - u) * 0.5;
+
+      const nearestXRoad = nearestMultiple(gridX, ROAD_INTERVAL);
+      const nearestYRoad = nearestMultiple(gridY, ROAD_INTERVAL);
+      const axis: 'x' | 'y' = Math.abs(gridX - nearestXRoad) < Math.abs(gridY - nearestYRoad) ? 'x' : 'y';
+      const fixed = clamp(axis === 'x' ? nearestXRoad : nearestYRoad, -CAR_ROUTE_LIMIT, CAR_ROUTE_LIMIT);
+
+      carRef.current = {
+        axis,
+        fixed,
+        direction: Math.random() > 0.5 ? 1 : -1,
+        startTime: performance.now(),
+        durationMs: 4700,
+      };
     };
 
     canvas.addEventListener('click', handleCanvasClick);
 
+    const drawFuchsiaBall = (
+      center: { x: number; y: number },
+      night: number,
+      tileH: number,
+    ) => {
+      const radius = tileH * 0.55;
+
+      // Soft drop shadow to anchor the ball to the road.
+      ctx.fillStyle = `rgba(20, 16, 16, ${0.22 + night * 0.08})`;
+      ctx.beginPath();
+      ctx.ellipse(center.x, center.y + radius * 0.75, radius * 0.9, radius * 0.46, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      const ballGradient = ctx.createRadialGradient(
+        center.x - radius * 0.32,
+        center.y - radius * 0.48,
+        radius * 0.18,
+        center.x,
+        center.y,
+        radius
+      );
+      ballGradient.addColorStop(0, `hsla(312, 100%, ${82 - night * 6}%, 0.98)`);
+      ballGradient.addColorStop(0.45, `hsla(320, 92%, ${58 - night * 7}%, 0.98)`);
+      ballGradient.addColorStop(1, `hsla(328, 84%, ${36 - night * 7}%, 0.98)`);
+
+      ctx.fillStyle = ballGradient;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Specular highlight for a glossy red sphere look.
+      ctx.fillStyle = `rgba(255, 248, 248, ${0.78 - night * 0.2})`;
+      ctx.beginPath();
+      ctx.arc(center.x - radius * 0.34, center.y - radius * 0.34, radius * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
     const render = () => {
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
-      const tileW = 44;
-      const tileH = 22;
+      const tileW = TILE_W;
+      const tileH = TILE_H;
       const radius = 24;
       const originX = window.innerWidth * 0.5;
       const originY = window.innerHeight * 0.5 + 40;
@@ -108,10 +155,8 @@ export function SplashGrid() {
       const nightEase = 0.04;
 
       const localNight = getNightLevelFromLocalTime();
-      const colorCycleTarget = Date.now() < colorCycleUntilRef.current ? 1 : 0;
-      colorCycleProgressRef.current += (colorCycleTarget - colorCycleProgressRef.current) * 0.05;
-      const colorCycle = Math.max(0, Math.min(1, colorCycleProgressRef.current));
-      const hueShift = colorCycle * (Math.sin(time * 3.1) * 110 + Math.sin(time * 1.55 + 1.2) * 50);
+      const colorCycle = 0;
+      const hueShift = 0;
       const pulseLift = 0;
       const accentHue = 306 + hueShift * 0.6;
 
@@ -119,7 +164,6 @@ export function SplashGrid() {
       const night = Math.max(0, Math.min(1, nightProgressRef.current));
 
       transformRef.current = { originX, originY, cityScale };
-      buildingHitAreasRef.current = [];
 
       ctx.save();
       ctx.translate(originX, originY);
@@ -150,7 +194,7 @@ export function SplashGrid() {
 
         const edgeDistance = Math.hypot(x, y);
         const outsideCity = edgeDistance > radius * 0.86;
-        const arterialRoad = x % 6 === 0 || y % 6 === 0;
+        const arterialRoad = x % ROAD_INTERVAL === 0 || y % ROAD_INTERVAL === 0;
         const avenueRoad = x % 3 === 0 || y % 3 === 0;
         const road = arterialRoad || avenueRoad;
         const water = Math.abs(y - x * 0.28 + 1.8) < 0.92;
@@ -275,7 +319,7 @@ export function SplashGrid() {
           ctx.arc(car2.x, car2.y, 1.45, 0, Math.PI * 2);
           ctx.fill();
 
-          if (x % 6 === 0 && y % 6 === 0) {
+          if (x % ROAD_INTERVAL === 0 && y % ROAD_INTERVAL === 0) {
             ctx.fillStyle = `hsla(${districtHue + 26}, 78%, 82%, 0.36)`;
             ctx.beginPath();
             ctx.arc(top.x, top.y + tileH * 0.22, 1.45, 0, Math.PI * 2);
@@ -338,10 +382,6 @@ export function SplashGrid() {
         const be = { x: basePt.x + (tileW * footprint) * 0.5, y: basePt.y };
         const bs = { x: basePt.x, y: basePt.y + (tileH * footprint) * 0.5 };
         const bw = { x: basePt.x - (tileW * footprint) * 0.5, y: basePt.y };
-
-        buildingHitAreasRef.current.push([n, e, s, w]);
-        buildingHitAreasRef.current.push([e, s, bs, be]);
-        buildingHitAreasRef.current.push([w, s, bs, bw]);
 
         drawPoly(
           [
@@ -409,6 +449,25 @@ export function SplashGrid() {
           );
         }
       });
+
+      const activeCar = carRef.current;
+      if (activeCar) {
+        const elapsed = performance.now() - activeCar.startTime;
+        const progress = elapsed / activeCar.durationMs;
+
+        if (progress >= 1) {
+          carRef.current = null;
+        } else {
+          const p = clamp(progress, 0, 1);
+          const travel = (p * 2 - 1) * 19 * activeCar.direction;
+
+          const gridCarX = activeCar.axis === 'y' ? travel : activeCar.fixed;
+          const gridCarY = activeCar.axis === 'x' ? travel : activeCar.fixed;
+          const center = iso(gridCarX, gridCarY, 2, tileW, tileH, originX, originY);
+
+          drawFuchsiaBall(center, night, tileH);
+        }
+      }
 
       // Keep daytime lift, but fade it at night.
       ctx.fillStyle = `rgba(255, 255, 255, ${0.2 * (1 - night)})`;

@@ -1,0 +1,12 @@
+# robots.txt for Cultural Archeologist
+# Replace the sitemap URL with your production domain before launch.
+
+User-agent: *
+Allow: /
+
+# Keep static assets crawlable for rendering/indexing.
+Allow: /favicon.svg
+Allow: /social-preview.png
+Allow: /social-preview.svg
+
+Sitemap: https://example.com/sitemap.xml
