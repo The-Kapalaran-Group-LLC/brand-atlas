@@ -1,29 +1,25 @@
 import React, { useEffect, useRef } from 'react';
 
-type MovingBallState = {
-  axis: 'x' | 'y';
-  fixed: number;
-  direction: 1 | -1;
-  startTime: number;
-  durationMs: number;
-};
-
 const TILE_W = 44;
 const TILE_H = 22;
 const ROAD_INTERVAL = 6;
-const CAR_ROUTE_LIMIT = 18;
 const CITY_SATURATION_BOOST = 8;
 const CITY_LIGHTNESS_SHIFT = -7;
 
 export function SplashGrid() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const transformRef = useRef({ originX: 0, originY: 0, cityScale: 1 });
-  const movingBallRef = useRef<MovingBallState | null>(null);
+  const flattenProgressRef = useRef(0);
+  const flattenTargetRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    let ctx: CanvasRenderingContext2D | null = null;
+    try {
+      ctx = canvas.getContext('2d');
+    } catch {
+      return;
+    }
     if (!ctx) return;
 
     let animationFrameId: number;
@@ -51,8 +47,6 @@ export function SplashGrid() {
     };
 
     const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-    const nearestMultiple = (value: number, step: number) => Math.round(value / step) * step;
-
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       canvas.width = window.innerWidth * dpr;
@@ -65,72 +59,12 @@ export function SplashGrid() {
     window.addEventListener('resize', resize);
     resize();
 
-    const handleCanvasClick = (event: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const sx = event.clientX - rect.left;
-      const sy = event.clientY - rect.top;
-
-      const { originX, originY, cityScale } = transformRef.current;
-      const localX = originX + (sx - originX) / cityScale;
-      const localY = originY + (sy - originY) / cityScale;
-
-      const u = (localX - originX) / (TILE_W * 0.5);
-      const v = (localY - originY) / (TILE_H * 0.5);
-      const gridX = (u + v) * 0.5;
-      const gridY = (v - u) * 0.5;
-
-      const nearestXRoad = nearestMultiple(gridX, ROAD_INTERVAL);
-      const nearestYRoad = nearestMultiple(gridY, ROAD_INTERVAL);
-      const axis: 'x' | 'y' = Math.abs(gridX - nearestXRoad) < Math.abs(gridY - nearestYRoad) ? 'x' : 'y';
-      const fixed = clamp(axis === 'x' ? nearestXRoad : nearestYRoad, -CAR_ROUTE_LIMIT, CAR_ROUTE_LIMIT);
-
-      movingBallRef.current = {
-        axis,
-        fixed,
-        direction: Math.random() > 0.5 ? 1 : -1,
-        startTime: performance.now(),
-        durationMs: 4700,
-      };
+    const handleCanvasClick = () => {
+      // Click collapses the skyline to a fully flattened state.
+      flattenTargetRef.current = 1;
     };
 
     canvas.addEventListener('click', handleCanvasClick);
-
-    const drawFuchsiaBall = (
-      center: { x: number; y: number },
-      night: number,
-      tileH: number,
-    ) => {
-      const radius = tileH * 0.55;
-
-      // Soft drop shadow to anchor the ball to the road.
-      ctx.fillStyle = `rgba(20, 16, 16, ${0.22 + night * 0.08})`;
-      ctx.beginPath();
-      ctx.ellipse(center.x, center.y + radius * 0.75, radius * 0.9, radius * 0.46, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      const ballGradient = ctx.createRadialGradient(
-        center.x - radius * 0.32,
-        center.y - radius * 0.48,
-        radius * 0.18,
-        center.x,
-        center.y,
-        radius
-      );
-      ballGradient.addColorStop(0, `hsla(312, 100%, ${82 - night * 6}%, 0.98)`);
-      ballGradient.addColorStop(0.45, `hsla(320, 92%, ${58 - night * 7}%, 0.98)`);
-      ballGradient.addColorStop(1, `hsla(328, 84%, ${36 - night * 7}%, 0.98)`);
-
-      ctx.fillStyle = ballGradient;
-      ctx.beginPath();
-      ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Specular highlight for a glossy fuchsia sphere look.
-      ctx.fillStyle = `rgba(255, 248, 248, ${0.78 - night * 0.2})`;
-      ctx.beginPath();
-      ctx.arc(center.x - radius * 0.34, center.y - radius * 0.34, radius * 0.22, 0, Math.PI * 2);
-      ctx.fill();
-    };
 
     const render = () => {
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
@@ -148,8 +82,13 @@ export function SplashGrid() {
       const accentHue = 320 + hueShift * 0.6;
       const sat = (value: number) => clamp(value + CITY_SATURATION_BOOST, 0, 100);
       const light = (value: number) => clamp(value + CITY_LIGHTNESS_SHIFT, 0, 100);
+      const cityMinX = originX - radius * tileW * 0.95;
+      const cityMaxX = originX + radius * tileW * 0.95;
+      const cityMinY = originY - radius * tileH * 0.8;
+      const cityMaxY = originY + radius * tileH * 0.8;
 
-      transformRef.current = { originX, originY, cityScale };
+      flattenProgressRef.current += (flattenTargetRef.current - flattenProgressRef.current) * 0.08;
+      const heightScale = clamp(1 - flattenProgressRef.current, 0, 1);
 
       ctx.save();
       ctx.translate(originX, originY);
@@ -201,9 +140,11 @@ export function SplashGrid() {
 
         const plaza = !renderRoad && !water && district === 'commercial' && hash(x * 4, y * 3) > 0.84;
         const park = !renderRoad && !water && !plaza && district !== 'industrial' && hash(x + 3, y - 8) > 0.9;
-        const gradientMix = clamp((x + y + radius) / (radius * 2), 0, 1);
+        const gradientMixX = clamp((base.x - cityMinX) / (cityMaxX - cityMinX), 0, 1);
+        const gradientMixY = clamp((base.y - cityMinY) / (cityMaxY - cityMinY), 0, 1);
+        const gradientMix = clamp(gradientMixX * 0.78 + gradientMixY * 0.22, 0, 1);
         const gradientHue = 228 + gradientMix * 92;
-        const districtHue = gradientHue + ((x + y + 60) % 8) * 2 + hueShift;
+        const districtHue = gradientHue + hueShift;
 
         if (outsideCity && !water) {
           return;
@@ -355,7 +296,7 @@ export function SplashGrid() {
         const districtBoost = district === 'commercial' ? 54 : district === 'industrial' ? 18 : 0;
         const contextScale = inLandmarkRing && !isLandmark ? 0.7 : 1;
         const baseHeight = (20 + zoneCenter * 118 + districtBoost + hash(x * 3, y * 2) * 20) * contextScale;
-        const h = isLandmark ? baseHeight * 1.52 : baseHeight;
+        const h = (isLandmark ? baseHeight * 1.52 : baseHeight) * heightScale;
 
         const spread = district === 'commercial' ? 0.84 : district === 'industrial' ? 0.79 : 0.7;
         const footprint = spread - hash(x + 9, y - 4) * 0.1;
@@ -437,25 +378,6 @@ export function SplashGrid() {
           );
         }
       });
-
-      const activeBall = movingBallRef.current;
-      if (activeBall) {
-        const elapsed = performance.now() - activeBall.startTime;
-        const progress = elapsed / activeBall.durationMs;
-
-        if (progress >= 1) {
-          movingBallRef.current = null;
-        } else {
-          const p = clamp(progress, 0, 1);
-          const travel = (p * 2 - 1) * 19 * activeBall.direction;
-
-          const gridBallX = activeBall.axis === 'y' ? travel : activeBall.fixed;
-          const gridBallY = activeBall.axis === 'x' ? travel : activeBall.fixed;
-          const center = iso(gridBallX, gridBallY, 2, tileW, tileH, originX, originY);
-
-          drawFuchsiaBall(center, night, tileH);
-        }
-      }
 
       // Keep daytime lift, but fade it at night.
       ctx.fillStyle = `rgba(255, 255, 255, ${0.1 * (1 - night)})`;

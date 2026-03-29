@@ -997,11 +997,11 @@ export default function App() {
               <div className="inline-flex items-center justify-center p-4 bg-white/80 backdrop-blur-md rounded-3xl shadow-xl border border-white/50 mb-8">
                 <Sparkles className="w-12 h-12 text-[#7c3aed]" />
               </div>
-              <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-zinc-900 mb-5 drop-shadow-[0_2px_10px_rgba(255,255,255,0.45)] select-none">
+              <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-zinc-950 mb-5 drop-shadow-[0_4px_14px_rgba(24,24,27,0.2)] select-none">
                 Cultural{' '}
                 <motion.span
-                  initial={{ color: '#18181b' }}
-                  animate={{ color: '#18181b' }}
+                  initial={{ color: '#09090b' }}
+                  animate={{ color: '#09090b' }}
                   exit={{ color: '#d946ef' }}
                   transition={{ duration: 0.8, ease: 'easeInOut' }}
                 >
@@ -1928,6 +1928,10 @@ export default function App() {
           </motion.div>
         )}
       </main>
+
+      <footer className="relative z-10 pb-5 text-center text-[11px] tracking-wide text-zinc-500/90 select-none">
+        Copyright Cultural Archeologist 2026
+      </footer>
     </div>
   );
 }
