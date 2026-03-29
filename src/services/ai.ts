@@ -1,19 +1,17 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 // ============================================================================
-// AZURE OPENAI MIGRATION GUIDE
+// DEPRECATED: Use `azure-openai.ts` instead
 // ============================================================================
-// The user requested to prepare this code to be recreated in Azure with the OpenAI API.
-// A complete, drop-in replacement file has been created at:
-// `src/services/azure-openai.ts`
+// This file is DEPRECATED and no longer used in the application.
+// It has been replaced by `src/services/azure-openai.ts` which uses Azure OpenAI API.
 //
-// To switch your application from Gemini to Azure OpenAI:
-// 1. Open `src/App.tsx`
-// 2. Change the import path on line 9 from:
-//    `import { ... } from './services/ai';`
-//    to:
-//    `import { ... } from './services/azure-openai';`
-// 3. Set your Azure OpenAI environment variables (see `azure-openai.ts` for details).
+// This file is kept for:
+// - Type definitions (exported interfaces can be imported where needed)
+// - Historical reference
+// - Potential fallback if needed in future
+//
+// Do not add new code to this file. Use `azure-openai.ts` for all new AI service calls.
 // ============================================================================
 
 function getAI() {

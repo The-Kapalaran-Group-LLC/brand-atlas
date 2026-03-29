@@ -84,7 +84,8 @@ export function SplashGrid() {
 
       const tileW = TILE_W;
       const tileH = TILE_H;
-      const radius = 24;
+      const radiusX = Math.ceil(window.innerWidth / (tileW * 1.5));
+      const radiusY = 12;
       const originX = window.innerWidth * 0.5;
       const originY = window.innerHeight - 80;
       const cityScale = 0.7;
@@ -95,10 +96,10 @@ export function SplashGrid() {
       const accentHue = 320 + hueShift * 0.6;
       const sat = (value: number) => clamp(value + CITY_SATURATION_BOOST, 0, 100);
       const light = (value: number) => clamp(value + CITY_LIGHTNESS_SHIFT, 0, 100);
-      const cityMinX = originX - radius * tileW * 0.95;
-      const cityMaxX = originX + radius * tileW * 0.95;
-      const cityMinY = originY - radius * tileH * 0.8;
-      const cityMaxY = originY + radius * tileH * 0.8;
+      const cityMinX = originX - radiusX * tileW * 0.95;
+      const cityMaxX = originX + radiusX * tileW * 0.95;
+      const cityMinY = originY - radiusY * tileH * 0.8;
+      const cityMaxY = originY + radiusY * tileH * 0.8;
 
       flattenProgressRef.current += (flattenTargetRef.current - flattenProgressRef.current) * 0.08;
       const heightScale = clamp(1 - flattenProgressRef.current, 0, 1);
@@ -127,8 +128,8 @@ export function SplashGrid() {
       ctx.globalAlpha = cityVisibility;
 
       const cells: Array<{ x: number; y: number }> = [];
-      for (let y = -radius; y <= radius; y++) {
-        for (let x = -radius; x <= radius; x++) {
+      for (let y = -radiusY; y <= radiusY; y++) {
+        for (let x = -radiusX; x <= radiusX; x++) {
           cells.push({ x, y });
         }
       }
@@ -148,8 +149,10 @@ export function SplashGrid() {
         const bottom = { x: base.x, y: base.y + tileH * 0.5 };
         const left = { x: base.x - tileW * 0.5, y: base.y };
 
-        const edgeDistance = Math.hypot(x, y);
-        const outsideCity = edgeDistance > radius * 0.86;
+        const edgeDistanceX = Math.abs(x) / radiusX;
+        const edgeDistanceY = Math.abs(y) / radiusY;
+        const edgeDistance = Math.max(edgeDistanceX, edgeDistanceY);
+        const outsideCity = edgeDistance > 0.88;
         const arterialRoad = x % ROAD_INTERVAL === 0 || y % ROAD_INTERVAL === 0;
         const avenueRoad = x % 3 === 0 || y % 3 === 0;
         const road = arterialRoad || avenueRoad;
