@@ -994,18 +994,18 @@ export default function App() {
               transition={{ delay: 0.5, duration: 0.8 }}
               className="relative z-10 flex flex-col items-center text-center px-4 py-6 pointer-events-none"
             >
-              <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-white mb-5 drop-shadow-[0_6px_18px_rgba(0,0,0,0.26)] select-none">
+              <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-zinc-950 mb-5 drop-shadow-[0_2px_8px_rgba(255,255,255,0.4)] select-none">
                 Cultural{' '}
                 <motion.span
-                  initial={{ color: '#ffffff' }}
-                  animate={{ color: '#ffffff' }}
+                  initial={{ color: '#09090b' }}
+                  animate={{ color: '#09090b' }}
                   exit={{ color: '#d946ef' }}
                   transition={{ duration: 0.8, ease: 'easeInOut' }}
                 >
                   Archeologist
                 </motion.span>
               </h1>
-              <p className="text-xl md:text-2xl text-zinc-100/92 max-w-2xl mb-10 font-semibold drop-shadow-[0_1px_8px_rgba(0,0,0,0.35)] select-none">
+              <p className="text-xl md:text-2xl text-zinc-800 max-w-2xl mb-10 font-semibold drop-shadow-[0_1px_4px_rgba(255,255,255,0.5)] select-none">
                 Generate cultural insights and audience analysis in seconds.
               </p>
             </motion.div>
@@ -1607,7 +1607,7 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <Search className="w-5 h-5" /> Generate Insights
+                  <Sparkles className="w-5 h-5" /> Generate Insights
                 </>
               )}
               {isLoading && (
