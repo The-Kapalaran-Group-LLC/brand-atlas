@@ -21,7 +21,6 @@ export function SplashGrid() {
   const dissolveDelayUntilRef = useRef<number | null>(null);
   const dissolveCompleteDelayUntilRef = useRef<number | null>(null);
 
-  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     let ctx: CanvasRenderingContext2D | null = null;
@@ -86,7 +85,7 @@ export function SplashGrid() {
       const tileH = TILE_H;
       const radius = 24;
       const originX = window.innerWidth * 0.5;
-      const originY = window.innerHeight * 0.5 + 40;
+      const originY = window.innerHeight - 80;
       const cityScale = 0.7;
       const night = 0;
       const colorCycle = 0;
@@ -457,5 +456,5 @@ export function SplashGrid() {
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />;
+  return <canvas ref={canvasRef} className="absolute bottom-0 left-0 right-0 w-full h-60" />;
 }
