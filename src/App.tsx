@@ -1082,8 +1082,10 @@ export default function App() {
                   Archeologist
                 </motion.span>
               </h1>
-              <p className="text-xl md:text-2xl text-zinc-950 max-w-2xl mb-6 font-semibold select-none">
-                Generate cultural insights and audience analysis in seconds.
+              <p className="text-xl md:text-2xl text-zinc-950 mb-6 font-semibold select-none">
+                <span className="inline-block rounded-lg bg-white/5 px-2.5 py-1 backdrop-blur-[1.2px]">
+                  Generate cultural insights and audience analysis in seconds.
+                </span>
               </p>
             </motion.div>
           </motion.div>
@@ -1989,10 +1991,6 @@ export default function App() {
           </motion.div>
         )}
       </main>
-
-      <footer className="relative z-10 pb-5 text-center text-[11px] tracking-wide text-zinc-500/90 select-none">
-        Copyright Cultural Archeologist 2026
-      </footer>
     </div>
   );
 }

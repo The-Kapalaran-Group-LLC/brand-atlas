@@ -9,4 +9,4 @@ Allow: /favicon.svg
 Allow: /social-preview.png
 Allow: /social-preview.svg
 
-Sitemap: https://example.com/sitemap.xml
+Sitemap: https://cultural-archeologist.com/sitemap.xml

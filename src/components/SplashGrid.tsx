@@ -108,8 +108,9 @@ export function SplashGrid() {
       const radiusX = Math.ceil(window.innerWidth / (tileW * 0.58));
       const radiusY = 22;
       const originX = window.innerWidth * 0.5;
-      const originY = window.innerHeight - 52;
-      const cityScale = 0.49;
+      // Push the skyline lower so it does not collide with splash headline copy.
+      const originY = window.innerHeight + 28;
+      const cityScale = 0.7;
       const sat = (value: number) => clamp(value + CITY_SATURATION_BOOST, 0, 100);
       const light = (value: number) => clamp(value + CITY_LIGHTNESS_SHIFT, 0, 100);
 
@@ -147,9 +148,11 @@ export function SplashGrid() {
         const s = { x: base.x, y: base.y + tileH * 0.5 };
         const w = { x: base.x - tileW * 0.5, y: base.y };
 
-        // Very light underlayer so the city sits on a subtle surface.
-        const underLayerAlpha = 0.16 + hash(x * 0.47, y * 0.51) * 0.08;
-        drawPoly([n, e, s, w], `rgba(242, 244, 248, ${underLayerAlpha})`);
+        const water = Math.abs(y - x * 0.24 + 1.5) < 0.9;
+        if (water) {
+          // Skip rendering base surfaces to keep the city floating without gray road planes.
+          return;
+        }
 
         const downtown = Math.max(0, 1 - Math.hypot(x + 3, y - 2) / (radiusY * 0.55));
         const midtown = Math.max(0, 1 - Math.hypot(x - 8, y + 5) / (radiusY * 0.9));
@@ -205,18 +208,6 @@ export function SplashGrid() {
         }
       });
 
-      ctx.restore();
-
-      // Soften overlap with headline copy by fading out the city's upper region.
-      const fadeEndY = window.innerHeight * 0.62;
-      const topFade = ctx.createLinearGradient(0, 0, 0, fadeEndY);
-      topFade.addColorStop(0, 'rgba(0, 0, 0, 1)');
-      topFade.addColorStop(0.55, 'rgba(0, 0, 0, 0.38)');
-      topFade.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.save();
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.fillStyle = topFade;
-      ctx.fillRect(0, 0, window.innerWidth, fadeEndY);
       ctx.restore();
 
       time += 0.008;
