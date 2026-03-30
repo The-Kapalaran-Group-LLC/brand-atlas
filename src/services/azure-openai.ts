@@ -176,7 +176,7 @@ Keep the inferred values concise (1-5 words).` }
 const MatrixItemSchema = z.object({
   text: z.string(),
   isHighlyUnique: z.boolean().describe("Set to true ONLY if this insight is extremely unique to this specific audience/group when compared against a baseline audience of the same average age, race/ethnicity, and gender breakdown, but OUTSIDE of the specific brand, industry, or topic being analyzed."),
-  sourceType: z.string().describe("The type of source this insight was derived from (e.g., 'Mainstream', 'Fringe', 'Topic-Specific', 'Alternative Media', 'Academic', 'Social Media', etc.)"),
+  sourceType: z.string().describe("The type of source this insight was derived from (e.g., 'Mainstream', 'Niche/Fringe', 'Topic-Specific', 'Alternative Media', 'Academic', 'Social Media', etc.)"),
   isFromDocument: z.boolean().nullable().describe("Set to true if this insight was derived from the attached documents.")
 });
 

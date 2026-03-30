@@ -76,7 +76,7 @@ const SOURCES_TYPES = [
   "Mainstream",
   "Topic-Specific",
   "Alternative Media",
-  "Fringe"
+  "Niche/Fringe"
 ];
 
 export default function App() {

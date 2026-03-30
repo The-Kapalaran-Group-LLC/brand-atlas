@@ -280,7 +280,7 @@ export async function generateCulturalMatrix(audience: string, brand?: string, g
       },
       sourceType: {
         type: Type.STRING,
-        description: "The type of source this insight was derived from (e.g., 'Mainstream', 'Fringe', 'Topic-Specific', 'Alternative Media', 'Academic', 'Social Media', etc.)"
+        description: "The type of source this insight was derived from (e.g., 'Mainstream', 'Niche/Fringe', 'Topic-Specific', 'Alternative Media', 'Academic', 'Social Media', etc.)"
       }
     },
     required: ["text", "isHighlyUnique", "sourceType"]
