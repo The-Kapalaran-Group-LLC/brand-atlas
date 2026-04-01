@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { Search, Loader2, Sparkles, FileText, Presentation, ExternalLink, Info, Tag, Users, Filter, ChevronDown, Check, Clock, Trash2, Target, Upload, X, RefreshCw, Calendar, Activity, Building2, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Search, Loader2, Sparkles, FileText, Presentation, ExternalLink, Info, Tag, Users, Filter, ChevronDown, Check, Clock, Trash2, Target, Upload, X, RefreshCw, Calendar, Activity, Building2 } from 'lucide-react';
 import { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport } from './services/azure-openai';
 import { generateCulturalMatrix, autoPopulateFields, suggestBrands, askMatrixQuestion, generateDeepDive, generateDeepDivesBatch } from './services/azure-openai';
 import { SplashGrid } from './components/SplashGrid';
@@ -84,7 +84,7 @@ export default function App() {
   const SPLASH_DURATION_MS = 3000;
   const [showSplash, setShowSplash] = useState(true);
   const [isSplashHeld, setIsSplashHeld] = useState(false);
-  const [activeExperience, setActiveExperience] = useState<'selector' | 'research' | 'brand'>('research');
+  const [activeExperience, setActiveExperience] = useState<'research' | 'brand'>('research');
   const [brand, setBrand] = useState('');
   const [audience, setAudience] = useState('');
   const [showValidation, setShowValidation] = useState(false);
@@ -2092,65 +2092,6 @@ function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], on
           </motion.div>
         </motion.button>
       )}
-    </motion.div>
-  );
-}
-
-function ExperienceSelector({
-  onSelectResearch,
-  onSelectBrandDeepDive,
-}: {
-  onSelectResearch: () => void;
-  onSelectBrandDeepDive: () => void;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="max-w-4xl mx-auto"
-    >
-      <div className="text-center mb-10">
-        <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-zinc-900 mb-4">
-          Choose Your Exploration
-        </h1>
-        <p className="text-zinc-500 text-lg">
-          Start with audience intelligence or move into a brand-first strategic deep dive.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <button
-          onClick={onSelectResearch}
-          className="group text-left bg-white rounded-3xl border border-zinc-200 p-7 hover:shadow-md hover:border-indigo-200 transition-all"
-        >
-          <div className="inline-flex p-3 rounded-2xl bg-indigo-50 text-indigo-600 mb-5">
-            <Search className="w-6 h-6" />
-          </div>
-          <h2 className="text-2xl font-semibold text-zinc-900 mb-3">Culture & Audience Research</h2>
-          <p className="text-zinc-600 text-sm leading-relaxed mb-6">
-            Generate the full cultural matrix for a target audience, including moments, beliefs, language, behaviors, and strategic implications.
-          </p>
-          <span className="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 group-hover:gap-3 transition-all">
-            Open Research Workspace <ArrowRight className="w-4 h-4" />
-          </span>
-        </button>
-
-        <button
-          onClick={onSelectBrandDeepDive}
-          className="group text-left bg-white rounded-3xl border border-zinc-200 p-7 hover:shadow-md hover:border-emerald-200 transition-all"
-        >
-          <div className="inline-flex p-3 rounded-2xl bg-emerald-50 text-emerald-600 mb-5">
-            <Building2 className="w-6 h-6" />
-          </div>
-          <h2 className="text-2xl font-semibold text-zinc-900 mb-3">Brand Deep Dive</h2>
-          <p className="text-zinc-600 text-sm leading-relaxed mb-6">
-            Analyze one brand question in depth with focused opportunity spaces, cultural tensions, strategic recommendations, and execution watchouts.
-          </p>
-          <span className="inline-flex items-center gap-2 text-sm font-medium text-emerald-700 group-hover:gap-3 transition-all">
-            Open Deep Dive Studio <ArrowRight className="w-4 h-4" />
-          </span>
-        </button>
-      </div>
     </motion.div>
   );
 }

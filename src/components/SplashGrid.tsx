@@ -34,17 +34,6 @@ export function SplashGrid() {
       };
     };
 
-    const drawPoly = (points: Array<{ x: number; y: number }>, fill: string | CanvasGradient) => {
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i].x, points[i].y);
-      }
-      ctx.closePath();
-      ctx.fillStyle = fill;
-      ctx.fill();
-    };
-
     const hash = (x: number, y: number) => {
       const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
       return s - Math.floor(s);
@@ -211,13 +200,13 @@ export function SplashGrid() {
           if (!neighbor) return;
 
           const depthMix = clamp((point.depth + neighbor.depth + 56) / 130, 0, 1);
-          const alpha = 0.18 + depthMix * 0.28 + (point.active + neighbor.active) * 0.18;
+          const alpha = 0.16 + depthMix * 0.24 + (point.active + neighbor.active) * 0.14;
           const lineGrad = ctx.createLinearGradient(point.x, point.y, neighbor.x, neighbor.y);
-          lineGrad.addColorStop(0, `hsla(34, ${sat(44)}%, ${light(48)}%, ${alpha})`);
-          lineGrad.addColorStop(1, `hsla(30, ${sat(34)}%, ${light(58)}%, ${alpha * 0.95})`);
+          lineGrad.addColorStop(0, `hsla(240, ${sat(58)}%, ${light(58)}%, ${alpha})`);
+          lineGrad.addColorStop(1, `hsla(320, ${sat(62)}%, ${light(62)}%, ${alpha * 0.95})`);
 
           ctx.strokeStyle = lineGrad;
-          ctx.lineWidth = 1.15 + depthMix * 1.6;
+          ctx.lineWidth = 0.96 + depthMix * 1.34;
           ctx.beginPath();
           ctx.moveTo(point.x, point.y);
           ctx.lineTo(neighbor.x, neighbor.y);
@@ -228,11 +217,11 @@ export function SplashGrid() {
       points.forEach((point) => {
         const depthMix = clamp((point.depth + 45) / 120, 0, 1);
         const nodeRadius = 1.25 + depthMix * 2.1 + point.active * 2.6;
-        const nodeColor = `hsla(35, ${sat(32)}%, ${light(78)}%, ${0.52 + depthMix * 0.38})`;
+        const nodeColor = `hsla(304, ${sat(68)}%, ${light(80)}%, ${0.42 + depthMix * 0.3})`;
 
         ctx.beginPath();
         ctx.arc(point.x, point.y, nodeRadius * 2.7, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(33, ${sat(30)}%, ${light(68)}%, ${0.09 + point.active * 0.12})`;
+        ctx.fillStyle = `hsla(264, ${sat(64)}%, ${light(72)}%, ${0.07 + point.active * 0.11})`;
         ctx.fill();
 
         ctx.beginPath();
@@ -244,8 +233,8 @@ export function SplashGrid() {
       ctx.restore();
 
       const meshGlow = ctx.createLinearGradient(0, window.innerHeight * 0.4, 0, window.innerHeight);
-      meshGlow.addColorStop(0, 'hsla(34, 50%, 70%, 0.1)');
-      meshGlow.addColorStop(1, 'hsla(32, 44%, 66%, 0.3)');
+      meshGlow.addColorStop(0, 'hsla(240, 70%, 70%, 0.08)');
+      meshGlow.addColorStop(1, 'hsla(318, 74%, 68%, 0.22)');
       ctx.fillStyle = meshGlow;
       ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
