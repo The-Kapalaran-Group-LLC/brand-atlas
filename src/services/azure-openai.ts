@@ -4,6 +4,59 @@ import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport } from "./ai";
 
+export interface BrandDeepDiveReport {
+  analysisObjective: string;
+  ecosystemMethod: string;
+  brandProfiles: BrandVisualIdentityProfile[];
+  crossBrandReadout: string[];
+  strategicRecommendations: string[];
+  sources: { title: string; url: string }[];
+}
+
+export interface BrandVisualIdentityProfile {
+  brandName: string;
+  website?: string | null;
+  logo: {
+    mainLogo: string;
+    logoVariations: string[];
+    wordmarkLogotype: string;
+    symbolsIcons: string[];
+  };
+  colorPalette: {
+    primaryColors: BrandColorSpec[];
+    secondaryAccentColors: BrandColorSpec[];
+    neutrals: BrandColorSpec[];
+  };
+  typography: {
+    fontFamilies: string[];
+    hierarchy: {
+      h1: string;
+      h2: string;
+      body: string;
+    };
+    usageRules: string[];
+  };
+  supportingVisualElements: {
+    imageryStyle: string[];
+    icons: string[];
+    patternsTextures: string[];
+    shapes: string[];
+    dataVisualization: string[];
+  };
+  consistencyAssessment: string;
+  distinctivenessAssessment: string;
+  sources: { title: string; url: string }[];
+}
+
+export interface BrandColorSpec {
+  name: string;
+  hex: string;
+  rgb?: string | null;
+  cmyk?: string | null;
+  pantone?: string | null;
+  usage?: string | null;
+}
+
 // ============================================================================
 // AZURE OPENAI MIGRATION GUIDE
 // ============================================================================
@@ -48,6 +101,224 @@ const DeepDiveReportSchema = z.object({
     url: z.string()
   }))
 });
+
+const BrandColorSpecSchema = z.object({
+  name: z.string(),
+  hex: z.string(),
+  rgb: z.string().nullable(),
+  cmyk: z.string().nullable(),
+  pantone: z.string().nullable(),
+  usage: z.string().nullable(),
+});
+
+const BrandDeepDiveReportSchema = z.object({
+  analysisObjective: z.string(),
+  ecosystemMethod: z.string(),
+  brandProfiles: z.array(
+    z.object({
+      brandName: z.string(),
+      website: z.string().nullable(),
+      logo: z.object({
+        mainLogo: z.string(),
+        logoVariations: z.array(z.string()),
+        wordmarkLogotype: z.string(),
+        symbolsIcons: z.array(z.string()),
+      }),
+      colorPalette: z.object({
+        primaryColors: z.array(BrandColorSpecSchema),
+        secondaryAccentColors: z.array(BrandColorSpecSchema),
+        neutrals: z.array(BrandColorSpecSchema),
+      }),
+      typography: z.object({
+        fontFamilies: z.array(z.string()),
+        hierarchy: z.object({
+          h1: z.string(),
+          h2: z.string(),
+          body: z.string(),
+        }),
+        usageRules: z.array(z.string()),
+      }),
+      supportingVisualElements: z.object({
+        imageryStyle: z.array(z.string()),
+        icons: z.array(z.string()),
+        patternsTextures: z.array(z.string()),
+        shapes: z.array(z.string()),
+        dataVisualization: z.array(z.string()),
+      }),
+      consistencyAssessment: z.string(),
+      distinctivenessAssessment: z.string(),
+      sources: z.array(
+        z.object({
+          title: z.string(),
+          url: z.string(),
+        })
+      ),
+    })
+  ),
+  crossBrandReadout: z.array(z.string()),
+  strategicRecommendations: z.array(z.string()),
+  sources: z.array(
+    z.object({
+      title: z.string(),
+      url: z.string(),
+    })
+  ),
+});
+
+const BrandDeepDiveFallbackSchema = z.object({
+  analysisObjective: z.string().nullable(),
+  ecosystemMethod: z.string().nullable(),
+  brandProfiles: z.array(
+    z.object({
+      brandName: z.string().nullable(),
+      website: z.string().nullable(),
+      logo: z.object({
+        mainLogo: z.string().nullable(),
+        logoVariations: z.array(z.string()).nullable(),
+        wordmarkLogotype: z.string().nullable(),
+        symbolsIcons: z.array(z.string()).nullable(),
+      }).nullable(),
+      colorPalette: z.object({
+        primaryColors: z.array(BrandColorSpecSchema).nullable(),
+        secondaryAccentColors: z.array(BrandColorSpecSchema).nullable(),
+        neutrals: z.array(BrandColorSpecSchema).nullable(),
+      }).nullable(),
+      typography: z.object({
+        fontFamilies: z.array(z.string()).nullable(),
+        hierarchy: z.object({
+          h1: z.string().nullable(),
+          h2: z.string().nullable(),
+          body: z.string().nullable(),
+        }).nullable(),
+        usageRules: z.array(z.string()).nullable(),
+      }).nullable(),
+      supportingVisualElements: z.object({
+        imageryStyle: z.array(z.string()).nullable(),
+        icons: z.array(z.string()).nullable(),
+        patternsTextures: z.array(z.string()).nullable(),
+        shapes: z.array(z.string()).nullable(),
+        dataVisualization: z.array(z.string()).nullable(),
+      }).nullable(),
+      consistencyAssessment: z.string().nullable(),
+      distinctivenessAssessment: z.string().nullable(),
+      sources: z.array(z.object({ title: z.string(), url: z.string() })).nullable(),
+    })
+  ).nullable(),
+  crossBrandReadout: z.array(z.string()).nullable(),
+  strategicRecommendations: z.array(z.string()).nullable(),
+  sources: z.array(z.object({ title: z.string(), url: z.string() })).nullable(),
+});
+
+function normalizeBrandDeepDiveReport(
+  parsed: z.infer<typeof BrandDeepDiveFallbackSchema>,
+  fallbackBrands: { name: string; website?: string }[],
+  fallbackObjective: string
+): BrandDeepDiveReport {
+  return {
+    analysisObjective: parsed.analysisObjective || fallbackObjective,
+    ecosystemMethod:
+      parsed.ecosystemMethod ||
+      "Brand website ecosystem analysis was conducted using available first-party digital touchpoints.",
+    brandProfiles: (parsed.brandProfiles || fallbackBrands.map((b) => ({ brandName: b.name, website: b.website }))).map((profile, idx) => ({
+      brandName: profile.brandName || fallbackBrands[idx]?.name || `Brand ${idx + 1}`,
+      website: profile.website || fallbackBrands[idx]?.website || null,
+      logo: {
+        mainLogo: profile.logo?.mainLogo || "Not provided",
+        logoVariations: profile.logo?.logoVariations || [],
+        wordmarkLogotype: profile.logo?.wordmarkLogotype || "Not provided",
+        symbolsIcons: profile.logo?.symbolsIcons || [],
+      },
+      colorPalette: {
+        primaryColors: profile.colorPalette?.primaryColors || [],
+        secondaryAccentColors: profile.colorPalette?.secondaryAccentColors || [],
+        neutrals: profile.colorPalette?.neutrals || [],
+      },
+      typography: {
+        fontFamilies: profile.typography?.fontFamilies || [],
+        hierarchy: {
+          h1: profile.typography?.hierarchy?.h1 || "Not provided",
+          h2: profile.typography?.hierarchy?.h2 || "Not provided",
+          body: profile.typography?.hierarchy?.body || "Not provided",
+        },
+        usageRules: profile.typography?.usageRules || [],
+      },
+      supportingVisualElements: {
+        imageryStyle: profile.supportingVisualElements?.imageryStyle || [],
+        icons: profile.supportingVisualElements?.icons || [],
+        patternsTextures: profile.supportingVisualElements?.patternsTextures || [],
+        shapes: profile.supportingVisualElements?.shapes || [],
+        dataVisualization: profile.supportingVisualElements?.dataVisualization || [],
+      },
+      consistencyAssessment: profile.consistencyAssessment || "Not provided",
+      distinctivenessAssessment: profile.distinctivenessAssessment || "Not provided",
+      sources: profile.sources || [],
+    })),
+    crossBrandReadout: parsed.crossBrandReadout || [],
+    strategicRecommendations: parsed.strategicRecommendations || [],
+    sources: parsed.sources || [],
+  };
+}
+
+export async function generateBrandDeepDive(input: {
+  brands: { name: string; website?: string }[];
+  analysisObjective: string;
+  targetAudience?: string;
+  timeHorizon?: string;
+}): Promise<BrandDeepDiveReport> {
+  const cappedBrands = input.brands.slice(0, 6);
+  const brandList = cappedBrands
+    .map((brand, idx) => `${idx + 1}. ${brand.name}${brand.website ? ` (${brand.website})` : ''}`)
+    .join("\n");
+
+  const prompt = `You are a senior brand design strategist and visual identity analyst.
+
+Analyze up to 6 brands by assessing their visual identity systems using this framework:
+1) Logo (primary mark, variations, wordmark/logotype, symbols/icons)
+2) Color Palette (primary, secondary/accent, neutrals, technical values: HEX/RGB/CMYK/Pantone where inferable)
+3) Typography (font families, hierarchy for H1/H2/body, usage rules)
+4) Supporting Visual Elements (imagery style, icons, patterns/textures, shapes, data visualization style)
+
+Brands to assess:
+${brandList}
+
+Analysis Objective: ${input.analysisObjective}
+Target Audience: ${input.targetAudience || "Not specified"}
+Time Horizon: ${input.timeHorizon || "6-12 months"}
+
+Research guidance:
+- Prioritize each brand's full website ecosystem (homepage, product pages, campaign pages, blog/editorial, about, investor/newsroom, design system/style guide if public).
+- Use public first-party sources where possible.
+- If a value cannot be confirmed with high confidence (for example CMYK/Pantone), mark uncertainty in text and avoid fabricating precision.
+
+Output requirements:
+- Return a profile for each brand listed.
+- Keep insights concrete, specific, and directly tied to observed visual identity choices.
+- Include a cross-brand readout that highlights patterns, white space, and differentiation opportunities.
+- Provide strategic recommendations for visual identity direction across the set.`;
+
+  try {
+    const response = await getAzureAI().chat.completions.create({
+      model: getDeploymentName(),
+      messages: [{ role: "user", content: prompt }],
+      response_format: zodResponseFormat(BrandDeepDiveReportSchema, "brand_deep_dive_report"),
+    });
+
+    const text = response.choices[0].message.content || "{}";
+    return JSON.parse(text) as BrandDeepDiveReport;
+  } catch (strictError) {
+    console.warn("Strict structured response failed for brand deep dive, retrying with fallback schema:", strictError);
+
+    const fallbackResponse = await getAzureAI().chat.completions.create({
+      model: getDeploymentName(),
+      messages: [{ role: "user", content: prompt }],
+      response_format: zodResponseFormat(BrandDeepDiveFallbackSchema, "brand_deep_dive_report_fallback"),
+    });
+
+    const fallbackText = fallbackResponse.choices[0].message.content || "{}";
+    const parsedFallback = BrandDeepDiveFallbackSchema.parse(JSON.parse(fallbackText));
+    return normalizeBrandDeepDiveReport(parsedFallback, cappedBrands, input.analysisObjective);
+  }
+}
 
 export async function generateDeepDive(
   insight: MatrixItem,
@@ -123,6 +394,56 @@ export async function askMatrixQuestion(matrix: CulturalMatrix, question: string
 const SuggestBrandsSchema = z.object({
   brands: z.array(z.string())
 });
+
+const SuggestBrandWebsiteSchema = z.object({
+  website: z.string().nullable(),
+});
+
+export async function suggestBrandWebsite(brandName: string): Promise<string | null> {
+  const normalized = brandName.trim();
+  if (!normalized) return null;
+
+  try {
+    const response = await getAzureAI().chat.completions.create({
+      model: getDeploymentName(),
+      messages: [
+        {
+          role: "system",
+          content:
+            "Return only the most likely official homepage URL for the given brand as structured output. Prefer the canonical top-level domain. If uncertain, return null.",
+        },
+        {
+          role: "user",
+          content: `Brand name: ${normalized}`,
+        },
+      ],
+      response_format: zodResponseFormat(SuggestBrandWebsiteSchema, "suggest_brand_website"),
+    });
+
+    const text = response.choices[0].message.content || "{}";
+    const parsed = JSON.parse(text) as { website?: string | null };
+    if (!parsed.website) return null;
+
+    const value = parsed.website.trim();
+    if (!value) return null;
+
+    const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+
+    try {
+      const parsed = new URL(withProtocol);
+      // Require a plausible hostname to avoid filling malformed values that block form submission.
+      if (!parsed.hostname || !parsed.hostname.includes('.')) {
+        return null;
+      }
+      return parsed.toString();
+    } catch {
+      return null;
+    }
+  } catch (error) {
+    console.error("Failed to suggest brand website:", error);
+    return null;
+  }
+}
 
 export async function suggestBrands(partialName: string): Promise<string[]> {
   if (!partialName || partialName.length < 2) return [];

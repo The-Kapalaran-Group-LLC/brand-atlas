@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 
 const TILE_W = 44;
 const TILE_H = 22;
-const CITY_SATURATION_BOOST = 6;
-const CITY_LIGHTNESS_SHIFT = 8;
+const CITY_SATURATION_BOOST = 0;
+const CITY_LIGHTNESS_SHIFT = 10;
 
 export function SplashGrid() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -103,14 +103,39 @@ export function SplashGrid() {
     const render = () => {
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
+      const haloA = ctx.createRadialGradient(
+        window.innerWidth * 0.24,
+        window.innerHeight * 0.48,
+        0,
+        window.innerWidth * 0.24,
+        window.innerHeight * 0.48,
+        window.innerWidth * 0.46,
+      );
+      haloA.addColorStop(0, 'hsla(230, 95%, 72%, 0.12)');
+      haloA.addColorStop(1, 'hsla(230, 95%, 72%, 0)');
+      ctx.fillStyle = haloA;
+      ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+      const haloB = ctx.createRadialGradient(
+        window.innerWidth * 0.78,
+        window.innerHeight * 0.66,
+        0,
+        window.innerWidth * 0.78,
+        window.innerHeight * 0.66,
+        window.innerWidth * 0.42,
+      );
+      haloB.addColorStop(0, 'hsla(320, 92%, 78%, 0.1)');
+      haloB.addColorStop(1, 'hsla(320, 92%, 78%, 0)');
+      ctx.fillStyle = haloB;
+      ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
       const tileW = TILE_W;
       const tileH = TILE_H;
-      const radiusX = Math.ceil(window.innerWidth / (tileW * 0.58));
-      const radiusY = 22;
+      const radiusX = Math.ceil(window.innerWidth / (tileW * 0.62));
+      const radiusY = 24;
       const originX = window.innerWidth * 0.5;
-      // Push the skyline lower so it does not collide with splash headline copy.
-      const originY = window.innerHeight + 28;
-      const cityScale = 0.7;
+      const originY = window.innerHeight * 0.9;
+      const meshScale = 0.9;
       const sat = (value: number) => clamp(value + CITY_SATURATION_BOOST, 0, 100);
       const light = (value: number) => clamp(value + CITY_LIGHTNESS_SHIFT, 0, 100);
 
@@ -127,7 +152,7 @@ export function SplashGrid() {
 
       ctx.save();
       ctx.translate(originX, originY);
-      ctx.scale(cityScale, cityScale);
+      ctx.scale(meshScale, meshScale);
       ctx.translate(-originX, -originY);
 
       const cells: Array<{ x: number; y: number }> = [];
@@ -137,22 +162,17 @@ export function SplashGrid() {
         }
       }
 
-      cells.sort((a, b) => a.x - b.x || a.y - b.y);
+      cells.sort((a, b) => a.y - b.y || a.x - b.x);
+
+      const points = new Map<string, { x: number; y: number; depth: number; active: number }>();
 
       cells.forEach(({ x, y }) => {
-        if (Math.abs(y) > radiusY * 0.97) return;
+        if (Math.abs(y) > radiusY * 0.98) return;
 
         const base = iso(x, y, 0, tileW, tileH, originX, originY);
-
-        const water = Math.abs(y - x * 0.24 + 1.5) < 0.9;
-        if (water) {
-          // Skip rendering base surfaces to keep the city floating without gray road planes.
-          return;
-        }
-
-        const downtown = Math.max(0, 1 - Math.hypot(x + 3, y - 2) / (radiusY * 0.55));
-        const midtown = Math.max(0, 1 - Math.hypot(x - 8, y + 5) / (radiusY * 0.9));
-        const density = Math.max(downtown, midtown * 0.74);
+        const curvature = Math.max(0, 1 - Math.hypot(x * 0.85, y * 0.95) / (radiusY * 1.15));
+        const jitter = (hash(x * 2.9, y * 2.3) - 0.5) * 8;
+        const wave = Math.sin(time * 1.8 + x * 0.42 + y * 0.31) * 9;
 
         const distX = base.x - pointerX;
         const distY = base.y - pointerY;
@@ -161,50 +181,79 @@ export function SplashGrid() {
         const localWeight = weightX * weightY;
         const pointerLift = pointerLiftRef.current * pointerInfluenceRef.current * localWeight;
 
-        const baseHeight = 28 + density * 170 + hash(x * 3.3, y * 2.1) * 40;
-        const breathe = 1 + Math.sin(time * 1.25 + hash(x * 0.6, y * 0.7) * Math.PI * 2) * 0.045;
-        const interactiveScale = clamp(1 + pointerLift * 2.25, 0.28, 3.7);
-        const height = baseHeight * breathe * interactiveScale;
+        const depth = (curvature * 26 + wave + jitter) * (1 + pointerLift * 1.3);
+        const elevated = iso(x, y, depth, tileW, tileH, originX, originY);
+        const driftX = Math.sin(time * 0.8 + x * 0.17 + y * 0.21) * 4;
+        const driftY = Math.cos(time * 0.75 + x * 0.19 - y * 0.16) * 3;
 
-        const footprint = 0.68 + hash(x * 0.93 - 8, y * 1.1 + 3) * 0.18;
-        const top = iso(x, y, height, tileW * footprint, tileH * footprint, originX, originY);
-        const tn = { x: top.x, y: top.y - (tileH * footprint) * 0.5 };
-        const te = { x: top.x + (tileW * footprint) * 0.5, y: top.y };
-        const ts = { x: top.x, y: top.y + (tileH * footprint) * 0.5 };
-        const tw = { x: top.x - (tileW * footprint) * 0.5, y: top.y };
+        points.set(`${x},${y}`, {
+          x: elevated.x + driftX,
+          y: elevated.y + driftY,
+          depth,
+          active: localWeight,
+        });
+      });
 
-        const b = iso(x, y, 0, tileW * footprint, tileH * footprint, originX, originY);
-        const be = { x: b.x + (tileW * footprint) * 0.5, y: b.y };
-        const bs = { x: b.x, y: b.y + (tileH * footprint) * 0.5 };
-        const bw = { x: b.x - (tileW * footprint) * 0.5, y: b.y };
+      const neighbors = [
+        [1, 0],
+        [0, 1],
+        [1, 1],
+        [-1, 1],
+      ];
 
-        const hue = 252 + ((y + radiusY) / (radiusY * 2)) * 50;
-        const topColor = `hsla(${hue + 16}, ${sat(74)}%, ${light(82)}%, 0.95)`;
-        const eastColor = `hsla(${hue + 6}, ${sat(62)}%, ${light(60)}%, 0.9)`;
-        const westColor = `hsla(${hue - 4}, ${sat(54)}%, ${light(50)}%, 0.92)`;
+      points.forEach((point, key) => {
+        const [xStr, yStr] = key.split(',');
+        const x = Number(xStr);
+        const y = Number(yStr);
 
-        drawPoly([te, ts, bs, be], eastColor);
-        drawPoly([tw, ts, bs, bw], westColor);
-        drawPoly([tn, te, ts, tw], topColor);
+        neighbors.forEach(([dx, dy]) => {
+          const neighbor = points.get(`${x + dx},${y + dy}`);
+          if (!neighbor) return;
 
-        const litChance = 0.24 + density * 0.42;
-        const rows = Math.min(8, Math.max(2, Math.floor(height / 28)));
-        const cols = 2;
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            if (hash(x * 1.7 + c * 11, y * 1.4 + r * 9) < litChance) {
-              const fx = (c + 1) / (cols + 1);
-              const fy = (r + 1) / (rows + 1);
-              const wx = bw.x + (be.x - bw.x) * fx;
-              const wy = bs.y - (height * 0.85) * fy;
-              ctx.fillStyle = 'hsla(300, 88%, 78%, 0.65)';
-              ctx.fillRect(wx - 1.1, wy - 1.1, 2.2, 2.2);
-            }
-          }
-        }
+          const depthMix = clamp((point.depth + neighbor.depth + 56) / 130, 0, 1);
+          const alpha = 0.18 + depthMix * 0.28 + (point.active + neighbor.active) * 0.18;
+          const lineGrad = ctx.createLinearGradient(point.x, point.y, neighbor.x, neighbor.y);
+          lineGrad.addColorStop(0, `hsla(34, ${sat(44)}%, ${light(48)}%, ${alpha})`);
+          lineGrad.addColorStop(1, `hsla(30, ${sat(34)}%, ${light(58)}%, ${alpha * 0.95})`);
+
+          ctx.strokeStyle = lineGrad;
+          ctx.lineWidth = 1.15 + depthMix * 1.6;
+          ctx.beginPath();
+          ctx.moveTo(point.x, point.y);
+          ctx.lineTo(neighbor.x, neighbor.y);
+          ctx.stroke();
+        });
+      });
+
+      points.forEach((point) => {
+        const depthMix = clamp((point.depth + 45) / 120, 0, 1);
+        const nodeRadius = 1.25 + depthMix * 2.1 + point.active * 2.6;
+        const nodeColor = `hsla(35, ${sat(32)}%, ${light(78)}%, ${0.52 + depthMix * 0.38})`;
+
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, nodeRadius * 2.7, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(33, ${sat(30)}%, ${light(68)}%, ${0.09 + point.active * 0.12})`;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, nodeRadius, 0, Math.PI * 2);
+        ctx.fillStyle = nodeColor;
+        ctx.fill();
       });
 
       ctx.restore();
+
+      const meshGlow = ctx.createLinearGradient(0, window.innerHeight * 0.4, 0, window.innerHeight);
+      meshGlow.addColorStop(0, 'hsla(34, 50%, 70%, 0.1)');
+      meshGlow.addColorStop(1, 'hsla(32, 44%, 66%, 0.3)');
+      ctx.fillStyle = meshGlow;
+      ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+      const fog = ctx.createLinearGradient(0, window.innerHeight * 0.45, 0, window.innerHeight);
+      fog.addColorStop(0, 'hsla(0, 0%, 100%, 0)');
+      fog.addColorStop(1, 'hsla(0, 0%, 100%, 0.68)');
+      ctx.fillStyle = fog;
+      ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
       time += 0.008;
       animationFrameId = requestAnimationFrame(render);
