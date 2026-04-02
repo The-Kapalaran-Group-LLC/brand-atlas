@@ -114,4 +114,28 @@ describe('BrandDeepDivePage', () => {
       await screen.findByText('The report was rescanned and updated using your prompt. Review the refreshed results below.')
     ).toBeInTheDocument();
   });
+
+  it('falls back to larger logo assets instead of favicons', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText('Visual Identity Objective (Required) e.g. Compare distinctiveness and consistency across premium skincare brands'),
+      {
+        target: { value: 'Compare premium skincare brands' },
+      }
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /generate visual identity deep dive/i }));
+
+    const logo = await screen.findByAltText('Aesop Logo');
+    expect(logo).toHaveAttribute('src', expect.stringContaining('logo.clearbit.com'));
+
+    fireEvent.error(logo);
+
+    expect(logo).toHaveAttribute('src', expect.stringContaining('/apple-touch-icon.png'));
+    expect(logo.getAttribute('src')).not.toContain('google.com/s2/favicons');
+  });
 });

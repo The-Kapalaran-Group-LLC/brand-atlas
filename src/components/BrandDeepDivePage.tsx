@@ -89,16 +89,60 @@ function getDomainFromUrl(url?: string | null): string | null {
   }
 }
 
+function getOriginFromUrl(url?: string | null): string | null {
+  const normalized = normalizeHttpUrl(url);
+  if (!normalized) return null;
+
+  try {
+    return new URL(normalized).origin;
+  } catch {
+    return null;
+  }
+}
+
 function buildDeterministicLogoUrl(website?: string | null): string | null {
   const domain = getDomainFromUrl(website);
   if (!domain) return null;
   return `https://logo.clearbit.com/${domain}`;
 }
 
-function buildFaviconLogoUrl(website?: string | null): string | null {
-  const domain = getDomainFromUrl(website);
-  if (!domain) return null;
-  return `https://www.google.com/s2/favicons?sz=256&domain=${domain}`;
+function buildLargeLogoCandidateUrls(website?: string | null): string[] {
+  const origin = getOriginFromUrl(website);
+  const deterministicLogo = buildDeterministicLogoUrl(website);
+
+  return dedupeVisualCards(
+    [
+      deterministicLogo ? { label: 'Primary Logo', url: deterministicLogo } : null,
+      origin ? { label: 'Apple Touch Icon', url: `${origin}/apple-touch-icon.png` } : null,
+      origin ? { label: 'Apple Touch Icon Precomposed', url: `${origin}/apple-touch-icon-precomposed.png` } : null,
+      origin ? { label: 'Android Chrome Icon', url: `${origin}/android-chrome-512x512.png` } : null,
+      origin ? { label: 'Android Chrome Icon Alt', url: `${origin}/android-chrome-192x192.png` } : null,
+      origin ? { label: 'Site Logo', url: `${origin}/logo.png` } : null,
+      origin ? { label: 'Site Logo Alt', url: `${origin}/assets/logo.png` } : null,
+      origin ? { label: 'Site Logo Image', url: `${origin}/images/logo.png` } : null,
+    ].filter((card): card is BrandVisualCard => Boolean(card))
+  ).map((card) => card.url);
+}
+
+function buildImageFallbackChain(primaryUrl: string, website?: string | null): string[] {
+  return buildLargeLogoCandidateUrls(website).filter((url) => url !== primaryUrl);
+}
+
+function advanceImageFallback(event: React.SyntheticEvent<HTMLImageElement>) {
+  const target = event.currentTarget;
+  const fallbackChain = (target.dataset.fallbackChain || '')
+    .split('|')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const nextFallback = fallbackChain.shift();
+
+  if (nextFallback && target.src !== nextFallback) {
+    target.dataset.fallbackChain = fallbackChain.join('|');
+    target.src = nextFallback;
+    return;
+  }
+
+  target.style.display = 'none';
 }
 
 function buildScreenshotPreviewUrl(pageUrl: string): string {
@@ -136,7 +180,6 @@ function isLikelyLowFidelityVisual(url: string): boolean {
   const value = url.toLowerCase();
   return (
     value.includes('logo.clearbit.com') ||
-    value.includes('google.com/s2/favicons') ||
     value.includes('favicon') ||
     value.includes('avatar') ||
     value.includes('gravatar')
@@ -655,14 +698,10 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
       const aiCards = [...aiNonLogoCards, ...(aiLogoCard && aiNonLogoCards.length === 0 ? [aiLogoCard] : [])].slice(0, 4);
 
       const deterministicCards = dedupeVisualCards(
-        [
-          buildDeterministicLogoUrl(profile.website)
-            ? { label: 'Primary Logo', url: buildDeterministicLogoUrl(profile.website) as string }
-            : null,
-          buildFaviconLogoUrl(profile.website)
-            ? { label: 'Brand Mark', url: buildFaviconLogoUrl(profile.website) as string }
-            : null,
-        ].filter((card): card is BrandVisualCard => Boolean(card))
+        buildLargeLogoCandidateUrls(profile.website).map((url, idx) => ({
+          label: idx === 0 ? 'Primary Logo' : `Logo Asset ${idx + 1}`,
+          url,
+        }))
       );
 
       const screenshotTargets = dedupeVisualCards(
@@ -708,7 +747,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
       resolvedMap[profile.brandName] = {
         method: candidates[0].method,
         images: candidates[0].images,
-        deterministicLogoUrl: buildDeterministicLogoUrl(profile.website) || undefined,
+        deterministicLogoUrl: buildLargeLogoCandidateUrls(profile.website)[0] || undefined,
       };
     });
 
@@ -1277,7 +1316,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                         {visuals.images.map((image, idx) => {
                           const sourceUrl = profile.website || '';
-                          const fallbackImageUrl = buildFaviconLogoUrl(profile.website) || '';
+                          const fallbackChain = buildImageFallbackChain(image.url, profile.website).join('|');
                           const visualClass =
                             visuals.method === 'screenshot'
                               ? 'w-full h-44 object-cover hover:brightness-95 transition-all'
@@ -1291,16 +1330,8 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                                     alt={`${profile.brandName} - ${image.label}`}
                                     loading="lazy"
                                     referrerPolicy="origin"
-                                    data-fallback={fallbackImageUrl}
-                                    onError={(e) => {
-                                      const target = e.currentTarget;
-                                      const fallback = target.dataset.fallback || '';
-                                      if (fallback && target.src !== fallback) {
-                                        target.src = fallback;
-                                        return;
-                                      }
-                                      target.style.display = 'none';
-                                    }}
+                                    data-fallback-chain={fallbackChain}
+                                    onError={advanceImageFallback}
                                     className={visualClass}
                                   />
                                 </a>
@@ -1310,16 +1341,8 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                                   alt={`${profile.brandName} - ${image.label}`}
                                   loading="lazy"
                                   referrerPolicy="origin"
-                                  data-fallback={fallbackImageUrl}
-                                  onError={(e) => {
-                                    const target = e.currentTarget;
-                                    const fallback = target.dataset.fallback || '';
-                                    if (fallback && target.src !== fallback) {
-                                      target.src = fallback;
-                                      return;
-                                    }
-                                    target.style.display = 'none';
-                                  }}
+                                  data-fallback-chain={fallbackChain}
+                                  onError={advanceImageFallback}
                                   className={visualClass}
                                 />
                               )}
@@ -1338,23 +1361,15 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                     {(() => {
                       const visuals = bestVisualsByBrand[profile.brandName];
                       const logoUrl = visuals?.deterministicLogoUrl;
-                      const fallbackLogoUrl = buildFaviconLogoUrl(profile.website);
+                      const fallbackChain = buildImageFallbackChain(logoUrl || '', profile.website).join('|');
                       return logoUrl ? (
                         <div className="mb-4 rounded-lg bg-zinc-50 p-3 flex items-center justify-center">
                           <img
                             src={logoUrl}
                             alt={`${profile.brandName} Logo`}
                             className="max-h-24 max-w-full object-contain"
-                            data-fallback={fallbackLogoUrl || ''}
-                            onError={(e) => {
-                              const target = e.currentTarget;
-                              const fallback = target.dataset.fallback || '';
-                              if (fallback && target.src !== fallback) {
-                                target.src = fallback;
-                                return;
-                              }
-                              target.style.display = 'none';
-                            }}
+                            data-fallback-chain={fallbackChain}
+                            onError={advanceImageFallback}
                           />
                         </div>
                       ) : null;
