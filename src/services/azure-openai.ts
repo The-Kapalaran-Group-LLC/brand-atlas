@@ -549,6 +549,90 @@ ${RESEARCH_ACCURACY_PROTOCOL}`;
   }
 }
 
+export async function regenerateBrandDeepDiveWithFeedback(input: {
+  brands: { name: string; website?: string }[];
+  analysisObjective: string;
+  targetAudience?: string;
+  timeHorizon?: string;
+  currentReport: BrandDeepDiveReport;
+  feedback: string;
+}): Promise<BrandDeepDiveReport> {
+  const cappedBrands = input.brands.slice(0, 6);
+  const brandList = cappedBrands
+    .map((brand, idx) => `${idx + 1}. ${brand.name}${brand.website ? ` (${brand.website})` : ''}`)
+    .join("\n");
+
+  const prompt = `You are a senior brand design strategist and visual identity analyst.
+
+Re-audit and correct the brand deep dive below. Treat the feedback as a request to rescan the listed brand websites and fix inaccuracies.
+
+Brands to assess:
+${brandList}
+
+Analysis Objective: ${input.analysisObjective}
+Target Audience: ${input.targetAudience || "Not specified"}
+Time Horizon: ${input.timeHorizon || "6-12 months"}
+
+User feedback about what looks inaccurate:
+${input.feedback}
+
+Current report to correct:
+${JSON.stringify(input.currentReport, null, 2)}
+
+Correction requirements:
+- Return a fully updated complete report, not a partial patch.
+- Re-check the brand website ecosystem and prioritize first-party same-domain sources.
+- Correct any likely inaccuracies in logos, colors, typography, imagery descriptions, and strategic conclusions.
+- If a value cannot be verified confidently from official or credible sources, remove the precision instead of guessing.
+- Keep sources current, high-credibility, and non-duplicative.
+- Preserve useful accurate material from the current report when it remains supportable.
+
+Output requirements:
+- Return a profile for each brand listed.
+- Keep insights concrete, specific, and directly tied to observed visual identity choices.
+- Include a cross-brand readout that highlights patterns, white space, and differentiation opportunities.
+- Provide strategic recommendations for visual identity direction across the set.
+- Include image URLs when available:
+  - logoImageUrl: direct URL for the current or most representative logo lockup.
+  - sampleVisuals: 2-4 direct image URLs (homepage hero, campaign visual, product visual, etc.) with short titles.
+- Prefer stable, first-party image URLs. If no reliable direct image URL is available, return null for logoImageUrl and an empty sampleVisuals list.
+- For colorPalette values, include exact HEX values only when they are verified on an official same-domain brand source (brand website/design system/style guide).
+- If official same-domain color verification is not available for a brand, leave primaryColors/secondaryAccentColors/neutrals empty instead of guessing exact values.
+
+${RESEARCH_ACCURACY_PROTOCOL}`;
+
+  try {
+    const response = await getAzureAI().chat.completions.create({
+      model: getDeploymentName(),
+      messages: [
+        { role: "system", content: RESEARCH_ACCURACY_PROTOCOL },
+        { role: "user", content: prompt }
+      ],
+      response_format: zodResponseFormat(BrandDeepDiveReportSchema, "brand_deep_dive_report_regenerated"),
+    });
+
+    const text = response.choices[0].message.content || "{}";
+    const parsedStrict = BrandDeepDiveReportSchema.parse(JSON.parse(text));
+    const normalizedStrict = BrandDeepDiveFallbackSchema.parse(parsedStrict);
+    return sanitizeBrandDeepDiveReport(normalizeBrandDeepDiveReport(normalizedStrict, cappedBrands, input.analysisObjective));
+  } catch (strictError) {
+    console.warn("Strict structured response failed for regenerated brand deep dive, retrying with fallback schema:", strictError);
+
+    const fallbackResponse = await getAzureAI().chat.completions.create({
+      model: getDeploymentName(),
+      messages: [
+        { role: "system", content: RESEARCH_ACCURACY_PROTOCOL },
+        { role: "user", content: prompt }
+      ],
+      response_format: zodResponseFormat(BrandDeepDiveFallbackSchema, "brand_deep_dive_report_regenerated_fallback"),
+    });
+
+    const fallbackText = fallbackResponse.choices[0].message.content || "{}";
+    const parsedFallback = BrandDeepDiveFallbackSchema.parse(JSON.parse(fallbackText));
+    return sanitizeBrandDeepDiveReport(normalizeBrandDeepDiveReport(parsedFallback, cappedBrands, input.analysisObjective));
+  }
+}
+
 export async function generateDeepDive(
   insight: MatrixItem,
   context: { audience: string; brand: string; generations: string[]; topicFocus?: string }
@@ -616,6 +700,10 @@ const MatrixAnswerSchema = z.object({
   relevantInsights: z.array(z.string())
 });
 
+const BrandDeepDiveAnswerSchema = z.object({
+  answer: z.string(),
+});
+
 export async function askMatrixQuestion(matrix: CulturalMatrix, question: string): Promise<{ answer: string, relevantInsights: string[] }> {
   const response = await getAzureAI().chat.completions.create({
     model: getDeploymentName(),
@@ -626,6 +714,30 @@ export async function askMatrixQuestion(matrix: CulturalMatrix, question: string
     response_format: zodResponseFormat(MatrixAnswerSchema, "matrix_answer"),
   });
   
+  const text = response.choices[0].message.content || "{}";
+  return JSON.parse(text);
+}
+
+export async function askBrandDeepDiveQuestion(
+  report: BrandDeepDiveReport,
+  question: string
+): Promise<{ answer: string }> {
+  const response = await getAzureAI().chat.completions.create({
+    model: getDeploymentName(),
+    messages: [
+      {
+        role: "system",
+        content:
+          `${RESEARCH_ACCURACY_PROTOCOL}\nYou are an expert brand strategist and design analyst. Answer using ONLY the provided brand deep dive report data. Do not invent facts. If the report does not contain enough information, explicitly say so. Provide a concise, direct answer.`,
+      },
+      {
+        role: "user",
+        content: `Data:\n\n${JSON.stringify(report)}\n\nQuestion: "${question}"`,
+      },
+    ],
+    response_format: zodResponseFormat(BrandDeepDiveAnswerSchema, "brand_deep_dive_answer"),
+  });
+
   const text = response.choices[0].message.content || "{}";
   return JSON.parse(text);
 }

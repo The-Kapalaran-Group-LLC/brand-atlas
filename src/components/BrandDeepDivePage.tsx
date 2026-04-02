@@ -20,7 +20,7 @@ import {
   Info,
 } from 'lucide-react';
 import pptxgen from 'pptxgenjs';
-import { BrandColorSpec, BrandDeepDiveReport, generateBrandDeepDive, suggestBrandWebsite } from '../services/azure-openai';
+import { BrandColorSpec, BrandDeepDiveReport, askBrandDeepDiveQuestion, generateBrandDeepDive, regenerateBrandDeepDiveWithFeedback, suggestBrandWebsite } from '../services/azure-openai';
 
 interface BrandDeepDivePageProps {
   onBack: () => void;
@@ -183,9 +183,13 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const [fakeProgress, setFakeProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<BrandDeepDiveReport | null>(null);
+  const [reportQuestion, setReportQuestion] = useState('');
+  const [reportAnswer, setReportAnswer] = useState('');
+  const [isAskingQuestion, setIsAskingQuestion] = useState(false);
+  const [isRescanningReport, setIsRescanningReport] = useState(false);
   const [bestVisualsByBrand, setBestVisualsByBrand] = useState<Record<string, BrandVisualSelection>>({});
   const [isExporting, setIsExporting] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [, setToast] = useState<string | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedDeepDiveSearch[]>([]);
   const websiteLookupTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const undoDeleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -204,6 +208,8 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
     setShowValidation(false);
     setError(null);
     setReport(null);
+    setReportQuestion('');
+    setReportAnswer('');
     setBestVisualsByBrand({});
     setToast('Started a new search.');
   };
@@ -218,6 +224,8 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
     setAnalysisObjective(saved.analysisObjective || '');
     setTargetAudience(saved.targetAudience || '');
     setReport(saved.report);
+    setReportQuestion('');
+    setReportAnswer('');
     setResultTab('profiles');
     setShowValidation(false);
     setError(null);
@@ -306,6 +314,8 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
     setIsLoading(true);
     setError(null);
     setResultTab('profiles');
+    setReportQuestion('');
+    setReportAnswer('');
     setBestVisualsByBrand({});
 
     try {
@@ -335,6 +345,73 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
       setFakeProgress(100);
       await new Promise((resolve) => setTimeout(resolve, 220));
       setIsLoading(false);
+    }
+  };
+
+  const getNormalizedBrands = () =>
+    brands
+      .map((brand) => ({
+        name: brand.name.trim(),
+        website: brand.website.trim(),
+      }))
+      .filter((brand) => brand.name.length > 0)
+      .slice(0, 6);
+
+  const handleAskQuestion = async () => {
+    if (!report || !reportQuestion.trim()) return;
+
+    setIsAskingQuestion(true);
+    try {
+      const result = await askBrandDeepDiveQuestion(report, reportQuestion);
+      setReportAnswer(result.answer);
+    } catch (err) {
+      console.error('Failed to answer deep dive question', err);
+      setReportAnswer("Sorry, I couldn't answer that question right now.");
+    } finally {
+      setIsAskingQuestion(false);
+    }
+  };
+
+  const handleRescanReport = async () => {
+    if (!report || !reportQuestion.trim()) return;
+
+    const normalizedBrands = getNormalizedBrands();
+    if (normalizedBrands.length === 0) return;
+
+    setIsRescanningReport(true);
+    setReportAnswer('');
+    setError(null);
+
+    try {
+      const nextReport = await regenerateBrandDeepDiveWithFeedback({
+        brands: normalizedBrands,
+        analysisObjective,
+        targetAudience,
+        currentReport: report,
+        feedback: reportQuestion,
+      });
+
+      setReport(nextReport);
+
+      const nextSaved: SavedDeepDiveSearch = {
+        id: `deep-dive-${Date.now()}`,
+        date: new Date().toISOString(),
+        brands: normalizedBrands,
+        analysisObjective,
+        targetAudience,
+        report: nextReport,
+      };
+      const updated = [nextSaved, ...savedSearches.filter((item) => item.id !== nextSaved.id)].slice(0, 20);
+      setSavedSearches(updated);
+      localStorage.setItem('visual_design_deep_dives', JSON.stringify(updated));
+      setReportAnswer('The report was rescanned and updated using your feedback. Review the refreshed results below.');
+    } catch (err: unknown) {
+      console.error('Failed to rescan brand deep dive', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setReportAnswer('The rescan could not complete right now.');
+      setError(`Failed to rescan brand deep dive: ${message}`);
+    } finally {
+      setIsRescanningReport(false);
     }
   };
 
@@ -866,7 +943,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className={`fixed ${toast ? 'top-20' : 'top-6'} left-1/2 -translate-x-1/2 z-50 bg-zinc-900 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-4 text-sm no-print`}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-4 text-sm no-print"
           >
             <Info className="w-4 h-4 text-indigo-400" />
             <span>{undoToast.message}</span>
@@ -1132,12 +1209,55 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                   </button>
                 </div>
               </div>
-              {toast && (
-                <div className="mt-2 px-3 py-2 rounded-lg bg-zinc-100 text-zinc-700 text-sm">
-                  {toast}
-                </div>
-              )}
             </section>
+
+            <div className="lg:col-span-2 bg-indigo-50 rounded-3xl p-6 md:p-8 border border-indigo-100 shadow-sm no-print">
+              <h3 className="text-xl font-bold text-indigo-900 mb-4 flex items-center gap-2">
+                <Search className="w-6 h-6" /> Ask the Archeologist
+              </h3>
+              <p className="text-sm text-indigo-700/80 mb-4">
+                Ask a question about the current audit, or use your prompt to trigger a corrective rescan if the results look wrong.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  value={reportQuestion}
+                  onChange={(e) => setReportQuestion(e.target.value)}
+                  placeholder="Ask a question or describe what looks inaccurate so the report can be rescanned"
+                  className="flex-1 px-5 py-4 rounded-2xl border border-indigo-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-zinc-900 shadow-sm"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAskQuestion()}
+                  disabled={isAskingQuestion || isRescanningReport}
+                />
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    type="button"
+                    onClick={handleAskQuestion}
+                    disabled={isAskingQuestion || isRescanningReport || !reportQuestion.trim()}
+                    className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-medium hover:bg-indigo-700 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-2 disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    {isAskingQuestion ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Ask'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRescanReport}
+                    disabled={isAskingQuestion || isRescanningReport || !reportQuestion.trim()}
+                    className="px-6 py-4 bg-white text-indigo-700 rounded-2xl font-medium border border-indigo-200 hover:bg-indigo-100/60 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:ring-offset-2 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    {isRescanningReport ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
+                    {isRescanningReport ? 'Rescanning...' : 'Rescan & Fix'}
+                  </button>
+                </div>
+              </div>
+              {reportAnswer && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-6 p-6 bg-white rounded-2xl border border-indigo-100 text-zinc-700 shadow-sm leading-relaxed"
+                >
+                  <p>{reportAnswer}</p>
+                </motion.div>
+              )}
+            </div>
 
             {resultTab === 'compare' ? (
               renderComparePanel()

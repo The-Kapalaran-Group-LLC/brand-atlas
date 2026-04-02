@@ -1090,7 +1090,7 @@ export default function App() {
             >
               <Sparkles className="w-7 h-7 text-indigo-600 mb-8" />
               <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-zinc-950 mb-5 select-none">
-                Archeo<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">AI</span>
+                 Brand <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">Archeologist</span>
               </h1>
             </motion.div>
           </motion.div>
