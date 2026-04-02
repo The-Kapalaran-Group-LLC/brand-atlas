@@ -84,7 +84,7 @@ export default function App() {
   const SPLASH_DURATION_MS = 3000;
   const [showSplash, setShowSplash] = useState(true);
   const [isSplashHeld, setIsSplashHeld] = useState(false);
-  const [activeExperience, setActiveExperience] = useState<'research' | 'brand'>('research');
+  const [activeExperience, setActiveExperience] = useState<'research' | 'brand' | null>(null);
   const [brand, setBrand] = useState('');
   const [audience, setAudience] = useState('');
   const [showValidation, setShowValidation] = useState(false);
@@ -273,14 +273,27 @@ export default function App() {
     }
 
     setFakeProgress(8);
+    const startedAt = Date.now();
     const progressInterval = setInterval(() => {
       setFakeProgress((prev) => {
-        const ceiling = 92;
-        if (prev >= ceiling) return prev;
-        const step = Math.max(1, (ceiling - prev) * 0.09);
+        const elapsedMs = Date.now() - startedAt;
+        const ceiling =
+          elapsedMs < 4000
+            ? 86
+            : elapsedMs < 10000
+              ? 94
+              : elapsedMs < 20000
+                ? 97.5
+                : 99.2;
+
+        if (prev >= ceiling) {
+          return prev;
+        }
+
+        const step = Math.max(0.15, (ceiling - prev) * 0.08);
         return Math.min(ceiling, prev + step);
       });
-    }, 120);
+    }, 140);
 
     return () => clearInterval(progressInterval);
   }, [isLoading]);
@@ -467,6 +480,7 @@ export default function App() {
       }
     } finally {
       setFakeProgress(100);
+      await new Promise((resolve) => setTimeout(resolve, 220));
       setIsLoading(false);
     }
   };
@@ -702,6 +716,8 @@ export default function App() {
       cat.data.forEach(d => {
         const textLength = d.text.length;
         const estimatedHeight = Math.max(0.6, Math.ceil(textLength / 100) * 0.35);
+        const confidenceText = (d.confidenceLevel || 'medium').toUpperCase();
+        const sourceText = d.sourceType ? ` | ${d.sourceType}` : '';
         
         if (yPos + estimatedHeight > 5.2) {
           catSlide = pres.addSlide();
@@ -710,7 +726,7 @@ export default function App() {
           yPos = 1.2;
         }
         
-        catSlide.addText(`${d.isHighlyUnique ? '✨ ' : '• '}${d.text}`, {
+        catSlide.addText(`${d.isHighlyUnique ? '✨ ' : '• '}${d.text}\n[${confidenceText} CONFIDENCE${sourceText}]`, {
           shape: pres.ShapeType.roundRect,
           x: 0.5, y: yPos, w: 9, h: estimatedHeight,
           fill: { color: d.isHighlyUnique ? "EEF2FF" : "FFFFFF" },
@@ -882,6 +898,11 @@ export default function App() {
             // Insight Text
             currentY = addWrappedText(item.text, margin, currentY, 16, true, [24, 24, 27]);
             currentY += 8;
+            currentY = addWrappedText(`Confidence: ${(item.confidenceLevel || 'medium').toUpperCase()}`, margin, currentY, 10, true, [79, 70, 229]);
+            if (item.sourceType) {
+              currentY = addWrappedText(`Source Type: ${item.sourceType}`, margin, currentY, 10, false, [82, 82, 91]);
+            }
+            currentY += 4;
             
             if (item.deepDive) {
               // Origination & Relevance
@@ -1095,12 +1116,59 @@ export default function App() {
       </div>
       
       <main className="relative z-10 max-w-6xl mx-auto px-6 py-16 md:py-24">
-        {activeExperience === 'brand' ? (
+        {activeExperience === null ? (
+          <motion.section
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45 }}
+            className="max-w-3xl mx-auto text-center"
+          >
+            <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-6 mx-auto">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <h2 className="text-4xl md:text-5xl font-medium tracking-tight text-zinc-900 mb-4">
+              Choose Your Research Experience
+            </h2>
+            <p className="text-zinc-500 mb-10 text-lg">
+              Start with cultural intelligence or go straight into visual identity analysis.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                onClick={() => setActiveExperience('research')}
+                className="text-left bg-white/90 border border-zinc-200 rounded-3xl p-6 hover:border-zinc-300 hover:shadow-sm transition-all"
+              >
+                <div className="inline-flex items-center gap-2 text-zinc-800 font-semibold mb-2">
+                  <Search className="w-4 h-4" /> Cultural Archeologist
+                </div>
+                <p className="text-sm text-zinc-500">
+                  Generate cross-generational audience and culture insights.
+                </p>
+              </button>
+              <button
+                onClick={() => setActiveExperience('brand')}
+                className="text-left bg-white/90 border border-zinc-200 rounded-3xl p-6 hover:border-zinc-300 hover:shadow-sm transition-all"
+              >
+                <div className="inline-flex items-center gap-2 text-zinc-800 font-semibold mb-2">
+                  <Sparkles className="w-4 h-4" /> Visual Design Deep Dive
+                </div>
+                <p className="text-sm text-zinc-500">
+                  Compare logo systems, colors, typography, and visual identity cues.
+                </p>
+              </button>
+            </div>
+          </motion.section>
+        ) : activeExperience === 'brand' ? (
           <BrandDeepDivePage onBack={() => setActiveExperience('research')} />
         ) : (
           <>
             {/* Top Navigation / Actions */}
             <div className="absolute top-6 right-6 z-50 no-print flex items-center gap-2">
+              <button
+                onClick={() => setActiveExperience('brand')}
+                className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+              >
+                <Sparkles className="w-4 h-4" /> Visual Design Deep Dive
+              </button>
               <button
                 onClick={handleReset}
                 className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
@@ -1796,10 +1864,10 @@ export default function App() {
                     </div>
                   )}
                   <button onClick={exportToPPTX} className="flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 rounded-full text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm">
-                    <Presentation className="w-4 h-4" /> PPTX
+                    <Presentation className="w-4 h-4" /> PPTX <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">Beta</span>
                   </button>
                   <button onClick={exportToPDF} className="flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 rounded-full text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm">
-                    <FileText className="w-4 h-4" /> PDF
+                    <FileText className="w-4 h-4" /> PDF <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">Beta</span>
                   </button>
                   <button 
                     onClick={exportToGoogleSlides} 
@@ -1807,7 +1875,7 @@ export default function App() {
                     className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-100 rounded-full text-sm font-medium text-indigo-700 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                    {isExporting ? 'Exporting...' : 'Google Slides'}
+                    {isExporting ? 'Exporting...' : 'Google Slides'} {!isExporting && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">Beta</span>}
                   </button>
                 </div>
               </div>
@@ -1998,6 +2066,16 @@ export default function App() {
 function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], onDeepDive }: { title: string; subtext: string; items: MatrixItem[]; delay: number; highlightedInsights?: string[]; onDeepDive?: (item: MatrixItem) => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const INITIAL_SHOW = 3;
+
+  const confidenceChipClass = (confidence?: string) => {
+    if (confidence === 'high') {
+      return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+    }
+    if (confidence === 'low') {
+      return 'bg-amber-50 text-amber-700 border border-amber-200';
+    }
+    return 'bg-zinc-100 text-zinc-600 border border-zinc-200';
+  };
   
   if (!items || items.length === 0) return null;
   
@@ -2041,6 +2119,11 @@ function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], on
                 </span>
                 <span className="flex-1 pr-8">
                   {item.text}
+                  {item.confidenceLevel && (
+                    <span className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${confidenceChipClass(item.confidenceLevel)}`}>
+                      {item.confidenceLevel} confidence
+                    </span>
+                  )}
                   {item.sourceType && (
                     <span className="inline-block ml-2 px-1.5 py-0.5 bg-zinc-100 text-zinc-500 text-[10px] uppercase tracking-wider font-semibold rounded border border-zinc-200 align-middle">
                       {item.sourceType}

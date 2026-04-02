@@ -16,6 +16,9 @@ export interface BrandDeepDiveReport {
 export interface BrandVisualIdentityProfile {
   brandName: string;
   website?: string | null;
+  matchSource?: 'name' | 'domain' | 'index' | 'none';
+  logoImageUrl?: string | null;
+  sampleVisuals: { title: string; url: string }[];
   logo: {
     mainLogo: string;
     logoVariations: string[];
@@ -118,6 +121,13 @@ const BrandDeepDiveReportSchema = z.object({
     z.object({
       brandName: z.string(),
       website: z.string().nullable(),
+      logoImageUrl: z.string().nullable(),
+      sampleVisuals: z.array(
+        z.object({
+          title: z.string(),
+          url: z.string(),
+        })
+      ),
       logo: z.object({
         mainLogo: z.string(),
         logoVariations: z.array(z.string()),
@@ -172,6 +182,8 @@ const BrandDeepDiveFallbackSchema = z.object({
     z.object({
       brandName: z.string().nullable(),
       website: z.string().nullable(),
+      logoImageUrl: z.string().nullable(),
+      sampleVisuals: z.array(z.object({ title: z.string(), url: z.string() })).nullable(),
       logo: z.object({
         mainLogo: z.string().nullable(),
         logoVariations: z.array(z.string()).nullable(),
@@ -209,50 +221,251 @@ const BrandDeepDiveFallbackSchema = z.object({
   sources: z.array(z.object({ title: z.string(), url: z.string() })).nullable(),
 });
 
+const RESEARCH_ACCURACY_PROTOCOL = `
+Accuracy protocol (must follow):
+- Prioritize high-credibility sources: first-party brand properties, reputable industry publishers, recognized research institutions.
+- Use the most recent evidence available (favor 2024-2026) and avoid stale claims unless historically relevant.
+- Do not fabricate sources, URLs, dates, statistics, or examples.
+- If confidence is low, state uncertainty explicitly and keep language conservative.
+- Ensure every strategic claim is grounded in observable signals from reliable sources.
+`;
+
+function normalizeHttpsUrl(rawUrl?: string | null): string | null {
+  if (!rawUrl) return null;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(withProtocol);
+    if (!parsed.hostname || !parsed.hostname.includes('.')) return null;
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeSources(sources?: { title: string; url: string }[] | null): { title: string; url: string }[] {
+  const seen = new Set<string>();
+  return (sources || [])
+    .map((source) => {
+      const url = normalizeHttpsUrl(source.url);
+      if (!url) return null;
+      const title = (source.title || '').trim() || 'Untitled source';
+      return { title, url };
+    })
+    .filter((source): source is { title: string; url: string } => Boolean(source))
+    .filter((source) => {
+      if (seen.has(source.url)) return false;
+      seen.add(source.url);
+      return true;
+    });
+}
+
+function sanitizeDeepDiveReport(report: DeepDiveReport): DeepDiveReport {
+  return {
+    ...report,
+    sources: sanitizeSources(report.sources),
+    strategicImplications: (report.strategicImplications || []).map((item) => item.trim()).filter(Boolean),
+    realWorldExamples: (report.realWorldExamples || []).map((item) => item.trim()).filter(Boolean),
+  };
+}
+
+function isValidHexColor(value?: string | null): boolean {
+  if (!value) return false;
+  return /^#?[0-9a-fA-F]{6}$/.test(value.trim());
+}
+
+function normalizeHexColor(value?: string | null): string | null {
+  if (!isValidHexColor(value)) return null;
+  const trimmed = value!.trim().replace('#', '').toUpperCase();
+  return `#${trimmed}`;
+}
+
+function isOfficialSourceForWebsite(sourceUrl?: string | null, websiteUrl?: string | null): boolean {
+  const sourceHost = getHostname(sourceUrl);
+  const websiteHost = getHostname(websiteUrl);
+  if (!sourceHost || !websiteHost) return false;
+  return sourceHost === websiteHost || sourceHost.endsWith(`.${websiteHost}`) || websiteHost.endsWith(`.${sourceHost}`);
+}
+
+function sanitizeBrandDeepDiveReport(report: BrandDeepDiveReport): BrandDeepDiveReport {
+  return {
+    ...report,
+    sources: sanitizeSources(report.sources),
+    brandProfiles: (report.brandProfiles || []).map((profile) => {
+      const normalizedWebsite = normalizeHttpsUrl(profile.website) || profile.website || null;
+      const profileSources = sanitizeSources(profile.sources);
+      const hasOfficialBrandSource = profileSources.some((source) =>
+        isOfficialSourceForWebsite(source.url, normalizedWebsite)
+      );
+
+      const sanitizeColors = (colors: BrandColorSpec[] = []): BrandColorSpec[] =>
+        colors
+          .map((color) => {
+            const hex = normalizeHexColor(color.hex);
+            if (!hex) return null;
+            return {
+              ...color,
+              name: (color.name || 'Color').trim(),
+              hex,
+            };
+          })
+          .filter((color): color is BrandColorSpec => Boolean(color));
+
+      const verifiedPrimaryColors = hasOfficialBrandSource ? sanitizeColors(profile.colorPalette?.primaryColors || []) : [];
+      const verifiedAccentColors = hasOfficialBrandSource ? sanitizeColors(profile.colorPalette?.secondaryAccentColors || []) : [];
+      const verifiedNeutrals = hasOfficialBrandSource ? sanitizeColors(profile.colorPalette?.neutrals || []) : [];
+
+      return {
+        ...profile,
+        website: normalizedWebsite,
+        logoImageUrl: normalizeHttpsUrl(profile.logoImageUrl) || null,
+        sampleVisuals: (profile.sampleVisuals || [])
+          .map((visual) => {
+            const url = normalizeHttpsUrl(visual.url);
+            if (!url) return null;
+            return { title: (visual.title || 'Visual').trim(), url };
+          })
+          .filter((visual): visual is { title: string; url: string } => Boolean(visual)),
+        colorPalette: {
+          primaryColors: verifiedPrimaryColors,
+          secondaryAccentColors: verifiedAccentColors,
+          neutrals: verifiedNeutrals,
+        },
+        consistencyAssessment: hasOfficialBrandSource
+          ? profile.consistencyAssessment
+          : `${profile.consistencyAssessment} Color hex values were omitted because no official same-domain source was found for verification.`,
+        sources: profileSources,
+      };
+    }),
+  };
+}
+
+function sanitizeCulturalMatrix(matrix: CulturalMatrix): CulturalMatrix {
+  const normalizeItemConfidence = (item: MatrixItem): MatrixItem => ({
+    ...item,
+    confidenceLevel:
+      item.confidenceLevel === 'low' || item.confidenceLevel === 'high' || item.confidenceLevel === 'medium'
+        ? item.confidenceLevel
+        : 'medium',
+  });
+
+  return {
+    ...matrix,
+    moments: (matrix.moments || []).map(normalizeItemConfidence),
+    beliefs: (matrix.beliefs || []).map(normalizeItemConfidence),
+    tone: (matrix.tone || []).map(normalizeItemConfidence),
+    language: (matrix.language || []).map(normalizeItemConfidence),
+    behaviors: (matrix.behaviors || []).map(normalizeItemConfidence),
+    contradictions: (matrix.contradictions || []).map(normalizeItemConfidence),
+    community: (matrix.community || []).map(normalizeItemConfidence),
+    influencers: (matrix.influencers || []).map(normalizeItemConfidence),
+    sources: sanitizeSources(matrix.sources),
+  };
+}
+
+function normalizeKey(value?: string | null): string {
+  return (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function getHostname(value?: string | null): string {
+  if (!value) return '';
+  try {
+    const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+    return new URL(withProtocol).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
 function normalizeBrandDeepDiveReport(
   parsed: z.infer<typeof BrandDeepDiveFallbackSchema>,
   fallbackBrands: { name: string; website?: string }[],
   fallbackObjective: string
 ): BrandDeepDiveReport {
+  const sourceProfiles = parsed.brandProfiles || [];
+  const remainingProfiles = [...sourceProfiles];
+
+  const alignedProfiles = fallbackBrands.map((brand, idx) => {
+    const targetNameKey = normalizeKey(brand.name);
+    const targetHost = getHostname(brand.website);
+    let matchedBy: 'name' | 'domain' | 'index' | 'none' = 'none';
+
+    let matchedIndex = remainingProfiles.findIndex((profile) => {
+      const profileNameKey = normalizeKey(profile.brandName);
+      return profileNameKey === targetNameKey || profileNameKey.includes(targetNameKey) || targetNameKey.includes(profileNameKey);
+    });
+    if (matchedIndex >= 0) {
+      matchedBy = 'name';
+    }
+
+    if (matchedIndex < 0 && targetHost) {
+      matchedIndex = remainingProfiles.findIndex((profile) => getHostname(profile.website) === targetHost);
+      if (matchedIndex >= 0) {
+        matchedBy = 'domain';
+      }
+    }
+
+    if (matchedIndex < 0 && idx < remainingProfiles.length) {
+      matchedIndex = idx;
+      matchedBy = 'index';
+    }
+
+    if (matchedIndex < 0 || matchedIndex >= remainingProfiles.length) {
+      return null;
+    }
+
+    const [matched] = remainingProfiles.splice(matchedIndex, 1);
+    return { brand, matched, matchedBy };
+  });
+
   return {
     analysisObjective: parsed.analysisObjective || fallbackObjective,
     ecosystemMethod:
       parsed.ecosystemMethod ||
       "Brand website ecosystem analysis was conducted using available first-party digital touchpoints.",
-    brandProfiles: (parsed.brandProfiles || fallbackBrands.map((b) => ({ brandName: b.name, website: b.website }))).map((profile, idx) => ({
-      brandName: profile.brandName || fallbackBrands[idx]?.name || `Brand ${idx + 1}`,
-      website: profile.website || fallbackBrands[idx]?.website || null,
+    brandProfiles: fallbackBrands.map((brand, idx) => {
+      const resolved = alignedProfiles[idx]?.matched;
+      const matchedBy = alignedProfiles[idx]?.matchedBy || 'none';
+      const profile = resolved || null;
+      return {
+      brandName: brand.name || profile?.brandName || `Brand ${idx + 1}`,
+      website: brand.website || profile?.website || null,
+      matchSource: matchedBy,
+      logoImageUrl: profile?.logoImageUrl || null,
+      sampleVisuals: profile?.sampleVisuals || [],
       logo: {
-        mainLogo: profile.logo?.mainLogo || "Not provided",
-        logoVariations: profile.logo?.logoVariations || [],
-        wordmarkLogotype: profile.logo?.wordmarkLogotype || "Not provided",
-        symbolsIcons: profile.logo?.symbolsIcons || [],
+        mainLogo: profile?.logo?.mainLogo || "Not provided",
+        logoVariations: profile?.logo?.logoVariations || [],
+        wordmarkLogotype: profile?.logo?.wordmarkLogotype || "Not provided",
+        symbolsIcons: profile?.logo?.symbolsIcons || [],
       },
       colorPalette: {
-        primaryColors: profile.colorPalette?.primaryColors || [],
-        secondaryAccentColors: profile.colorPalette?.secondaryAccentColors || [],
-        neutrals: profile.colorPalette?.neutrals || [],
+        primaryColors: profile?.colorPalette?.primaryColors || [],
+        secondaryAccentColors: profile?.colorPalette?.secondaryAccentColors || [],
+        neutrals: profile?.colorPalette?.neutrals || [],
       },
       typography: {
-        fontFamilies: profile.typography?.fontFamilies || [],
+        fontFamilies: profile?.typography?.fontFamilies || [],
         hierarchy: {
-          h1: profile.typography?.hierarchy?.h1 || "Not provided",
-          h2: profile.typography?.hierarchy?.h2 || "Not provided",
-          body: profile.typography?.hierarchy?.body || "Not provided",
+          h1: profile?.typography?.hierarchy?.h1 || "Not provided",
+          h2: profile?.typography?.hierarchy?.h2 || "Not provided",
+          body: profile?.typography?.hierarchy?.body || "Not provided",
         },
-        usageRules: profile.typography?.usageRules || [],
+        usageRules: profile?.typography?.usageRules || [],
       },
       supportingVisualElements: {
-        imageryStyle: profile.supportingVisualElements?.imageryStyle || [],
-        icons: profile.supportingVisualElements?.icons || [],
-        patternsTextures: profile.supportingVisualElements?.patternsTextures || [],
-        shapes: profile.supportingVisualElements?.shapes || [],
-        dataVisualization: profile.supportingVisualElements?.dataVisualization || [],
+        imageryStyle: profile?.supportingVisualElements?.imageryStyle || [],
+        icons: profile?.supportingVisualElements?.icons || [],
+        patternsTextures: profile?.supportingVisualElements?.patternsTextures || [],
+        shapes: profile?.supportingVisualElements?.shapes || [],
+        dataVisualization: profile?.supportingVisualElements?.dataVisualization || [],
       },
-      consistencyAssessment: profile.consistencyAssessment || "Not provided",
-      distinctivenessAssessment: profile.distinctivenessAssessment || "Not provided",
-      sources: profile.sources || [],
-    })),
+      consistencyAssessment: profile?.consistencyAssessment || "Not provided",
+      distinctivenessAssessment: profile?.distinctivenessAssessment || "Not provided",
+      sources: profile?.sources || [],
+    };}),
     crossBrandReadout: parsed.crossBrandReadout || [],
     strategicRecommendations: parsed.strategicRecommendations || [],
     sources: parsed.sources || [],
@@ -294,29 +507,45 @@ Output requirements:
 - Return a profile for each brand listed.
 - Keep insights concrete, specific, and directly tied to observed visual identity choices.
 - Include a cross-brand readout that highlights patterns, white space, and differentiation opportunities.
-- Provide strategic recommendations for visual identity direction across the set.`;
+- Provide strategic recommendations for visual identity direction across the set.
+- Include image URLs when available:
+  - logoImageUrl: direct URL for the current or most representative logo lockup.
+  - sampleVisuals: 2-4 direct image URLs (homepage hero, campaign visual, product visual, etc.) with short titles.
+- Prefer stable, first-party image URLs. If no reliable direct image URL is available, return null for logoImageUrl and an empty sampleVisuals list.
+- For colorPalette values, include exact HEX values only when they are verified on an official same-domain brand source (brand website/design system/style guide).
+- If official same-domain color verification is not available for a brand, leave primaryColors/secondaryAccentColors/neutrals empty instead of guessing exact values.
+
+${RESEARCH_ACCURACY_PROTOCOL}`;
 
   try {
     const response = await getAzureAI().chat.completions.create({
       model: getDeploymentName(),
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        { role: "system", content: RESEARCH_ACCURACY_PROTOCOL },
+        { role: "user", content: prompt }
+      ],
       response_format: zodResponseFormat(BrandDeepDiveReportSchema, "brand_deep_dive_report"),
     });
 
     const text = response.choices[0].message.content || "{}";
-    return JSON.parse(text) as BrandDeepDiveReport;
+    const parsedStrict = BrandDeepDiveReportSchema.parse(JSON.parse(text));
+    const normalizedStrict = BrandDeepDiveFallbackSchema.parse(parsedStrict);
+    return sanitizeBrandDeepDiveReport(normalizeBrandDeepDiveReport(normalizedStrict, cappedBrands, input.analysisObjective));
   } catch (strictError) {
     console.warn("Strict structured response failed for brand deep dive, retrying with fallback schema:", strictError);
 
     const fallbackResponse = await getAzureAI().chat.completions.create({
       model: getDeploymentName(),
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        { role: "system", content: RESEARCH_ACCURACY_PROTOCOL },
+        { role: "user", content: prompt }
+      ],
       response_format: zodResponseFormat(BrandDeepDiveFallbackSchema, "brand_deep_dive_report_fallback"),
     });
 
     const fallbackText = fallbackResponse.choices[0].message.content || "{}";
     const parsedFallback = BrandDeepDiveFallbackSchema.parse(JSON.parse(fallbackText));
-    return normalizeBrandDeepDiveReport(parsedFallback, cappedBrands, input.analysisObjective);
+    return sanitizeBrandDeepDiveReport(normalizeBrandDeepDiveReport(parsedFallback, cappedBrands, input.analysisObjective));
   }
 }
 
@@ -333,16 +562,21 @@ export async function generateDeepDive(
   
   Insight: "${insight.text}"
   
-  Please provide a deep dive into this specific insight to help me build strategies.`;
+  Please provide a deep dive into this specific insight to help me build strategies.
+
+  ${RESEARCH_ACCURACY_PROTOCOL}`;
 
   const response = await getAzureAI().chat.completions.create({
     model: getDeploymentName(),
-    messages: [{ role: "user", content: prompt }],
+    messages: [
+      { role: "system", content: RESEARCH_ACCURACY_PROTOCOL },
+      { role: "user", content: prompt }
+    ],
     response_format: zodResponseFormat(DeepDiveReportSchema, "deep_dive_report"),
   });
 
   const text = response.choices[0].message.content || "{}";
-  return JSON.parse(text) as DeepDiveReport;
+  return sanitizeDeepDiveReport(JSON.parse(text) as DeepDiveReport);
 }
 
 export async function generateDeepDivesBatch(
@@ -359,17 +593,22 @@ export async function generateDeepDivesBatch(
   Insights:
   ${insights.map((insight, index) => `${index + 1}. "${insight.text}"`).join('\n')}
   
-  Please provide a deep dive into EACH of these specific insights to help me build strategies.`;
+  Please provide a deep dive into EACH of these specific insights to help me build strategies.
+
+  ${RESEARCH_ACCURACY_PROTOCOL}`;
 
   const response = await getAzureAI().chat.completions.create({
     model: getDeploymentName(),
-    messages: [{ role: "user", content: prompt }],
+    messages: [
+      { role: "system", content: RESEARCH_ACCURACY_PROTOCOL },
+      { role: "user", content: prompt }
+    ],
     response_format: zodResponseFormat(z.object({ reports: z.array(DeepDiveReportSchema) }), "deep_dive_reports"),
   });
 
   const text = response.choices[0].message.content || "{}";
   const parsed = JSON.parse(text);
-  return parsed.reports || [];
+  return (parsed.reports || []).map((report: DeepDiveReport) => sanitizeDeepDiveReport(report));
 }
 
 const MatrixAnswerSchema = z.object({
@@ -381,7 +620,7 @@ export async function askMatrixQuestion(matrix: CulturalMatrix, question: string
   const response = await getAzureAI().chat.completions.create({
     model: getDeploymentName(),
     messages: [
-      { role: "system", content: "You are an expert analyst. Answer the user's question based on the provided cultural archeologist data. Provide a clear answer, and also list the exact 'text' of any insights from the data that are relevant to your answer." },
+      { role: "system", content: "You are an expert analyst. Answer using ONLY the provided matrix data. Do not invent facts. If the data is insufficient, explicitly say so. Provide a clear answer, and list the exact 'text' of relevant insights from the data." },
       { role: "user", content: `Data:\n\n${JSON.stringify(matrix)}\n\nQuestion: "${question}"` }
     ],
     response_format: zodResponseFormat(MatrixAnswerSchema, "matrix_answer"),
@@ -498,6 +737,7 @@ const MatrixItemSchema = z.object({
   text: z.string(),
   isHighlyUnique: z.boolean().describe("Set to true ONLY if this insight is extremely unique to this specific audience/group when compared against a baseline audience of the same average age, race/ethnicity, and gender breakdown, but OUTSIDE of the specific brand, industry, or topic being analyzed."),
   sourceType: z.string().describe("The type of source this insight was derived from (e.g., 'Mainstream', 'Niche/Fringe', 'Topic-Specific', 'Alternative Media', 'Academic', 'Social Media', etc.)"),
+  confidenceLevel: z.enum(['low', 'medium', 'high']).describe("Confidence in this specific insight based on evidence quality and recency. Use 'high' when strongly corroborated by reliable recent sources, 'medium' when plausible with partial support, and 'low' when signal is weak or emerging."),
   isFromDocument: z.boolean().nullable().describe("Set to true if this insight was derived from the attached documents.")
 });
 
@@ -536,7 +776,9 @@ export async function generateCulturalMatrix(audience: string, brand?: string, g
     ? `\n\nCRITICAL: You MUST restrict your sources and insights to be derived primarily from ${sourcesType.join(', ')} sources. Adjust your tone, findings, and the specific cultural signals you highlight to reflect the unique perspective, narratives, and biases of these media types.`
     : "";
 
-  const systemInstruction = "You are an expert cultural strategist and marketer. Your goal is to provide deep, accurate, and actionable cultural insights for the requested audience based on recent data. Highlight results that are extremely unique to this audience by setting isHighlyUnique to true (comparing them against demographic peers who are NOT involved in this specific brand, industry, or topic).";
+  const systemInstruction = `You are an expert cultural strategist and marketer. Your goal is to provide deep, accurate, and actionable cultural insights for the requested audience based on recent data. Highlight results that are extremely unique to this audience by setting isHighlyUnique to true (comparing them against demographic peers who are NOT involved in this specific brand, industry, or topic).
+
+${RESEARCH_ACCURACY_PROTOCOL}`;
 
   const prompt = `Generate a comprehensive cultural archeologist report for the following audience: "${audience}"${contextStr}.${topicStr}${generationStr}${filesStr}${sourcesTypeStr}
     
@@ -544,6 +786,7 @@ export async function generateCulturalMatrix(audience: string, brand?: string, g
     CRITICAL: For each category, provide at least 6-10 highly detailed and specific insights to ensure a rich and comprehensive report.
     CRITICAL: Within each category, you MUST order the observations by "potency" (i.e., the frequency and strength of the cultural signal), with the most potent observations first.
     CRITICAL: You are acting as a senior marketing strategist. The ideas and insights you bring MUST be new, exciting, contrarian, and something the client has likely never heard before. Avoid mainstream consensus and obvious observations. Focus on "weak signals", emerging fringe behaviors, counter-intuitive trends, and deep psychological drivers that are not widely discussed.
+    CRITICAL: Each insight must include confidenceLevel = low | medium | high based on evidence quality and recency.
     
     Categorize the insights into:
     - MOMENTS: Context of the time. What external forces are shaping behaviour right now? (Current events, Social climate, Trends)
@@ -614,7 +857,7 @@ Do not include any commentary outside the JSON structure.`;
     throw new Error("No response from Azure OpenAI during review step");
   }
 
-  return JSON.parse(finalText) as CulturalMatrix;
+  return sanitizeCulturalMatrix(JSON.parse(finalText) as CulturalMatrix);
 }
 
 // Re-export types for convenience

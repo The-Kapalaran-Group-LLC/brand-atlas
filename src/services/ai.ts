@@ -27,6 +27,7 @@ export interface MatrixItem {
   isHighlyUnique: boolean;
   isFromDocument?: boolean;
   sourceType?: string;
+  confidenceLevel?: 'low' | 'medium' | 'high';
   deepDive?: DeepDiveReport;
 }
 
