@@ -1117,7 +1117,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                   >
                     <Share2 className="w-4 h-4" />
                     Export PPTX
-                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">Beta</span>
+                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 border border-indigo-100">Beta</span>
                   </button>
                   <button
                     type="button"
@@ -1128,7 +1128,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                   >
                     <Share2 className="w-4 h-4" />
                     Export PDF
-                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">Beta</span>
+                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 border border-indigo-100">Beta</span>
                   </button>
                 </div>
               </div>

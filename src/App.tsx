@@ -1090,19 +1090,8 @@ export default function App() {
             >
               <Sparkles className="w-7 h-7 text-indigo-600 mb-8" />
               <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-zinc-950 mb-5 select-none">
-                Cultural{' '}
-                <motion.span
-                  initial={{ color: '#09090b' }}
-                  animate={{ color: '#09090b' }}
-                  exit={{ color: '#d946ef' }}
-                  transition={{ duration: 0.8, ease: 'easeInOut' }}
-                >
-                  Archeologist
-                </motion.span>
+                Archeo<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">AI</span>
               </h1>
-              <p className="text-xl md:text-2xl text-zinc-950 mb-6 font-semibold select-none">
-                Generate cultural insights and audience analysis in seconds.
-              </p>
             </motion.div>
           </motion.div>
         )}
@@ -1864,10 +1853,10 @@ export default function App() {
                     </div>
                   )}
                   <button onClick={exportToPPTX} className="flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 rounded-full text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm">
-                    <Presentation className="w-4 h-4" /> PPTX <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">Beta</span>
+                    <Presentation className="w-4 h-4" /> PPTX <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 border border-indigo-100">Beta</span>
                   </button>
                   <button onClick={exportToPDF} className="flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 rounded-full text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm">
-                    <FileText className="w-4 h-4" /> PDF <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">Beta</span>
+                    <FileText className="w-4 h-4" /> PDF <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 border border-indigo-100">Beta</span>
                   </button>
                   <button 
                     onClick={exportToGoogleSlides} 
@@ -1875,7 +1864,7 @@ export default function App() {
                     className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-100 rounded-full text-sm font-medium text-indigo-700 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                    {isExporting ? 'Exporting...' : 'Google Slides'} {!isExporting && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">Beta</span>}
+                    {isExporting ? 'Exporting...' : 'Google Slides'} {!isExporting && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 border border-indigo-100">Beta</span>}
                   </button>
                 </div>
               </div>
