@@ -20,7 +20,7 @@ import {
   Info,
 } from 'lucide-react';
 import pptxgen from 'pptxgenjs';
-import { BrandColorSpec, BrandDeepDiveReport, askBrandDeepDiveQuestion, generateBrandDeepDive, regenerateBrandDeepDiveWithFeedback, suggestBrandWebsite } from '../services/azure-openai';
+import { BrandColorSpec, BrandDeepDiveReport, generateBrandDeepDive, submitBrandDeepDivePrompt, suggestBrandWebsite } from '../services/azure-openai';
 
 interface BrandDeepDivePageProps {
   onBack: () => void;
@@ -185,8 +185,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const [report, setReport] = useState<BrandDeepDiveReport | null>(null);
   const [reportQuestion, setReportQuestion] = useState('');
   const [reportAnswer, setReportAnswer] = useState('');
-  const [isAskingQuestion, setIsAskingQuestion] = useState(false);
-  const [isRescanningReport, setIsRescanningReport] = useState(false);
+  const [isSubmittingPrompt, setIsSubmittingPrompt] = useState(false);
   const [bestVisualsByBrand, setBestVisualsByBrand] = useState<Record<string, BrandVisualSelection>>({});
   const [isExporting, setIsExporting] = useState(false);
   const [, setToast] = useState<string | null>(null);
@@ -360,58 +359,47 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const handleAskQuestion = async () => {
     if (!report || !reportQuestion.trim()) return;
 
-    setIsAskingQuestion(true);
-    try {
-      const result = await askBrandDeepDiveQuestion(report, reportQuestion);
-      setReportAnswer(result.answer);
-    } catch (err) {
-      console.error('Failed to answer deep dive question', err);
-      setReportAnswer("Sorry, I couldn't answer that question right now.");
-    } finally {
-      setIsAskingQuestion(false);
-    }
-  };
-
-  const handleRescanReport = async () => {
-    if (!report || !reportQuestion.trim()) return;
-
     const normalizedBrands = getNormalizedBrands();
     if (normalizedBrands.length === 0) return;
 
-    setIsRescanningReport(true);
-    setReportAnswer('');
+    setIsSubmittingPrompt(true);
     setError(null);
+    setReportAnswer('');
 
     try {
-      const nextReport = await regenerateBrandDeepDiveWithFeedback({
+      const result = await submitBrandDeepDivePrompt({
         brands: normalizedBrands,
         analysisObjective,
         targetAudience,
         currentReport: report,
-        feedback: reportQuestion,
+        prompt: reportQuestion,
       });
 
-      setReport(nextReport);
+      if (result.mode === 'rescan') {
+        setReport(result.report);
+        setResultTab('profiles');
 
-      const nextSaved: SavedDeepDiveSearch = {
-        id: `deep-dive-${Date.now()}`,
-        date: new Date().toISOString(),
-        brands: normalizedBrands,
-        analysisObjective,
-        targetAudience,
-        report: nextReport,
-      };
-      const updated = [nextSaved, ...savedSearches.filter((item) => item.id !== nextSaved.id)].slice(0, 20);
-      setSavedSearches(updated);
-      localStorage.setItem('visual_design_deep_dives', JSON.stringify(updated));
-      setReportAnswer('The report was rescanned and updated using your feedback. Review the refreshed results below.');
+        const nextSaved: SavedDeepDiveSearch = {
+          id: `deep-dive-${Date.now()}`,
+          date: new Date().toISOString(),
+          brands: normalizedBrands,
+          analysisObjective,
+          targetAudience,
+          report: result.report,
+        };
+        const updated = [nextSaved, ...savedSearches.filter((item) => item.id !== nextSaved.id)].slice(0, 20);
+        setSavedSearches(updated);
+        localStorage.setItem('visual_design_deep_dives', JSON.stringify(updated));
+      }
+
+      setReportAnswer(result.answer);
     } catch (err: unknown) {
-      console.error('Failed to rescan brand deep dive', err);
+      console.error('Failed to process deep dive prompt', err);
       const message = err instanceof Error ? err.message : 'Unknown error';
-      setReportAnswer('The rescan could not complete right now.');
-      setError(`Failed to rescan brand deep dive: ${message}`);
+      setReportAnswer("Sorry, I couldn't answer that question right now.");
+      setError(`Failed to process prompt: ${message}`);
     } finally {
-      setIsRescanningReport(false);
+      setIsSubmittingPrompt(false);
     }
   };
 
@@ -1216,37 +1204,26 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                 <Search className="w-6 h-6" /> Ask the Archeologist
               </h3>
               <p className="text-sm text-indigo-700/80 mb-4">
-                Ask a question about the current audit, or use your prompt to trigger a corrective rescan if the results look wrong.
+                Ask a question about the current audit. If your prompt points out an inaccuracy, the report will be refreshed automatically.
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
                 <input
                   type="text"
                   value={reportQuestion}
                   onChange={(e) => setReportQuestion(e.target.value)}
-                  placeholder="Ask a question or describe what looks inaccurate so the report can be rescanned"
+                  placeholder="Ask a question or describe what looks inaccurate"
                   className="flex-1 px-5 py-4 rounded-2xl border border-indigo-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-zinc-900 shadow-sm"
                   onKeyDown={(e) => e.key === 'Enter' && handleAskQuestion()}
-                  disabled={isAskingQuestion || isRescanningReport}
+                  disabled={isSubmittingPrompt}
                 />
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <button
-                    type="button"
-                    onClick={handleAskQuestion}
-                    disabled={isAskingQuestion || isRescanningReport || !reportQuestion.trim()}
-                    className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-medium hover:bg-indigo-700 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-2 disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    {isAskingQuestion ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Ask'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRescanReport}
-                    disabled={isAskingQuestion || isRescanningReport || !reportQuestion.trim()}
-                    className="px-6 py-4 bg-white text-indigo-700 rounded-2xl font-medium border border-indigo-200 hover:bg-indigo-100/60 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:ring-offset-2 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    {isRescanningReport ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
-                    {isRescanningReport ? 'Rescanning...' : 'Rescan & Fix'}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleAskQuestion}
+                  disabled={isSubmittingPrompt || !reportQuestion.trim()}
+                  className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-medium hover:bg-indigo-700 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-2 disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all flex items-center justify-center gap-2 shadow-sm"
+                >
+                  {isSubmittingPrompt ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Ask'}
+                </button>
               </div>
               {reportAnswer && (
                 <motion.div

@@ -704,6 +704,35 @@ const BrandDeepDiveAnswerSchema = z.object({
   answer: z.string(),
 });
 
+export type BrandDeepDivePromptResult =
+  | { mode: "answer"; answer: string }
+  | { mode: "rescan"; answer: string; report: BrandDeepDiveReport };
+
+function looksLikeBrandDeepDiveCorrectionPrompt(prompt: string): boolean {
+  const normalized = prompt.trim().toLowerCase();
+  if (!normalized) return false;
+
+  const directRescanPatterns = [
+    /\brescan\b/,
+    /\bscan again\b/,
+    /\bre-?audit\b/,
+    /\brecheck\b/,
+    /\bcheck again\b/,
+    /\brefresh\b.*\b(report|results|audit)\b/,
+    /\bupdate\b.*\b(report|results|audit)\b/,
+    /\bfix\b.*\b(report|results|audit|analysis|colors?|typography|logo|imagery)\b/,
+    /\bcorrect\b.*\b(report|results|audit|analysis|colors?|typography|logo|imagery)\b/,
+    /\bverify\b.*\b(report|results|audit|analysis|colors?|typography|logo|imagery)\b/,
+  ];
+
+  const issuePatterns = [
+    /\b(report|results|audit|analysis|colors?|typography|logo|imagery)\b.*\b(wrong|incorrect|inaccurate|outdated|missing|off)\b/,
+    /\b(wrong|incorrect|inaccurate|outdated|missing|off)\b.*\b(report|results|audit|analysis|colors?|typography|logo|imagery)\b/,
+  ];
+
+  return [...directRescanPatterns, ...issuePatterns].some((pattern) => pattern.test(normalized));
+}
+
 export async function askMatrixQuestion(matrix: CulturalMatrix, question: string): Promise<{ answer: string, relevantInsights: string[] }> {
   const response = await getAzureAI().chat.completions.create({
     model: getDeploymentName(),
@@ -740,6 +769,43 @@ export async function askBrandDeepDiveQuestion(
 
   const text = response.choices[0].message.content || "{}";
   return JSON.parse(text);
+}
+
+export async function submitBrandDeepDivePrompt(input: {
+  brands: { name: string; website?: string }[];
+  analysisObjective: string;
+  targetAudience?: string;
+  timeHorizon?: string;
+  currentReport: BrandDeepDiveReport;
+  prompt: string;
+}): Promise<BrandDeepDivePromptResult> {
+  const normalizedPrompt = input.prompt.trim();
+  if (!normalizedPrompt) {
+    throw new Error("Prompt is required.");
+  }
+
+  if (looksLikeBrandDeepDiveCorrectionPrompt(normalizedPrompt)) {
+    const nextReport = await regenerateBrandDeepDiveWithFeedback({
+      brands: input.brands,
+      analysisObjective: input.analysisObjective,
+      targetAudience: input.targetAudience,
+      timeHorizon: input.timeHorizon,
+      currentReport: input.currentReport,
+      feedback: normalizedPrompt,
+    });
+
+    return {
+      mode: "rescan",
+      answer: "The report was rescanned and updated using your prompt. Review the refreshed results below.",
+      report: nextReport,
+    };
+  }
+
+  const answer = await askBrandDeepDiveQuestion(input.currentReport, normalizedPrompt);
+  return {
+    mode: "answer",
+    answer: answer.answer,
+  };
 }
 
 const SuggestBrandsSchema = z.object({
