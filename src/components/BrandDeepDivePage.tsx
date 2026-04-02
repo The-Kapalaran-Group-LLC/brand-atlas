@@ -128,6 +128,27 @@ function buildImageFallbackChain(primaryUrl: string, website?: string | null): s
   return buildLargeLogoCandidateUrls(website).filter((url) => url !== primaryUrl);
 }
 
+function buildVisualPreviewFallbackChain(primaryUrl: string, website?: string | null): string[] {
+  const normalizedWebsite = normalizeHttpUrl(website);
+  const screenshotFallbacks = normalizedWebsite
+    ? [buildScreenshotPreviewUrl(normalizedWebsite), buildWordpressScreenshotUrl(normalizedWebsite)]
+    : [];
+
+  return dedupeVisualCards(
+    [
+      ...buildImageFallbackChain(primaryUrl, website).map((url) => ({ label: 'fallback', url })),
+      ...screenshotFallbacks.map((url) => ({ label: 'preview', url })),
+    ]
+  )
+    .map((card) => card.url)
+    .filter((url) => url !== primaryUrl);
+}
+
+function buildInlineFallbackImageSvg(label: string): string {
+  const safeLabel = encodeURIComponent(label || 'Preview unavailable');
+  return `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360'><rect width='100%' height='100%' fill='%23F4F4F5'/><rect x='24' y='24' width='592' height='312' rx='16' ry='16' fill='%23FFFFFF' stroke='%23D4D4D8'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%236B7280' font-family='Arial, sans-serif' font-size='20'>${safeLabel}</text></svg>`;
+}
+
 function advanceImageFallback(event: React.SyntheticEvent<HTMLImageElement>) {
   const target = event.currentTarget;
   const fallbackChain = (target.dataset.fallbackChain || '')
@@ -142,7 +163,8 @@ function advanceImageFallback(event: React.SyntheticEvent<HTMLImageElement>) {
     return;
   }
 
-  target.style.display = 'none';
+  target.onerror = null;
+  target.src = buildInlineFallbackImageSvg(target.alt || 'Preview unavailable');
 }
 
 function buildScreenshotPreviewUrl(pageUrl: string): string {
@@ -490,6 +512,20 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
           </div>
         )}
       </li>
+    );
+  };
+
+  const renderListOrFallback = (items: string[], fallbackLabel: string) => {
+    if (!items || items.length === 0) {
+      return <p className="text-sm text-zinc-500">{fallbackLabel}</p>;
+    }
+
+    return (
+      <ul className="space-y-1">
+        {items.map((item, idx) => (
+          <li key={idx} className="text-sm text-zinc-700">• {item}</li>
+        ))}
+      </ul>
     );
   };
 
@@ -1316,7 +1352,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                         {visuals.images.map((image, idx) => {
                           const sourceUrl = profile.website || '';
-                          const fallbackChain = buildImageFallbackChain(image.url, profile.website).join('|');
+                          const fallbackChain = buildVisualPreviewFallbackChain(image.url, profile.website).join('|');
                           const visualClass =
                             visuals.method === 'screenshot'
                               ? 'w-full h-44 object-cover hover:brightness-95 transition-all'
@@ -1361,7 +1397,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                     {(() => {
                       const visuals = bestVisualsByBrand[profile.brandName];
                       const logoUrl = visuals?.deterministicLogoUrl;
-                      const fallbackChain = buildImageFallbackChain(logoUrl || '', profile.website).join('|');
+                      const fallbackChain = buildVisualPreviewFallbackChain(logoUrl || '', profile.website).join('|');
                       return logoUrl ? (
                         <div className="mb-4 rounded-lg bg-zinc-50 p-3 flex items-center justify-center">
                           <img
@@ -1377,17 +1413,9 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                     <p className="text-sm text-zinc-700 mb-2"><span className="font-medium">Primary:</span> {profile.logo.mainLogo}</p>
                     <p className="text-sm text-zinc-700 mb-2"><span className="font-medium">Wordmark:</span> {profile.logo.wordmarkLogotype}</p>
                     <p className="text-sm text-zinc-700 mb-1 font-medium">Variations</p>
-                    <ul className="space-y-1">
-                      {profile.logo.logoVariations.map((item, idx) => (
-                        <li key={idx} className="text-sm text-zinc-700">• {item}</li>
-                      ))}
-                    </ul>
+                    {renderListOrFallback(profile.logo.logoVariations, 'No logo variations provided.')}
                     <p className="text-sm text-zinc-700 mt-3 mb-1 font-medium">Symbols / Icons</p>
-                    <ul className="space-y-1">
-                      {profile.logo.symbolsIcons.map((item, idx) => (
-                        <li key={idx} className="text-sm text-zinc-700">• {item}</li>
-                      ))}
-                    </ul>
+                    {renderListOrFallback(profile.logo.symbolsIcons, 'No symbol or icon notes provided.')}
                   </div>
 
                   <div className="rounded-2xl border border-zinc-200 p-4">
@@ -1399,11 +1427,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                     <p className="text-sm text-zinc-700"><span className="font-medium">H2:</span> {profile.typography.hierarchy.h2}</p>
                     <p className="text-sm text-zinc-700 mb-2"><span className="font-medium">Body:</span> {profile.typography.hierarchy.body}</p>
                     <p className="text-sm text-zinc-700 mb-1 font-medium">Usage Rules</p>
-                    <ul className="space-y-1">
-                      {profile.typography.usageRules.map((item, idx) => (
-                        <li key={idx} className="text-sm text-zinc-700">• {item}</li>
-                      ))}
-                    </ul>
+                    {renderListOrFallback(profile.typography.usageRules, 'No typography usage rules provided.')}
                   </div>
                 </div>
 
@@ -1412,15 +1436,27 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                     <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-3 inline-flex items-center gap-2">
                       <Palette className="w-4 h-4" /> Primary Colors
                     </h4>
-                    <ul className="space-y-2">{profile.colorPalette.primaryColors.map(renderColorSwatch)}</ul>
+                    {profile.colorPalette.primaryColors.length > 0 ? (
+                      <ul className="space-y-2">{profile.colorPalette.primaryColors.map(renderColorSwatch)}</ul>
+                    ) : (
+                      <p className="text-sm text-zinc-500">No primary color values available.</p>
+                    )}
                   </div>
                   <div className="rounded-2xl border border-zinc-200 p-4">
                     <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-3">Accent Colors</h4>
-                    <ul className="space-y-2">{profile.colorPalette.secondaryAccentColors.map(renderColorSwatch)}</ul>
+                    {profile.colorPalette.secondaryAccentColors.length > 0 ? (
+                      <ul className="space-y-2">{profile.colorPalette.secondaryAccentColors.map(renderColorSwatch)}</ul>
+                    ) : (
+                      <p className="text-sm text-zinc-500">No accent color values available.</p>
+                    )}
                   </div>
                   <div className="rounded-2xl border border-zinc-200 p-4">
                     <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-3">Neutrals</h4>
-                    <ul className="space-y-2">{profile.colorPalette.neutrals.map(renderColorSwatch)}</ul>
+                    {profile.colorPalette.neutrals.length > 0 ? (
+                      <ul className="space-y-2">{profile.colorPalette.neutrals.map(renderColorSwatch)}</ul>
+                    ) : (
+                      <p className="text-sm text-zinc-500">No neutral color values available.</p>
+                    )}
                   </div>
                 </div>
 
@@ -1431,23 +1467,23 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm font-medium text-zinc-800 mb-1">Imagery Style</p>
-                      <ul className="space-y-1">{profile.supportingVisualElements.imageryStyle.map((item, idx) => <li key={idx} className="text-sm text-zinc-700">• {item}</li>)}</ul>
+                      {renderListOrFallback(profile.supportingVisualElements.imageryStyle, 'No imagery style notes provided.')}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-zinc-800 mb-1">Icons</p>
-                      <ul className="space-y-1">{profile.supportingVisualElements.icons.map((item, idx) => <li key={idx} className="text-sm text-zinc-700">• {item}</li>)}</ul>
+                      {renderListOrFallback(profile.supportingVisualElements.icons, 'No icon notes provided.')}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-zinc-800 mb-1">Patterns & Textures</p>
-                      <ul className="space-y-1">{profile.supportingVisualElements.patternsTextures.map((item, idx) => <li key={idx} className="text-sm text-zinc-700">• {item}</li>)}</ul>
+                      {renderListOrFallback(profile.supportingVisualElements.patternsTextures, 'No pattern or texture notes provided.')}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-zinc-800 mb-1">Shapes</p>
-                      <ul className="space-y-1">{profile.supportingVisualElements.shapes.map((item, idx) => <li key={idx} className="text-sm text-zinc-700">• {item}</li>)}</ul>
+                      {renderListOrFallback(profile.supportingVisualElements.shapes, 'No shape system notes provided.')}
                     </div>
                     <div className="md:col-span-2">
                       <p className="text-sm font-medium text-zinc-800 mb-1">Data Visualization</p>
-                      <ul className="space-y-1">{profile.supportingVisualElements.dataVisualization.map((item, idx) => <li key={idx} className="text-sm text-zinc-700">• {item}</li>)}</ul>
+                      {renderListOrFallback(profile.supportingVisualElements.dataVisualization, 'No data visualization notes provided.')}
                     </div>
                   </div>
                 </div>

@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from 'motion/react';
 import { CulturalCard } from './CulturalCard';
 import { Sparkles, Brain, Heart, Zap, Users, TrendingUp, BookOpen, Eye } from 'lucide-react';

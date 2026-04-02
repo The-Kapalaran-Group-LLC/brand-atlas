@@ -2,7 +2,54 @@ import { AzureOpenAI } from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
-import { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport } from "./ai";
+
+export interface MatrixItem {
+  text: string;
+  isHighlyUnique: boolean;
+  isFromDocument?: boolean;
+  sourceType?: string;
+  confidenceLevel?: 'low' | 'medium' | 'high';
+  deepDive?: DeepDiveReport;
+}
+
+export interface UploadedFile {
+  name: string;
+  mimeType: string;
+  data: string;
+}
+
+export interface Source {
+  title: string;
+  url: string;
+}
+
+export interface Demographics {
+  age: string;
+  race: string;
+  gender: string;
+}
+
+export interface CulturalMatrix {
+  demographics: Demographics;
+  moments: MatrixItem[];
+  beliefs: MatrixItem[];
+  tone: MatrixItem[];
+  language: MatrixItem[];
+  behaviors: MatrixItem[];
+  contradictions: MatrixItem[];
+  community: MatrixItem[];
+  influencers: MatrixItem[];
+  sources: Source[];
+}
+
+export interface DeepDiveReport {
+  originationDate: string;
+  relevance: string;
+  expandedContext: string;
+  strategicImplications: string[];
+  realWorldExamples: string[];
+  sources: Source[];
+}
 
 export interface BrandDeepDiveReport {
   analysisObjective: string;
@@ -60,18 +107,6 @@ export interface BrandColorSpec {
   usage?: string | null;
 }
 
-// ============================================================================
-// AZURE OPENAI MIGRATION GUIDE
-// ============================================================================
-// To switch from Gemini to Azure OpenAI:
-// 1. In `src/App.tsx`, change the import path from `./services/ai` to `./services/azure-openai`
-// 2. Set the following environment variables in your Azure environment or .env file:
-//    - AZURE_OPENAI_API_KEY
-//    - AZURE_OPENAI_ENDPOINT (e.g., https://your-resource-name.openai.azure.com/)
-//    - AZURE_OPENAI_API_VERSION (e.g., 2024-02-15-preview)
-//    - AZURE_OPENAI_DEPLOYMENT_NAME (e.g., gpt-4o)
-// ============================================================================
-
 function getAzureAI() {
   const apiKey = process.env.AZURE_OPENAI_API_KEY;
   const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
@@ -89,7 +124,6 @@ function getAzureAI() {
   });
 }
 
-// Helper to get the deployment name
 const getDeploymentName = () => process.env.AZURE_OPENAI_DEPLOYMENT_NAME || "gpt-4o";
 
 // Zod schemas for structured outputs
@@ -313,9 +347,14 @@ function sanitizeBrandDeepDiveReport(report: BrandDeepDiveReport): BrandDeepDive
           })
           .filter((color): color is BrandColorSpec => Boolean(color));
 
-      const verifiedPrimaryColors = hasOfficialBrandSource ? sanitizeColors(profile.colorPalette?.primaryColors || []) : [];
-      const verifiedAccentColors = hasOfficialBrandSource ? sanitizeColors(profile.colorPalette?.secondaryAccentColors || []) : [];
-      const verifiedNeutrals = hasOfficialBrandSource ? sanitizeColors(profile.colorPalette?.neutrals || []) : [];
+      const verifiedPrimaryColors = sanitizeColors(profile.colorPalette?.primaryColors || []);
+      const verifiedAccentColors = sanitizeColors(profile.colorPalette?.secondaryAccentColors || []);
+      const verifiedNeutrals = sanitizeColors(profile.colorPalette?.neutrals || []);
+
+      const consistencyAssessment = (profile.consistencyAssessment || 'Not provided').trim();
+      const verificationSuffix = 'Color values were not fully verifiable from official same-domain sources and should be treated as directional.';
+      const hasAnyColorData =
+        verifiedPrimaryColors.length > 0 || verifiedAccentColors.length > 0 || verifiedNeutrals.length > 0;
 
       return {
         ...profile,
@@ -333,9 +372,10 @@ function sanitizeBrandDeepDiveReport(report: BrandDeepDiveReport): BrandDeepDive
           secondaryAccentColors: verifiedAccentColors,
           neutrals: verifiedNeutrals,
         },
-        consistencyAssessment: hasOfficialBrandSource
-          ? profile.consistencyAssessment
-          : `${profile.consistencyAssessment} Color hex values were omitted because no official same-domain source was found for verification.`,
+        consistencyAssessment:
+          hasOfficialBrandSource || !hasAnyColorData
+            ? consistencyAssessment
+            : `${consistencyAssessment} ${verificationSuffix}`,
         sources: profileSources,
       };
     }),
@@ -1039,4 +1079,3 @@ Do not include any commentary outside the JSON structure.`;
 }
 
 // Re-export types for convenience
-export type { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport } from "./ai";
