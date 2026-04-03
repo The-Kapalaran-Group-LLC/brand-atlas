@@ -31,6 +31,8 @@ type VisualMethod = 'ai' | 'deterministic' | 'screenshot';
 interface BrandVisualCard {
   label: string;
   url: string;
+  originalUrl?: string;
+  status?: 'ok' | 'fallback' | 'placeholder';
 }
 
 interface BrandVisualSelection {
@@ -58,6 +60,44 @@ const VISUAL_METHOD_LABEL: Record<VisualMethod, string> = {
 };
 
 const VISUAL_METHOD_PRIORITY: VisualMethod[] = ['ai', 'deterministic', 'screenshot'];
+
+const getImageProxyBaseUrl = (): string => {
+  const configured = (((import.meta as any).env?.VITE_IMAGE_PROXY_BASE_URL as string) || '').trim();
+  if (configured) {
+    return configured.replace(/\/$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://localhost:3001';
+    }
+  }
+
+  return '';
+};
+
+function withImageProxy(rawUrl: string): string {
+  if (!rawUrl || rawUrl.startsWith('data:image')) {
+    return rawUrl;
+  }
+
+  if (rawUrl.includes('/api/image-proxy?url=')) {
+    return rawUrl;
+  }
+
+  const normalized = normalizeHttpUrl(rawUrl);
+  if (!normalized) {
+    return rawUrl;
+  }
+
+  const proxyBase = getImageProxyBaseUrl();
+  if (!proxyBase) {
+    return normalized;
+  }
+
+  return `${proxyBase}/api/image-proxy?url=${encodeURIComponent(normalized)}`;
+}
 
 function normalizeHttpUrl(rawUrl?: string | null): string | null {
   if (!rawUrl) return null;
@@ -125,10 +165,14 @@ function buildLargeLogoCandidateUrls(website?: string | null): string[] {
 }
 
 function buildImageFallbackChain(primaryUrl: string, website?: string | null): string[] {
-  return buildLargeLogoCandidateUrls(website).filter((url) => url !== primaryUrl);
+  const normalizedPrimary = normalizeHttpUrl(primaryUrl);
+  return buildLargeLogoCandidateUrls(website)
+    .filter((url) => normalizeHttpUrl(url) !== normalizedPrimary)
+    .map((url) => withImageProxy(url));
 }
 
 function buildVisualPreviewFallbackChain(primaryUrl: string, website?: string | null): string[] {
+  const normalizedPrimary = normalizeHttpUrl(primaryUrl);
   const normalizedWebsite = normalizeHttpUrl(website);
   const screenshotFallbacks = normalizedWebsite
     ? [buildScreenshotPreviewUrl(normalizedWebsite), buildWordpressScreenshotUrl(normalizedWebsite)]
@@ -140,13 +184,33 @@ function buildVisualPreviewFallbackChain(primaryUrl: string, website?: string | 
       ...screenshotFallbacks.map((url) => ({ label: 'preview', url })),
     ]
   )
-    .map((card) => card.url)
-    .filter((url) => url !== primaryUrl);
+    .map((card) => withImageProxy(card.url))
+    .filter((url) => normalizeHttpUrl(url) !== normalizedPrimary);
 }
 
 function buildInlineFallbackImageSvg(label: string): string {
   const safeLabel = encodeURIComponent(label || 'Preview unavailable');
   return `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360'><rect width='100%' height='100%' fill='%23F4F4F5'/><rect x='24' y='24' width='592' height='312' rx='16' ry='16' fill='%23FFFFFF' stroke='%23D4D4D8'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%236B7280' font-family='Arial, sans-serif' font-size='20'>${safeLabel}</text></svg>`;
+}
+
+function buildDeterministicPlaceholderCards(brandName: string): BrandVisualCard[] {
+  return [
+    {
+      label: 'Awaiting verified visual source',
+      url: buildInlineFallbackImageSvg(`${brandName}: waiting on reliable image source`),
+      status: 'placeholder',
+    },
+    {
+      label: 'Proxy fallback active',
+      url: buildInlineFallbackImageSvg(`${brandName}: proxy retry in progress`),
+      status: 'placeholder',
+    },
+    {
+      label: 'Use Ask to rescan if needed',
+      url: buildInlineFallbackImageSvg(`${brandName}: ask to rescan for fresher assets`),
+      status: 'placeholder',
+    },
+  ];
 }
 
 function advanceImageFallback(event: React.SyntheticEvent<HTMLImageElement>) {
@@ -155,7 +219,11 @@ function advanceImageFallback(event: React.SyntheticEvent<HTMLImageElement>) {
     .split('|')
     .map((item) => item.trim())
     .filter(Boolean);
-  const nextFallback = fallbackChain.shift();
+
+  let nextFallback = fallbackChain.shift();
+  while (nextFallback && target.src === nextFallback) {
+    nextFallback = fallbackChain.shift();
+  }
 
   if (nextFallback && target.src !== nextFallback) {
     target.dataset.fallbackChain = fallbackChain.join('|');
@@ -252,6 +320,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const [reportAnswer, setReportAnswer] = useState('');
   const [isSubmittingPrompt, setIsSubmittingPrompt] = useState(false);
   const [bestVisualsByBrand, setBestVisualsByBrand] = useState<Record<string, BrandVisualSelection>>({});
+  const [visualFailuresByCard, setVisualFailuresByCard] = useState<Record<string, { attempts: number; lastSource: string; isPlaceholder: boolean }>>({});
   const [isExporting, setIsExporting] = useState(false);
   const [, setToast] = useState<string | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedDeepDiveSearch[]>([]);
@@ -707,8 +776,11 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   useEffect(() => {
     if (!report) {
       setBestVisualsByBrand({});
+      setVisualFailuresByCard({});
       return;
     }
+
+    setVisualFailuresByCard({});
 
     const resolvedMap: Record<string, BrandVisualSelection> = {};
 
@@ -725,20 +797,25 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
           .map((card) => ({
             ...card,
             url: normalizeHttpUrl(card.url) || '',
+            originalUrl: normalizeHttpUrl(card.url) || card.url,
           }))
           .filter((card) => Boolean(card.url))
       );
 
       const aiNonLogoCards = aiCardsRaw.filter((card) => !isLogoLikeAsset(card.url, card.label));
       const aiLogoCard = aiCardsRaw.find((card) => isLogoLikeAsset(card.url, card.label));
-      const aiCards = [...aiNonLogoCards, ...(aiLogoCard && aiNonLogoCards.length === 0 ? [aiLogoCard] : [])].slice(0, 4);
+      const aiCards = [...aiNonLogoCards, ...(aiLogoCard && aiNonLogoCards.length === 0 ? [aiLogoCard] : [])]
+        .slice(0, 4)
+        .map((card) => ({ ...card, url: withImageProxy(card.url), status: 'ok' as const }));
 
       const deterministicCards = dedupeVisualCards(
         buildLargeLogoCandidateUrls(profile.website).map((url, idx) => ({
           label: idx === 0 ? 'Primary Logo' : `Logo Asset ${idx + 1}`,
-          url,
+          url: withImageProxy(url),
+          originalUrl: url,
+          status: 'fallback' as const,
         }))
-      );
+      ).slice(0, 3);
 
       const screenshotTargets = dedupeVisualCards(
         [
@@ -754,41 +831,93 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
 
       const screenshotCards = dedupeVisualCards(
         screenshotTargets.flatMap((target) => [
-          { label: target.label, url: buildScreenshotPreviewUrl(target.url) },
-          { label: `${target.label} (Alt)`, url: buildWordpressScreenshotUrl(target.url) },
+          {
+            label: target.label,
+            url: withImageProxy(buildScreenshotPreviewUrl(target.url)),
+            originalUrl: buildScreenshotPreviewUrl(target.url),
+            status: 'ok' as const,
+          },
+          {
+            label: `${target.label} (Alt)`,
+            url: withImageProxy(buildWordpressScreenshotUrl(target.url)),
+            originalUrl: buildWordpressScreenshotUrl(target.url),
+            status: 'ok' as const,
+          },
         ])
       ).slice(0, 4);
 
-      const methods: Record<VisualMethod, BrandVisualCard[]> = {
-        ai: aiCards,
-        deterministic: deterministicCards,
-        screenshot: screenshotCards,
-      };
+      const candidates: Array<{ method: VisualMethod; images: BrandVisualCard[]; score: number }> = [];
 
-      const candidates = (Object.keys(methods) as VisualMethod[])
-        .map((method) => ({ method, images: methods[method], score: scoreVisualMethod(method, methods[method]) }))
-        .filter((entry) => entry.images.length > 0)
-        .sort((a, b) => {
-          if (b.score !== a.score) {
-            return b.score - a.score;
-          }
+      if (aiCards.length >= 2) {
+        candidates.push({ method: 'ai', images: aiCards, score: 100 + scoreVisualMethod('ai', aiCards) });
+      }
 
-          return VISUAL_METHOD_PRIORITY.indexOf(a.method) - VISUAL_METHOD_PRIORITY.indexOf(b.method);
-        });
+      if (screenshotCards.length > 0) {
+        candidates.push({ method: 'screenshot', images: screenshotCards, score: 80 + scoreVisualMethod('screenshot', screenshotCards) });
+      }
+
+      if (deterministicCards.length > 0) {
+        candidates.push({ method: 'deterministic', images: deterministicCards, score: 20 + scoreVisualMethod('deterministic', deterministicCards) });
+      }
 
       if (!candidates.length) {
+        resolvedMap[profile.brandName] = {
+          method: 'deterministic',
+          images: buildDeterministicPlaceholderCards(profile.brandName),
+        };
         return;
       }
+
+      candidates.sort((a, b) => b.score - a.score);
 
       resolvedMap[profile.brandName] = {
         method: candidates[0].method,
         images: candidates[0].images,
-        deterministicLogoUrl: buildLargeLogoCandidateUrls(profile.website)[0] || undefined,
+        deterministicLogoUrl: withImageProxy(buildLargeLogoCandidateUrls(profile.website)[0] || ''),
       };
     });
 
     setBestVisualsByBrand(resolvedMap);
   }, [report]);
+
+  const getFailureSourceLabel = (value: string): string => {
+    if (!value) return 'unknown source';
+    if (value.startsWith('data:image')) return 'inline placeholder';
+
+    try {
+      const parsed = new URL(value);
+      if (parsed.pathname.endsWith('/api/image-proxy')) {
+        const proxied = parsed.searchParams.get('url');
+        if (proxied) {
+          const original = new URL(proxied);
+          return original.hostname;
+        }
+      }
+      return parsed.hostname;
+    } catch {
+      return 'image source';
+    }
+  };
+
+  const handleVisualImageError = (event: React.SyntheticEvent<HTMLImageElement>, cardKey: string) => {
+    const target = event.currentTarget;
+    const attemptedSource = target.currentSrc || target.src;
+    advanceImageFallback(event);
+
+    setVisualFailuresByCard((prev) => {
+      const current = prev[cardKey];
+      const nextSource = target.currentSrc || target.src;
+
+      return {
+        ...prev,
+        [cardKey]: {
+          attempts: (current?.attempts || 0) + 1,
+          lastSource: getFailureSourceLabel(attemptedSource),
+          isPlaceholder: nextSource.startsWith('data:image/svg+xml'),
+        },
+      };
+    });
+  };
 
   const saveToLocalStorage = () => {
     if (!report) return;
@@ -1351,14 +1480,21 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                         {visuals.images.map((image, idx) => {
+                          const cardKey = `${profile.brandName}-visual-${idx}`;
+                          const failureState = visualFailuresByCard[cardKey];
                           const sourceUrl = profile.website || '';
                           const fallbackChain = buildVisualPreviewFallbackChain(image.url, profile.website).join('|');
                           const visualClass =
                             visuals.method === 'screenshot'
-                              ? 'w-full h-44 object-cover hover:brightness-95 transition-all'
-                              : 'w-full h-44 object-contain bg-white p-2 transition-all';
+                              ? 'w-full h-44 object-cover hover:brightness-95 transition-all bg-zinc-100'
+                              : 'w-full h-44 object-contain bg-white p-3 transition-all';
                           return (
-                            <figure key={`${profile.brandName}-visual-${idx}`} className="rounded-xl border border-zinc-200 bg-zinc-50 overflow-hidden hover:shadow-md transition-shadow">
+                            <figure key={cardKey} className="rounded-xl border border-zinc-200 bg-zinc-50 overflow-hidden hover:shadow-md transition-shadow relative">
+                              {failureState && (
+                                <span className="absolute top-2 right-2 z-10 inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 text-[10px] font-medium">
+                                  Failed source: {failureState.lastSource}
+                                </span>
+                              )}
                               {sourceUrl ? (
                                 <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="block">
                                   <img
@@ -1367,7 +1503,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                                     loading="lazy"
                                     referrerPolicy="origin"
                                     data-fallback-chain={fallbackChain}
-                                    onError={advanceImageFallback}
+                                    onError={(event) => handleVisualImageError(event, cardKey)}
                                     className={visualClass}
                                   />
                                 </a>
@@ -1378,11 +1514,16 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                                   loading="lazy"
                                   referrerPolicy="origin"
                                   data-fallback-chain={fallbackChain}
-                                  onError={advanceImageFallback}
+                                  onError={(event) => handleVisualImageError(event, cardKey)}
                                   className={visualClass}
                                 />
                               )}
-                              <figcaption className="px-3 py-2 text-xs text-zinc-600">{image.label}</figcaption>
+                              <figcaption className="px-3 py-2 text-xs text-zinc-600 space-y-1">
+                                <p>{image.label}</p>
+                                <p className="text-[11px] text-zinc-500">
+                                  Status: {failureState?.isPlaceholder ? 'Placeholder shown (all sources failed)' : failureState ? 'Fallback source active' : image.status === 'placeholder' ? 'Deterministic placeholder' : 'Loaded'}
+                                </p>
+                              </figcaption>
                             </figure>
                           );
                         })}
@@ -1397,7 +1538,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                     {(() => {
                       const visuals = bestVisualsByBrand[profile.brandName];
                       const logoUrl = visuals?.deterministicLogoUrl;
-                      const fallbackChain = buildVisualPreviewFallbackChain(logoUrl || '', profile.website).join('|');
+                      const fallbackChain = buildImageFallbackChain(logoUrl || '', profile.website).join('|');
                       return logoUrl ? (
                         <div className="mb-4 rounded-lg bg-zinc-50 p-3 flex items-center justify-center">
                           <img

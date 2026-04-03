@@ -307,12 +307,23 @@ function sanitizeDeepDiveReport(report: DeepDiveReport): DeepDiveReport {
 
 function isValidHexColor(value?: string | null): boolean {
   if (!value) return false;
-  return /^#?[0-9a-fA-F]{6}$/.test(value.trim());
+  return /^#?[0-9a-fA-F]{3}$|^#?[0-9a-fA-F]{6}$|^#?[0-9a-fA-F]{8}$/.test(value.trim());
 }
 
 function normalizeHexColor(value?: string | null): string | null {
   if (!isValidHexColor(value)) return null;
   const trimmed = value!.trim().replace('#', '').toUpperCase();
+  if (trimmed.length === 3) {
+    return `#${trimmed
+      .split('')
+      .map((char) => `${char}${char}`)
+      .join('')}`;
+  }
+
+  if (trimmed.length === 8) {
+    return `#${trimmed.slice(0, 6)}`;
+  }
+
   return `#${trimmed}`;
 }
 
@@ -552,8 +563,8 @@ Output requirements:
   - logoImageUrl: direct URL for the current or most representative logo lockup.
   - sampleVisuals: 2-4 direct image URLs (homepage hero, campaign visual, product visual, etc.) with short titles.
 - Prefer stable, first-party image URLs. If no reliable direct image URL is available, return null for logoImageUrl and an empty sampleVisuals list.
-- For colorPalette values, include exact HEX values only when they are verified on an official same-domain brand source (brand website/design system/style guide).
-- If official same-domain color verification is not available for a brand, leave primaryColors/secondaryAccentColors/neutrals empty instead of guessing exact values.
+- For colorPalette values, prefer exact HEX values verified on official same-domain sources when available.
+- If same-domain verification is unavailable, still provide best-estimate HEX values inferred from observable brand visuals and mark usage clearly as estimated/unverified.
 
 ${RESEARCH_ACCURACY_PROTOCOL}`;
 
@@ -636,8 +647,8 @@ Output requirements:
   - logoImageUrl: direct URL for the current or most representative logo lockup.
   - sampleVisuals: 2-4 direct image URLs (homepage hero, campaign visual, product visual, etc.) with short titles.
 - Prefer stable, first-party image URLs. If no reliable direct image URL is available, return null for logoImageUrl and an empty sampleVisuals list.
-- For colorPalette values, include exact HEX values only when they are verified on an official same-domain brand source (brand website/design system/style guide).
-- If official same-domain color verification is not available for a brand, leave primaryColors/secondaryAccentColors/neutrals empty instead of guessing exact values.
+- For colorPalette values, prefer exact HEX values verified on official same-domain sources when available.
+- If same-domain verification is unavailable, still provide best-estimate HEX values inferred from observable brand visuals and mark usage clearly as estimated/unverified.
 
 ${RESEARCH_ACCURACY_PROTOCOL}`;
 

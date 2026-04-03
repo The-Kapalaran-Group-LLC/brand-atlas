@@ -135,7 +135,7 @@ describe('BrandDeepDivePage', () => {
 
     fireEvent.error(logo);
 
-    expect(logo).toHaveAttribute('src', expect.stringContaining('/apple-touch-icon.png'));
+    expect(logo).toHaveAttribute('src', expect.stringMatching(/apple-touch-icon\.png|apple-touch-icon%2Epng|apple-touch-icon%2Fpng/i));
     expect(logo.getAttribute('src')).not.toContain('google.com/s2/favicons');
   });
 });
