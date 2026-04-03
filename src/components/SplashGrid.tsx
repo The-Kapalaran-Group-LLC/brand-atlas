@@ -83,11 +83,33 @@ export function SplashGrid() {
       pointerActiveRef.current = false;
     };
 
+    const handleWindowPointerMove = (event: PointerEvent) => {
+      if (event.pointerType === 'mouse') {
+        pointerActiveRef.current = true;
+      }
+      setPointerPosition(event.clientX, event.clientY);
+    };
+
+    const handleWindowPointerDown = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') {
+        pointerActiveRef.current = true;
+      }
+      setPointerPosition(event.clientX, event.clientY);
+    };
+
+    const handleWindowPointerUpOrCancel = () => {
+      pointerActiveRef.current = false;
+    };
+
     canvas.addEventListener('pointerdown', handlePointerDown);
     canvas.addEventListener('pointermove', handlePointerMove);
     canvas.addEventListener('pointerup', handlePointerUpOrCancel);
     canvas.addEventListener('pointercancel', handlePointerUpOrCancel);
     canvas.addEventListener('pointerleave', handlePointerLeave);
+    window.addEventListener('pointermove', handleWindowPointerMove);
+    window.addEventListener('pointerdown', handleWindowPointerDown);
+    window.addEventListener('pointerup', handleWindowPointerUpOrCancel);
+    window.addEventListener('pointercancel', handleWindowPointerUpOrCancel);
 
     const render = () => {
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
@@ -256,6 +278,10 @@ export function SplashGrid() {
       canvas.removeEventListener('pointerup', handlePointerUpOrCancel);
       canvas.removeEventListener('pointercancel', handlePointerUpOrCancel);
       canvas.removeEventListener('pointerleave', handlePointerLeave);
+      window.removeEventListener('pointermove', handleWindowPointerMove);
+      window.removeEventListener('pointerdown', handleWindowPointerDown);
+      window.removeEventListener('pointerup', handleWindowPointerUpOrCancel);
+      window.removeEventListener('pointercancel', handleWindowPointerUpOrCancel);
       window.removeEventListener('resize', resize);
       cancelAnimationFrame(animationFrameId);
     };
