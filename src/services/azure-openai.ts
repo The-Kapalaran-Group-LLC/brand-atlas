@@ -727,6 +727,8 @@ function sanitizeCulturalMatrix(matrix: CulturalMatrix, hasUploadedDocuments: bo
   const stripEvidenceMarkers = (value: string): string =>
     value
       .replace(/\[(KNOWN|INFERRED|INFERED|SPECULATIVE)\]\s*/gi, '')
+      .replace(/\b(KNOWN|INFERRED|INFERED|SPECULATIVE)\b\s*[:\-]?\s*/gi, '')
+      .replace(/\s{2,}/g, ' ')
       .trim();
 
   const fallbackLifecycle = (confidence?: MatrixItem['confidenceLevel']): 'emerging' | 'peaking' | 'declining' => {

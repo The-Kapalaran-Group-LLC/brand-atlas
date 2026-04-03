@@ -760,23 +760,17 @@ export default function App() {
     const boxY = currentY + 0.8;
     slide.addText([
       { text: "AVERAGE AGE\n", options: { fontSize: 10, color: "A1A1AA", bold: true } },
-      { text: matrix.demographics.age, options: { fontSize: 14, color: "18181B", bold: true } }
       { text: cleanAge, options: { fontSize: 14, color: "18181B", bold: true } }
     ], { shape: pres.ShapeType.roundRect, x: 1, y: boxY, w: 2.5, h: 0.8, fill: { color: "FFFFFF" }, line: { color: "E4E4E7", width: 1 }, align: "center", valign: "middle" });
     
     slide.addText([
       { text: "RACE / ETHNICITY\n", options: { fontSize: 10, color: "A1A1AA", bold: true } },
-      { text: matrix.demographics.race, options: { fontSize: 14, color: "18181B", bold: true } }
       { text: cleanRace, options: { fontSize: 14, color: "18181B", bold: true } }
     ], { shape: pres.ShapeType.roundRect, x: 3.75, y: boxY, w: 2.5, h: 0.8, fill: { color: "FFFFFF" }, line: { color: "E4E4E7", width: 1 }, align: "center", valign: "middle" });
     
     slide.addText([
       { text: "GENDER\n", options: { fontSize: 10, color: "A1A1AA", bold: true } },
-      { text: matrix.demographics.gender, options: { fontSize: 14, color: "18181B", bold: true } }
       { text: cleanGender, options: { fontSize: 14, color: "18181B", bold: true } }
-      const cleanAge = stripDemographicEvidenceMarkers(matrix.demographics.age);
-      const cleanRace = stripDemographicEvidenceMarkers(matrix.demographics.race);
-      const cleanGender = stripDemographicEvidenceMarkers(matrix.demographics.gender);
     ], { shape: pres.ShapeType.roundRect, x: 6.5, y: boxY, w: 2.5, h: 0.8, fill: { color: "FFFFFF" }, line: { color: "E4E4E7", width: 1 }, align: "center", valign: "middle" });
     
     const categories = [
@@ -898,6 +892,10 @@ export default function App() {
     
     import('jspdf').then(({ jsPDF }) => {
       try {
+        const cleanAge = stripDemographicEvidenceMarkers(matrix.demographics.age);
+        const cleanRace = stripDemographicEvidenceMarkers(matrix.demographics.race);
+        const cleanGender = stripDemographicEvidenceMarkers(matrix.demographics.gender);
+
         const doc = new jsPDF({
           orientation: 'portrait',
           unit: 'mm',
