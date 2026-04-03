@@ -1259,6 +1259,22 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {!showSplash && activeExperience === null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, ease: 'easeOut' }}
+            className="fixed inset-0 z-[1] pointer-events-none overflow-hidden"
+          >
+            <div className="absolute inset-0">
+              <SplashGrid />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Soft Dialpad-style background gradient */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] rounded-full bg-indigo-200/30 blur-[120px]" />
@@ -2223,18 +2239,15 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 no-print">
                 <div className="bg-white p-4 rounded-2xl border border-zinc-200 shadow-sm text-center">
                   <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Average Age</div>
-                  <div className="text-lg font-semibold text-zinc-900">{matrix.demographics.age}</div>
-                                  <div className="text-lg font-semibold text-zinc-900">{stripDemographicEvidenceMarkers(matrix.demographics.age)}</div>
+                  <div className="text-sm font-semibold text-zinc-900">{stripDemographicEvidenceMarkers(matrix.demographics.age)}</div>
                 </div>
                 <div className="bg-white p-4 rounded-2xl border border-zinc-200 shadow-sm text-center">
                   <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Race / Ethnicity</div>
-                  <div className="text-lg font-semibold text-zinc-900">{matrix.demographics.race}</div>
-                                  <div className="text-lg font-semibold text-zinc-900">{stripDemographicEvidenceMarkers(matrix.demographics.race)}</div>
+                  <div className="text-sm font-semibold text-zinc-900">{stripDemographicEvidenceMarkers(matrix.demographics.race)}</div>
                 </div>
                 <div className="bg-white p-4 rounded-2xl border border-zinc-200 shadow-sm text-center">
                   <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Gender</div>
-                  <div className="text-lg font-semibold text-zinc-900">{matrix.demographics.gender}</div>
-                                  <div className="text-lg font-semibold text-zinc-900">{stripDemographicEvidenceMarkers(matrix.demographics.gender)}</div>
+                  <div className="text-sm font-semibold text-zinc-900">{stripDemographicEvidenceMarkers(matrix.demographics.gender)}</div>
                 </div>
               </div>
 
