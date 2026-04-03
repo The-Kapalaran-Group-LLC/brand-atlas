@@ -13,6 +13,7 @@ import { BrandDeepDivePage } from './components/BrandDeepDivePage';
 import { TrendLifecycleBadge } from './components/TrendLifecycleBadge';
 import { ProgressiveLoader } from './components/ProgressiveLoader';
 import { Accordion } from './components/Accordion';
+import { FeedbackChatWidget } from './components/FeedbackChatWidget';
 import pptxgen from 'pptxgenjs';
 
 declare const google: any;
@@ -52,6 +53,10 @@ type MatrixInsightKey =
   | 'community'
   | 'influencers';
 
+type ConfidenceLevelFilter = 'low' | 'medium' | 'high';
+type EvidenceLabelFilter = 'known' | 'inferred' | 'speculative';
+type TrendStageFilter = 'emerging' | 'peaking' | 'declining';
+
 const MATRIX_INSIGHT_KEYS: MatrixInsightKey[] = [
   'moments',
   'beliefs',
@@ -62,6 +67,27 @@ const MATRIX_INSIGHT_KEYS: MatrixInsightKey[] = [
   'community',
   'influencers',
 ];
+
+const CONFIDENCE_FILTERS: ConfidenceLevelFilter[] = ['high', 'medium', 'low'];
+const EVIDENCE_FILTERS: EvidenceLabelFilter[] = ['known', 'inferred', 'speculative'];
+const TREND_STAGE_FILTERS: TrendStageFilter[] = ['peaking', 'emerging', 'declining'];
+
+const normalizeTrendStage = (stage?: string): TrendStageFilter => {
+  if (stage === 'peaking' || stage === 'declining') {
+    return stage;
+  }
+  return 'emerging';
+};
+
+const extractEvidenceLabelsFromText = (text: string): EvidenceLabelFilter[] => {
+  const labels = new Set<EvidenceLabelFilter>();
+
+  if (/\[KNOWN\]|\bKNOWN\b\s*[:\-]?/i.test(text)) labels.add('known');
+  if (/\[INFERRED?\]|\bINFERRED?\b\s*[:\-]?/i.test(text)) labels.add('inferred');
+  if (/\[SPECULATIVE\]|\bSPECULATIVE\b\s*[:\-]?/i.test(text)) labels.add('speculative');
+
+  return Array.from(labels);
+};
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error) {
@@ -79,6 +105,12 @@ const stripDemographicEvidenceMarkers = (value: string): string => {
     .replace(/\s{2,}/g, ' ')
     .trim();
 };
+
+const sanitizeDemographics = (demographics: { age: string; race: string; gender: string }) => ({
+  age: stripDemographicEvidenceMarkers(demographics.age),
+  race: stripDemographicEvidenceMarkers(demographics.race),
+  gender: stripDemographicEvidenceMarkers(demographics.gender),
+});
 
 const GENERATIONS = [
   "Gen Alpha (2013–mid 2020s)",
@@ -182,6 +214,10 @@ export default function App() {
   const [isGeneratingDeepDives, setIsGeneratingDeepDives] = useState(false);
   const [deepDiveProgress, setDeepDiveProgress] = useState({ current: 0, total: 0 });
 
+  const [selectedConfidenceFilters, setSelectedConfidenceFilters] = useState<ConfidenceLevelFilter[]>([]);
+  const [selectedEvidenceFilters, setSelectedEvidenceFilters] = useState<EvidenceLabelFilter[]>([]);
+  const [selectedTrendStageFilters, setSelectedTrendStageFilters] = useState<TrendStageFilter[]>([]);
+
   const [deletingIds, setDeletingIds] = useState<string[]>([]);
   const deleteTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [undoToast, setUndoToast] = useState<{ id: string, message: string } | null>(null);
@@ -202,6 +238,50 @@ export default function App() {
         sm.audience.toLowerCase().includes(search)
     );
   }, [brand, visibleSavedMatrices]);
+
+  const filteredMatrix = useMemo(() => {
+    if (!matrix) {
+      return null;
+    }
+
+    const itemMatchesFilters = (item: MatrixItem): boolean => {
+      if (selectedConfidenceFilters.length > 0) {
+        const confidence = (item.confidenceLevel || 'medium') as ConfidenceLevelFilter;
+        if (!selectedConfidenceFilters.includes(confidence)) {
+          return false;
+        }
+      }
+
+      if (selectedEvidenceFilters.length > 0) {
+        const labels = extractEvidenceLabelsFromText(item.text);
+        const hasMatch = labels.some((label) => selectedEvidenceFilters.includes(label));
+        if (!hasMatch) {
+          return false;
+        }
+      }
+
+      if (selectedTrendStageFilters.length > 0) {
+        const stage = normalizeTrendStage(item.trendLifecycle);
+        if (!selectedTrendStageFilters.includes(stage)) {
+          return false;
+        }
+      }
+
+      return true;
+    };
+
+    const nextMatrix: CulturalMatrix = { ...matrix };
+    MATRIX_INSIGHT_KEYS.forEach((key) => {
+      nextMatrix[key] = (matrix[key] || []).filter(itemMatchesFilters);
+    });
+
+    return nextMatrix;
+  }, [matrix, selectedConfidenceFilters, selectedEvidenceFilters, selectedTrendStageFilters]);
+
+  const activeFilterCount = selectedConfidenceFilters.length + selectedEvidenceFilters.length + selectedTrendStageFilters.length;
+  const displayMatrix = filteredMatrix || matrix;
+  const hasVisibleInsights =
+    !!displayMatrix && MATRIX_INSIGHT_KEYS.some((key) => (displayMatrix[key] || []).length > 0);
 
   const loadSavedMatrix = (sm: SavedMatrix, shouldScroll = false) => {
     setBrand(sm.brand);
@@ -726,9 +806,7 @@ export default function App() {
     const slide = pres.addSlide();
     slide.background = { color: "FAFAFA" };
 
-    const cleanAge = stripDemographicEvidenceMarkers(matrix.demographics.age);
-    const cleanRace = stripDemographicEvidenceMarkers(matrix.demographics.race);
-    const cleanGender = stripDemographicEvidenceMarkers(matrix.demographics.gender);
+    const cleanDemographics = sanitizeDemographics(matrix.demographics);
     
     slide.addText("Cultural Archeologist", { x: 1, y: 1.5, w: 8, h: 1, fontSize: 44, bold: true, color: "18181B" });
     slide.addText(`Audience: ${matrixMeta.audience}`, { x: 1, y: 2.5, w: 8, h: 0.5, fontSize: 24, color: "4F46E5", bold: true });
@@ -761,17 +839,17 @@ export default function App() {
     const boxY = currentY + 0.8;
     slide.addText([
       { text: "AVERAGE AGE\n", options: { fontSize: 10, color: "A1A1AA", bold: true } },
-      { text: cleanAge, options: { fontSize: 14, color: "18181B", bold: true } }
+      { text: cleanDemographics.age, options: { fontSize: 14, color: "18181B", bold: true } }
     ], { shape: pres.ShapeType.roundRect, x: 1, y: boxY, w: 2.5, h: 0.8, fill: { color: "FFFFFF" }, line: { color: "E4E4E7", width: 1 }, align: "center", valign: "middle" });
     
     slide.addText([
       { text: "RACE / ETHNICITY\n", options: { fontSize: 10, color: "A1A1AA", bold: true } },
-      { text: cleanRace, options: { fontSize: 14, color: "18181B", bold: true } }
+      { text: cleanDemographics.race, options: { fontSize: 14, color: "18181B", bold: true } }
     ], { shape: pres.ShapeType.roundRect, x: 3.75, y: boxY, w: 2.5, h: 0.8, fill: { color: "FFFFFF" }, line: { color: "E4E4E7", width: 1 }, align: "center", valign: "middle" });
     
     slide.addText([
       { text: "GENDER\n", options: { fontSize: 10, color: "A1A1AA", bold: true } },
-      { text: cleanGender, options: { fontSize: 14, color: "18181B", bold: true } }
+      { text: cleanDemographics.gender, options: { fontSize: 14, color: "18181B", bold: true } }
     ], { shape: pres.ShapeType.roundRect, x: 6.5, y: boxY, w: 2.5, h: 0.8, fill: { color: "FFFFFF" }, line: { color: "E4E4E7", width: 1 }, align: "center", valign: "middle" });
     
     const categories = [
@@ -893,9 +971,7 @@ export default function App() {
     
     import('jspdf').then(({ jsPDF }) => {
       try {
-        const cleanAge = stripDemographicEvidenceMarkers(matrix.demographics.age);
-        const cleanRace = stripDemographicEvidenceMarkers(matrix.demographics.race);
-        const cleanGender = stripDemographicEvidenceMarkers(matrix.demographics.gender);
+        const cleanDemographics = sanitizeDemographics(matrix.demographics);
 
         const doc = new jsPDF({
           orientation: 'portrait',
@@ -951,9 +1027,9 @@ export default function App() {
         y += 15;
         y = addWrappedText("Demographics", margin, y, 14, true, [24, 24, 27]);
         y += 2;
-        y = addWrappedText(`Average Age: ${cleanAge}`, margin, y, 11, false, [63, 63, 70]);
-        y = addWrappedText(`Race / Ethnicity: ${cleanRace}`, margin, y, 11, false, [63, 63, 70]);
-        y = addWrappedText(`Gender: ${cleanGender}`, margin, y, 11, false, [63, 63, 70]);
+        y = addWrappedText(`Average Age: ${cleanDemographics.age}`, margin, y, 11, false, [63, 63, 70]);
+        y = addWrappedText(`Race / Ethnicity: ${cleanDemographics.race}`, margin, y, 11, false, [63, 63, 70]);
+        y = addWrappedText(`Gender: ${cleanDemographics.gender}`, margin, y, 11, false, [63, 63, 70]);
         
         const categories = [
           { title: 'Moments', data: matrix.moments },
@@ -2097,14 +2173,6 @@ export default function App() {
                   <button onClick={exportToPDF} className="flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 rounded-full text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm">
                     <FileText className="w-4 h-4" /> PDF <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 border border-indigo-100">Beta</span>
                   </button>
-                  <button 
-                    onClick={exportToGoogleSlides} 
-                    disabled={isExporting}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-100 rounded-full text-sm font-medium text-indigo-700 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                    {isExporting ? 'Exporting...' : 'Google Slides'} {!isExporting && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 border border-indigo-100">Beta</span>}
-                  </button>
                 </div>
               </div>
 
@@ -2176,7 +2244,7 @@ export default function App() {
                   <span>Highly unique observation</span>
                 </div>
                 {matrixMeta?.hasUploadedDocuments && MATRIX_INSIGHT_KEYS.some((cat) =>
-                  matrix[cat]?.some((item) => item.isFromDocument)
+                  displayMatrix?.[cat]?.some((item) => item.isFromDocument)
                 ) && (
                   <div className="flex items-center gap-2 text-sm text-zinc-600">
                     <FileText className="w-4 h-4 text-emerald-500" />
@@ -2189,15 +2257,150 @@ export default function App() {
                 </div>
               </div>
 
+              <div className="mb-8 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl no-print">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                  <h4 className="text-sm font-semibold text-zinc-900">Result Filters</h4>
+                  {activeFilterCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedConfidenceFilters([]);
+                        setSelectedEvidenceFilters([]);
+                        setSelectedTrendStageFilters([]);
+                      }}
+                      className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                    >
+                      Clear All ({activeFilterCount})
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2 group/tip relative">
+                      <div className="text-[11px] uppercase tracking-wider text-zinc-500">Confidence Level</div>
+                      <div className="relative flex items-center">
+                        <Info className="w-3 h-3 text-zinc-400 cursor-default" />
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
+                          How strong &amp; reliable the evidence is for this observation. High = well-corroborated by recent sources. Low = weak or emerging signal.
+                          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {CONFIDENCE_FILTERS.map((level) => {
+                        const selected = selectedConfidenceFilters.includes(level);
+                        return (
+                          <button
+                            key={level}
+                            type="button"
+                            onClick={() =>
+                              setSelectedConfidenceFilters((prev) =>
+                                prev.includes(level) ? prev.filter((v) => v !== level) : [...prev, level]
+                              )
+                            }
+                            className={`px-2.5 py-1 rounded-full border text-[11px] font-semibold uppercase tracking-wider transition-colors ${
+                              selected
+                                ? 'bg-zinc-900 text-white border-zinc-900'
+                                : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300'
+                            }`}
+                          >
+                            {level}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2 group/tip relative">
+                      <div className="text-[11px] uppercase tracking-wider text-zinc-500">Evidence Type</div>
+                      <div className="relative flex items-center">
+                        <Info className="w-3 h-3 text-zinc-400 cursor-default" />
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
+                          How the observation is being gathered. Known = directly observed fact. Inferred = pattern drawn from signals. Speculative = forward-looking or unverified hypothesis.
+                          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {EVIDENCE_FILTERS.map((label) => {
+                        const selected = selectedEvidenceFilters.includes(label);
+                        return (
+                          <button
+                            key={label}
+                            type="button"
+                            onClick={() =>
+                              setSelectedEvidenceFilters((prev) =>
+                                prev.includes(label) ? prev.filter((v) => v !== label) : [...prev, label]
+                              )
+                            }
+                            className={`px-2.5 py-1 rounded-full border text-[11px] font-semibold uppercase tracking-wider transition-colors ${
+                              selected
+                                ? 'bg-zinc-900 text-white border-zinc-900'
+                                : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2 group/tip relative">
+                      <div className="text-[11px] uppercase tracking-wider text-zinc-500">Trend Stage</div>
+                      <div className="relative flex items-center">
+                        <Info className="w-3 h-3 text-zinc-400 cursor-default" />
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
+                          Where this observation sits on the trend lifecycle. Peaking = mainstream adoption. Emerging = early wave. Declining = fading or being replaced.
+                          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {TREND_STAGE_FILTERS.map((stage) => {
+                        const selected = selectedTrendStageFilters.includes(stage);
+                        return (
+                          <button
+                            key={stage}
+                            type="button"
+                            onClick={() =>
+                              setSelectedTrendStageFilters((prev) =>
+                                prev.includes(stage) ? prev.filter((v) => v !== stage) : [...prev, stage]
+                              )
+                            }
+                            className={`px-2.5 py-1 rounded-full border text-[11px] font-semibold uppercase tracking-wider transition-colors ${
+                              selected
+                                ? 'bg-zinc-900 text-white border-zinc-900'
+                                : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300'
+                            }`}
+                          >
+                            {stage}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {!hasVisibleInsights && (
+                <div className="mb-8 p-5 rounded-2xl border border-zinc-200 bg-white text-sm text-zinc-600 no-print">
+                  No insights match the selected filters. Adjust or clear filters to repopulate results.
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
-                <MatrixCard title="Moments" subtext="External forces shaping their behavior" items={matrix.moments} delay={0.1} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
-                <MatrixCard title="Beliefs" subtext="Values they’re operating from" items={matrix.beliefs} delay={0.2} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
-                <MatrixCard title="Tone" subtext="What & how they feel" items={matrix.tone} delay={0.3} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
-                <MatrixCard title="Language" subtext="How they communicate" items={matrix.language} delay={0.4} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} onOpenVocabularyExtractor={() => setIsVocabularyOpen(true)} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
-                <MatrixCard title="Behaviors" subtext="How they act/interact" items={matrix.behaviors} delay={0.5} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
-                <MatrixCard title="Contradictions" subtext="Emerging tensions or shift in values or behavior" items={matrix.contradictions} delay={0.6} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
-                <MatrixCard title="Community" subtext="Who people look to for identity & belonging" items={matrix.community} delay={0.7} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
-                <MatrixCard title="Influencers" subtext="People who are shaping their beliefs & behavior" items={matrix.influencers} delay={0.8} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
+                <MatrixCard title="Moments" subtext="External forces shaping their behavior" items={displayMatrix?.moments || []} delay={0.1} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
+                <MatrixCard title="Beliefs" subtext="Values they’re operating from" items={displayMatrix?.beliefs || []} delay={0.2} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
+                <MatrixCard title="Tone" subtext="What & how they feel" items={displayMatrix?.tone || []} delay={0.3} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
+                <MatrixCard title="Language" subtext="How they communicate" items={displayMatrix?.language || []} delay={0.4} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} onOpenVocabularyExtractor={() => setIsVocabularyOpen(true)} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
+                <MatrixCard title="Behaviors" subtext="How they act/interact" items={displayMatrix?.behaviors || []} delay={0.5} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
+                <MatrixCard title="Contradictions" subtext="Emerging tensions or shift in values or behavior" items={displayMatrix?.contradictions || []} delay={0.6} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
+                <MatrixCard title="Community" subtext="Who people look to for identity & belonging" items={displayMatrix?.community || []} delay={0.7} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
+                <MatrixCard title="Influencers" subtext="People who are shaping their beliefs & behavior" items={displayMatrix?.influencers || []} delay={0.8} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
               </div>
 
               {/* Sources Section */}
@@ -2289,6 +2492,7 @@ export default function App() {
         )}
           </>
         )}
+        <FeedbackChatWidget />
       </main>
     </div>
   );

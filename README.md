@@ -21,6 +21,17 @@ Copy `.env.example` to `.env` and fill in these values:
 - `AZURE_OPENAI_API_VERSION`
 - `AZURE_OPENAI_DEPLOYMENT_NAME`
 
+For the feedback chat widget (bottom-right popup), configure:
+
+- `VITE_API_BASE_URL` (default: `http://localhost:3001`)
+- `FEEDBACK_TO_EMAIL` (recipient mailbox for feedback notifications)
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_SECURE` (`true` for SMTPS, typically port 465)
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM` (optional sender address)
+
 ## Local Development
 
 1. Install dependencies with `npm install`.
@@ -39,8 +50,3 @@ The frontend runs on `http://localhost:3000` and the Express server runs on `htt
 
 - `.env` is ignored by git; keep credentials there and out of committed files.
 - The current frontend still imports the Azure service layer directly, so Azure credentials should only be used in trusted local environments until that service is fully moved behind the server.
-*** Add File: /Users/brussell/Downloads/Code/Cultural Archeologist/cultural-archaeologist-azure-claude-fixed/.env.example
-AZURE_OPENAI_API_KEY=your-azure-openai-api-key
-AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com/
-AZURE_OPENAI_API_VERSION=2024-02-15-preview
-AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o

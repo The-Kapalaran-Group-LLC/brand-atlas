@@ -1,74 +1,84 @@
 import { motion } from 'motion/react';
 import type { Variants } from 'motion/react';
+import type { ReactNode } from 'react';
 import { CulturalCard } from './CulturalCard';
 import { Sparkles, Brain, Heart, Zap, Users, TrendingUp, BookOpen, Eye } from 'lucide-react';
+
+type CategoryItem = {
+  category: string;
+  title: string;
+  description: string;
+  icon: ReactNode;
+  colSpan: number;
+  highlight?: boolean;
+};
+
+const CATEGORIES: CategoryItem[] = [
+  {
+    category: 'moments',
+    title: 'Moments',
+    description: 'External forces and zeitgeist shaping behavior',
+    icon: <Zap className="w-5 h-5" />,
+    highlight: true,
+    colSpan: 2,
+  },
+  {
+    category: 'beliefs',
+    title: 'Beliefs',
+    description: 'Core values & operating systems',
+    icon: <Brain className="w-5 h-5" />,
+    colSpan: 1,
+  },
+  {
+    category: 'tone',
+    title: 'Tone & Emotion',
+    description: 'Attitude, outlook & feeling states',
+    icon: <Heart className="w-5 h-5" />,
+    colSpan: 1,
+  },
+  {
+    category: 'language',
+    title: 'Language',
+    description: 'Vernacular, symbols & codes',
+    icon: <BookOpen className="w-5 h-5" />,
+    colSpan: 1,
+  },
+  {
+    category: 'behaviors',
+    title: 'Behaviors',
+    description: 'Actions, rituals & customs',
+    icon: <TrendingUp className="w-5 h-5" />,
+    colSpan: 1,
+  },
+  {
+    category: 'contradictions',
+    title: 'Contradictions',
+    description: 'Emerging tensions & value shifts',
+    icon: <Sparkles className="w-5 h-5" />,
+    highlight: true,
+    colSpan: 2,
+  },
+  {
+    category: 'community',
+    title: 'Community',
+    description: 'Identity anchors & belonging',
+    icon: <Users className="w-5 h-5" />,
+    colSpan: 1,
+  },
+  {
+    category: 'influencers',
+    title: 'Influencers',
+    description: 'Shapers of beliefs & behavior',
+    icon: <Eye className="w-5 h-5" />,
+    colSpan: 1,
+  },
+];
 
 interface DashboardProps {
   onCardClick?: (category: string) => void;
 }
 
 export function Dashboard({ onCardClick }: DashboardProps) {
-  const categories = [
-    {
-      category: 'moments',
-      title: 'Moments',
-      description: 'External forces and zeitgeist shaping behavior',
-      icon: <Zap className="w-5 h-5" />,
-      highlight: true,
-      colSpan: 2,
-    },
-    {
-      category: 'beliefs',
-      title: 'Beliefs',
-      description: 'Core values & operating systems',
-      icon: <Brain className="w-5 h-5" />,
-      colSpan: 1,
-    },
-    {
-      category: 'tone',
-      title: 'Tone & Emotion',
-      description: 'Attitude, outlook & feeling states',
-      icon: <Heart className="w-5 h-5" />,
-      colSpan: 1,
-    },
-    {
-      category: 'language',
-      title: 'Language',
-      description: 'Vernacular, symbols & codes',
-      icon: <BookOpen className="w-5 h-5" />,
-      colSpan: 1,
-    },
-    {
-      category: 'behaviors',
-      title: 'Behaviors',
-      description: 'Actions, rituals & customs',
-      icon: <TrendingUp className="w-5 h-5" />,
-      colSpan: 1,
-    },
-    {
-      category: 'contradictions',
-      title: 'Contradictions',
-      description: 'Emerging tensions & value shifts',
-      icon: <Sparkles className="w-5 h-5" />,
-      highlight: true,
-      colSpan: 2,
-    },
-    {
-      category: 'community',
-      title: 'Community',
-      description: 'Identity anchors & belonging',
-      icon: <Users className="w-5 h-5" />,
-      colSpan: 1,
-    },
-    {
-      category: 'influencers',
-      title: 'Influencers',
-      description: 'Shapers of beliefs & behavior',
-      icon: <Eye className="w-5 h-5" />,
-      colSpan: 1,
-    },
-  ];
-
   const container: Variants = {
     hidden: { opacity: 0 },
     show: {
@@ -110,7 +120,7 @@ export function Dashboard({ onCardClick }: DashboardProps) {
           animate="show"
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 auto-rows-max"
         >
-          {categories.map((cat) => (
+          {CATEGORIES.map((cat) => (
             <motion.div
               key={cat.category}
               variants={item}
@@ -122,7 +132,6 @@ export function Dashboard({ onCardClick }: DashboardProps) {
                 description={cat.description}
                 icon={cat.icon}
                 highlight={cat.highlight}
-                colSpan={cat.colSpan}
                 onClick={() => onCardClick?.(cat.category)}
               />
             </motion.div>

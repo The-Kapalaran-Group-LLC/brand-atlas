@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import db, { initializeDB } from './db';
+import nodemailer from 'nodemailer';
 
 const app = express();
 const PORT = 3001;
@@ -19,6 +20,87 @@ type CachedImage = {
 };
 
 const imageCache = new Map<string, CachedImage>();
+
+const MAX_FEEDBACK_NAME_LENGTH = 120;
+const MAX_FEEDBACK_EMAIL_LENGTH = 254;
+const MAX_FEEDBACK_MESSAGE_LENGTH = 4000;
+
+const feedbackRecipient = process.env.FEEDBACK_TO_EMAIL;
+const smtpHost = process.env.SMTP_HOST;
+const smtpPort = Number(process.env.SMTP_PORT || 587);
+const smtpUser = process.env.SMTP_USER;
+const smtpPass = process.env.SMTP_PASS;
+const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+const smtpFrom = process.env.SMTP_FROM || smtpUser || 'noreply@localhost';
+
+const isValidEmail = (value: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+};
+
+const sendFeedbackEmail = async (payload: {
+  name?: string;
+  email?: string;
+  message: string;
+  pageUrl?: string;
+  userAgent?: string;
+}) => {
+  if (!feedbackRecipient || !smtpHost || !smtpUser || !smtpPass) {
+    return {
+      sent: false,
+      reason: 'SMTP or recipient configuration is missing.',
+    } as const;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure,
+    auth: {
+      user: smtpUser,
+      pass: smtpPass,
+    },
+  });
+
+  const escapedMessage = payload.message
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+    .replace(/\n/g, '<br/>');
+
+  await transporter.sendMail({
+    from: smtpFrom,
+    to: feedbackRecipient,
+    subject: `New Feedback${payload.email ? ` from ${payload.email}` : ''}`,
+    text: [
+      'New feedback message received',
+      '',
+      `Name: ${payload.name || 'Not provided'}`,
+      `Email: ${payload.email || 'Not provided'}`,
+      `Page: ${payload.pageUrl || 'Not provided'}`,
+      `User Agent: ${payload.userAgent || 'Not provided'}`,
+      '',
+      'Message:',
+      payload.message,
+    ].join('\n'),
+    html: `
+      <h2>New feedback message</h2>
+      <p><strong>Name:</strong> ${payload.name || 'Not provided'}</p>
+      <p><strong>Email:</strong> ${payload.email || 'Not provided'}</p>
+      <p><strong>Page:</strong> ${payload.pageUrl || 'Not provided'}</p>
+      <p><strong>User Agent:</strong> ${payload.userAgent || 'Not provided'}</p>
+      <hr />
+      <p>${escapedMessage}</p>
+    `,
+    replyTo: payload.email || undefined,
+  });
+
+  return {
+    sent: true,
+    reason: null,
+  } as const;
+};
 
 const isDisallowedHost = (hostname: string): boolean => {
   const host = hostname.toLowerCase();
@@ -137,6 +219,93 @@ app.delete('/api/searches/:id', (req, res) => {
   } catch (error) {
     console.error('Error deleting search:', error);
     res.status(500).json({ error: 'Failed to delete search' });
+  }
+});
+
+app.post('/api/feedback', async (req, res) => {
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+  const pageUrl = typeof req.body?.pageUrl === 'string' ? req.body.pageUrl.trim() : '';
+
+  if (!message) {
+    return res.status(400).json({ error: 'Message is required.' });
+  }
+
+  if (message.length > MAX_FEEDBACK_MESSAGE_LENGTH) {
+    return res.status(400).json({ error: `Message must be ${MAX_FEEDBACK_MESSAGE_LENGTH} characters or less.` });
+  }
+
+  if (name.length > MAX_FEEDBACK_NAME_LENGTH) {
+    return res.status(400).json({ error: `Name must be ${MAX_FEEDBACK_NAME_LENGTH} characters or less.` });
+  }
+
+  if (email.length > MAX_FEEDBACK_EMAIL_LENGTH) {
+    return res.status(400).json({ error: `Email must be ${MAX_FEEDBACK_EMAIL_LENGTH} characters or less.` });
+  }
+
+  if (email && !isValidEmail(email)) {
+    return res.status(400).json({ error: 'Email format is invalid.' });
+  }
+
+  const userAgent = req.header('user-agent') || '';
+
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO feedback_messages (name, email, message, pageUrl, userAgent)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    const result = stmt.run(
+      name || null,
+      email || null,
+      message,
+      pageUrl || null,
+      userAgent || null,
+    );
+
+    let emailResult: { sent: boolean; reason: string | null } = { sent: false, reason: null };
+    try {
+      emailResult = await sendFeedbackEmail({
+        name,
+        email,
+        message,
+        pageUrl,
+        userAgent,
+      });
+    } catch (emailError) {
+      const reason = emailError instanceof Error ? emailError.message : 'Unknown email delivery error';
+      emailResult = { sent: false, reason };
+      console.error('Feedback email send failed:', reason);
+    }
+
+    return res.json({
+      success: true,
+      feedbackId: result.lastInsertRowid,
+      emailSent: emailResult.sent,
+      emailError: emailResult.sent ? null : emailResult.reason,
+    });
+  } catch (error) {
+    console.error('Error saving feedback:', error);
+    return res.status(500).json({ error: 'Failed to submit feedback.' });
+  }
+});
+
+app.get('/api/feedback', (req, res) => {
+  const requestedLimit = Number(req.query.limit || 100);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.max(1, Math.min(500, requestedLimit))
+    : 100;
+
+  try {
+    const feedback = db
+      .prepare('SELECT * FROM feedback_messages ORDER BY createdAt DESC LIMIT ?')
+      .all(limit);
+
+    return res.json(feedback);
+  } catch (error) {
+    console.error('Error fetching feedback:', error);
+    return res.status(500).json({ error: 'Failed to fetch feedback.' });
   }
 });
 

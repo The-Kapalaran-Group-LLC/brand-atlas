@@ -7,7 +7,6 @@ interface CulturalCardProps {
   description: string;
   icon?: React.ReactNode;
   highlight?: boolean;
-  colSpan?: number;
   onClick?: () => void;
 }
 
@@ -17,7 +16,6 @@ export function CulturalCard({
   description,
   icon,
   highlight = false,
-  colSpan = 1,
   onClick,
 }: CulturalCardProps) {
   return (
@@ -25,7 +23,6 @@ export function CulturalCard({
       onClick={onClick}
       whileHover={{ y: -4 }}
       className={`group relative overflow-hidden rounded-2xl p-6 backdrop-blur-md transition-all duration-300 ease-out text-left border
-        ${colSpan === 2 ? 'col-span-2' : 'col-span-1'}
         ${highlight
           ? 'bg-amber-500/10 border-amber-500/40 hover:border-amber-500/60 shadow-lg shadow-amber-500/20'
           : 'bg-white/[0.03] border-white/10 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10'
