@@ -14,7 +14,9 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
+    "@types/cheerio": "^0.22.35",
     "better-sqlite3": "^12.8.0",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
@@ -22,11 +24,13 @@
     "jspdf": "^4.2.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "node-vibrant": "^4.0.4",
     "nodemailer": "^7.0.5",
     "openai": "^6.33.0",
     "pptxgenjs": "^4.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sharp": "^0.34.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {

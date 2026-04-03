@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import db, { initializeDB } from './db';
 import nodemailer from 'nodemailer';
+import { processImageForUI, type ProcessedImageResult } from './image-processing';
+import { extractBrandImages, type BrandImagesResult } from './brand-images';
 
 const app = express();
 const PORT = 3001;
@@ -376,6 +378,93 @@ app.get('/api/image-proxy', async (req, res) => {
     return res.status(502).json({ error: `Failed to fetch image: ${message}` });
   } finally {
     clearTimeout(timeout);
+  }
+});
+
+// ── Processed-image cache (LQIP + dominant color) ───────────────────────────
+const PROCESSED_IMAGE_CACHE_TTL_MS = 30 * 60 * 1_000; // 30 min
+const processedImageCache = new Map<string, { result: ProcessedImageResult; expiresAt: number }>();
+
+app.get('/api/process-image', async (req, res) => {
+  const rawUrl = Array.isArray(req.query.url) ? req.query.url[0] : req.query.url;
+
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return res.status(400).json({ error: 'Missing url query parameter.' });
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(rawUrl);
+  } catch {
+    return res.status(400).json({ error: 'Invalid url parameter.' });
+  }
+
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return res.status(400).json({ error: 'Only http/https image URLs are allowed.' });
+  }
+
+  if (isDisallowedHost(parsedUrl.hostname)) {
+    return res.status(403).json({ error: 'Host is not allowed.' });
+  }
+
+  const cacheKey = parsedUrl.toString();
+  const cached = processedImageCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.result);
+  }
+
+  try {
+    const result = await processImageForUI(cacheKey);
+    processedImageCache.set(cacheKey, { result, expiresAt: Date.now() + PROCESSED_IMAGE_CACHE_TTL_MS });
+    return res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(502).json({ error: `Failed to process image: ${message}` });
+  }
+});
+
+// ── Brand images (logo + hero) ───────────────────────────────────────────
+const BRAND_IMAGES_CACHE_TTL_MS = 30 * 60 * 1_000; // 30 min
+const brandImagesCache = new Map<string, { result: BrandImagesResult; expiresAt: number }>();
+
+app.get('/api/brand-images', async (req, res) => {
+  const rawDomain = Array.isArray(req.query.domain) ? req.query.domain[0] : req.query.domain;
+
+  if (!rawDomain || typeof rawDomain !== 'string') {
+    return res.status(400).json({ error: 'Missing domain query parameter.' });
+  }
+
+  let parsedUrl: URL;
+  try {
+    const withProtocol = /^https?:\/\//i.test(rawDomain.trim())
+      ? rawDomain.trim()
+      : `https://${rawDomain.trim()}`;
+    parsedUrl = new URL(withProtocol);
+  } catch {
+    return res.status(400).json({ error: 'Invalid domain parameter.' });
+  }
+
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return res.status(400).json({ error: 'Only http/https domains are allowed.' });
+  }
+
+  if (isDisallowedHost(parsedUrl.hostname)) {
+    return res.status(403).json({ error: 'Host is not allowed.' });
+  }
+
+  const cacheKey = parsedUrl.hostname;
+  const cached = brandImagesCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.result);
+  }
+
+  try {
+    const result = await extractBrandImages(parsedUrl.hostname);
+    brandImagesCache.set(cacheKey, { result, expiresAt: Date.now() + BRAND_IMAGES_CACHE_TTL_MS });
+    return res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(502).json({ error: `Failed to extract brand images: ${message}` });
   }
 });
 

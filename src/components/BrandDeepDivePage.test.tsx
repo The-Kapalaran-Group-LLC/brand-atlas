@@ -131,11 +131,12 @@ describe('BrandDeepDivePage', () => {
     fireEvent.click(screen.getByRole('button', { name: /generate visual identity deep dive/i }));
 
     const [logo] = await screen.findAllByAltText('Aesop Logo');
-    expect(logo).toHaveAttribute('src', expect.stringContaining('logo.clearbit.com'));
+    expect(logo).toHaveAttribute('src', expect.stringContaining('www.aesop.com'));
+    expect(logo.getAttribute('src')).not.toContain('logo.clearbit.com');
 
     fireEvent.error(logo);
 
-    expect(logo).toHaveAttribute('src', expect.stringMatching(/apple-touch-icon\.png|apple-touch-icon%2Epng|apple-touch-icon%2Fpng/i));
+    expect(logo).toHaveAttribute('src', expect.stringMatching(/logo\.png|logo\.svg|apple-touch-icon\.png|logo%2Epng|logo%2Esvg|apple-touch-icon%2Epng|apple-touch-icon%2Fpng/i));
     expect(logo.getAttribute('src')).not.toContain('google.com/s2/favicons');
   });
 

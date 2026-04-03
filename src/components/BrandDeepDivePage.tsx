@@ -29,7 +29,7 @@ interface BrandDeepDivePageProps {
   onBack: () => void;
 }
 
-type VisualMethod = 'ai' | 'deterministic' | 'screenshot';
+type VisualMethod = 'deterministic' | 'screenshot';
 
 interface BrandVisualCard {
   label: string;
@@ -51,6 +51,7 @@ interface SavedDeepDiveSearch {
   analysisObjective: string;
   targetAudience: string;
   report: BrandDeepDiveReport;
+  customName?: string;
 }
 
 type ResultTab = 'profiles' | 'compare';
@@ -63,7 +64,6 @@ interface ComparePopupState {
 }
 
 const VISUAL_METHOD_LABEL: Record<VisualMethod, string> = {
-  ai: 'AI-Provided Assets',
   deterministic: 'Derived Domain Logo',
   screenshot: 'Website Screenshot Previews',
 };
@@ -148,9 +148,9 @@ function getOriginFromUrl(url?: string | null): string | null {
 }
 
 function buildDeterministicLogoUrl(website?: string | null): string | null {
-  const domain = getDomainFromUrl(website);
-  if (!domain) return null;
-  return `https://logo.clearbit.com/${domain}`;
+  const origin = getOriginFromUrl(website);
+  if (!origin) return null;
+  return `${origin}/favicon.ico`;
 }
 
 function buildLargeLogoCandidateUrls(website?: string | null): string[] {
@@ -159,14 +159,26 @@ function buildLargeLogoCandidateUrls(website?: string | null): string[] {
 
   return dedupeVisualCards(
     [
-      deterministicLogo ? { label: 'Primary Logo', url: deterministicLogo } : null,
+      origin ? { label: 'Primary Logo', url: `${origin}/logo.svg` } : null,
+      origin ? { label: 'Primary Logo PNG', url: `${origin}/logo.png` } : null,
+      origin ? { label: 'Primary Logo WEBP', url: `${origin}/logo.webp` } : null,
+      origin ? { label: 'Wordmark', url: `${origin}/wordmark.svg` } : null,
+      origin ? { label: 'Wordmark PNG', url: `${origin}/wordmark.png` } : null,
+      origin ? { label: 'Brand Mark', url: `${origin}/brandmark.svg` } : null,
+      origin ? { label: 'Brand Mark PNG', url: `${origin}/brandmark.png` } : null,
       origin ? { label: 'Apple Touch Icon', url: `${origin}/apple-touch-icon.png` } : null,
       origin ? { label: 'Apple Touch Icon Precomposed', url: `${origin}/apple-touch-icon-precomposed.png` } : null,
       origin ? { label: 'Android Chrome Icon', url: `${origin}/android-chrome-512x512.png` } : null,
       origin ? { label: 'Android Chrome Icon Alt', url: `${origin}/android-chrome-192x192.png` } : null,
+      origin ? { label: 'Favicon SVG', url: `${origin}/favicon.svg` } : null,
+      origin ? { label: 'Favicon PNG', url: `${origin}/favicon.png` } : null,
+      deterministicLogo ? { label: 'Favicon ICO', url: deterministicLogo } : null,
       origin ? { label: 'Site Logo', url: `${origin}/logo.png` } : null,
+      origin ? { label: 'Site Logo SVG', url: `${origin}/logo.svg` } : null,
       origin ? { label: 'Site Logo Alt', url: `${origin}/assets/logo.png` } : null,
+      origin ? { label: 'Site Logo Alt SVG', url: `${origin}/assets/logo.svg` } : null,
       origin ? { label: 'Site Logo Image', url: `${origin}/images/logo.png` } : null,
+      origin ? { label: 'Site Logo Image SVG', url: `${origin}/images/logo.svg` } : null,
     ].filter((card): card is BrandVisualCard => Boolean(card))
   ).map((card) => card.url);
 }
@@ -276,7 +288,6 @@ function isLogoLikeAsset(url: string, label: string): boolean {
 function isLikelyLowFidelityVisual(url: string): boolean {
   const value = url.toLowerCase();
   return (
-    value.includes('logo.clearbit.com') ||
     value.includes('favicon') ||
     value.includes('avatar') ||
     value.includes('gravatar')
@@ -289,7 +300,7 @@ function scoreVisualMethod(method: VisualMethod, cards: BrandVisualCard[]): numb
   const lowFidelityCount = cards.filter((card) => isLikelyLowFidelityVisual(card.url)).length;
   const base = cards.length * 10 + uniqueDomains * 4 + nonLogoCount * 3 - lowFidelityCount * 6;
 
-  const methodBonus = method === 'screenshot' ? 2 : method === 'ai' ? 1 : 0;
+  const methodBonus = method === 'screenshot' ? 2 : 0;
   return base + methodBonus;
 }
 
@@ -336,6 +347,12 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const undoDeleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [recentlyDeletedSearch, setRecentlyDeletedSearch] = useState<SavedDeepDiveSearch | null>(null);
   const [undoToast, setUndoToast] = useState<{ message: string } | null>(null);
+  const [processedLogos, setProcessedLogos] = useState<Record<string, { base64Placeholder: string; dominantColorHex: string }>>({});
+  const requestedLogosRef = useRef<Set<string>>(new Set());
+  const [heroImages, setHeroImages] = useState<Record<string, string | null>>({});
+  const requestedHeroRef = useRef<Set<string>>(new Set());
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
 
   const clearDeepDiveSearch = () => {
     setBrands([
@@ -352,6 +369,10 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
     setReportQuestion('');
     setReportAnswer('');
     setBestVisualsByBrand({});
+    setProcessedLogos({});
+    requestedLogosRef.current.clear();
+    setHeroImages({});
+    requestedHeroRef.current.clear();
     setToast('Started a new search.');
   };
 
@@ -400,7 +421,27 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
     setResultTab('profiles');
     setShowValidation(false);
     setError(null);
+    setProcessedLogos({});
+    requestedLogosRef.current.clear();
+    setHeroImages({});
+    requestedHeroRef.current.clear();
     setToast('Loaded saved search.');
+  };
+
+  const renameSavedSearch = (id: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    const updated = savedSearches.map((item) =>
+      item.id === id ? { ...item, customName: trimmed } : item
+    );
+    setSavedSearches(updated);
+    localStorage.setItem('visual_design_deep_dives', JSON.stringify(updated));
+  };
+
+  const commitRename = (id: string, value: string) => {
+    if (value.trim()) renameSavedSearch(id, value);
+    setRenamingId(null);
+    setRenameValue('');
   };
 
   const deleteSavedSearch = (id: string) => {
@@ -481,6 +522,46 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   useEffect(() => {
     setComparePopup(null);
   }, [resultTab, report]);
+
+  useEffect(() => {
+    const proxyBase = getImageProxyBaseUrl();
+    if (!proxyBase) return;
+
+    Object.entries(bestVisualsByBrand).forEach(([brandName, visuals]) => {
+      const logoUrl = visuals.deterministicLogoUrl;
+      if (!logoUrl || requestedLogosRef.current.has(brandName)) return;
+
+      requestedLogosRef.current.add(brandName);
+      fetch(`${proxyBase}/api/process-image?url=${encodeURIComponent(logoUrl)}`)
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+        .then((data: { base64Placeholder: string; dominantColorHex: string }) => {
+          setProcessedLogos((prev) => ({
+            ...prev,
+            [brandName]: { base64Placeholder: data.base64Placeholder, dominantColorHex: data.dominantColorHex },
+          }));
+        })
+        .catch(() => {
+          // Enhancement silently degrades; logo renders without blur-up.
+        });
+    });
+
+    // Fetch hero image per brand that has a website
+    if (!report) return;
+    report.brandProfiles.forEach((profile) => {
+      const website = profile.website;
+      if (!website || requestedHeroRef.current.has(profile.brandName)) return;
+
+      requestedHeroRef.current.add(profile.brandName);
+      fetch(`${proxyBase}/api/brand-images?domain=${encodeURIComponent(website)}`)
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+        .then((data: { heroImageUrl: string | null }) => {
+          setHeroImages((prev) => ({ ...prev, [profile.brandName]: data.heroImageUrl }));
+        })
+        .catch(() => {
+          setHeroImages((prev) => ({ ...prev, [profile.brandName]: null }));
+        });
+    });
+  }, [bestVisualsByBrand, report]);
 
   useEffect(() => {
     return () => {
@@ -850,28 +931,6 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
     const resolvedMap: Record<string, BrandVisualSelection> = {};
 
     report.brandProfiles.forEach((profile) => {
-      const aiCardsRaw = dedupeVisualCards(
-        [
-          profile.logoImageUrl ? { label: 'Logo', url: profile.logoImageUrl } : null,
-          ...(profile.sampleVisuals || []).map((visual) => ({
-            label: visual.title || 'Visual',
-            url: visual.url,
-          })),
-        ]
-          .filter((card): card is BrandVisualCard => Boolean(card))
-          .map((card) => ({
-            ...card,
-            url: normalizeHttpUrl(card.url) || '',
-            originalUrl: normalizeHttpUrl(card.url) || card.url,
-          }))
-          .filter((card) => Boolean(card.url))
-      );
-
-      const aiNonLogoCards = aiCardsRaw.filter((card) => !isLogoLikeAsset(card.url, card.label));
-      const aiLogoCard = aiCardsRaw.find((card) => isLogoLikeAsset(card.url, card.label));
-      const aiCards = [...aiNonLogoCards, ...(aiLogoCard && aiNonLogoCards.length === 0 ? [aiLogoCard] : [])]
-        .slice(0, 4)
-        .map((card) => ({ ...card, url: withImageProxy(card.url), status: 'ok' as const }));
 
       const deterministicCards = dedupeVisualCards(
         buildLargeLogoCandidateUrls(profile.website).map((url, idx) => ({
@@ -882,17 +941,37 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
         }))
       ).slice(0, 3);
 
+      const websiteOrigin = getOriginFromUrl(profile.website);
+      const contextualSiteTargets = websiteOrigin
+        ? [
+            `${websiteOrigin}/`,
+            `${websiteOrigin}/products`,
+            `${websiteOrigin}/solutions`,
+            `${websiteOrigin}/pricing`,
+            `${websiteOrigin}/about`,
+            `${websiteOrigin}/blog`,
+            `${websiteOrigin}/contact`,
+            `${websiteOrigin}/careers`,
+          ]
+        : [];
+
       const screenshotTargets = dedupeVisualCards(
         [
-          normalizeHttpUrl(profile.website),
-          ...(profile.sources || []).map((source) => normalizeHttpUrl(source.url)),
-        ]
-          .filter((url): url is string => Boolean(url))
-          .map((url, idx) => ({
-            label: idx === 0 ? 'Homepage Preview' : `Source Preview ${idx}`,
+          ...contextualSiteTargets.map((url, idx) => ({
+            label: idx === 0 ? 'Homepage Preview' : `Site Context ${idx}`,
             url,
+          })),
+          ...(profile.sources || []).map((source, idx) => ({
+            label: `Source Preview ${idx + 1}`,
+            url: source.url,
+          })),
+        ]
+          .map((target) => ({
+            ...target,
+            url: normalizeHttpUrl(target.url) || '',
           }))
-      ).slice(0, 2);
+          .filter((target) => Boolean(target.url))
+      ).slice(0, 4);
 
       const screenshotCards = dedupeVisualCards(
         screenshotTargets.flatMap((target) => [
@@ -909,13 +988,9 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
             status: 'ok' as const,
           },
         ])
-      ).slice(0, 4);
+      ).slice(0, 8);
 
       const candidates: Array<{ method: VisualMethod; images: BrandVisualCard[]; score: number }> = [];
-
-      if (aiCards.length >= 2) {
-        candidates.push({ method: 'ai', images: aiCards, score: 100 + scoreVisualMethod('ai', aiCards) });
-      }
 
       if (screenshotCards.length > 0) {
         candidates.push({ method: 'screenshot', images: screenshotCards, score: 80 + scoreVisualMethod('screenshot', screenshotCards) });
@@ -981,6 +1056,15 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
           isPlaceholder: nextSource.startsWith('data:image/svg+xml'),
         },
       };
+    });
+  };
+
+  const clearVisualFailureState = (cardKey: string) => {
+    setVisualFailuresByCard((prev) => {
+      if (!prev[cardKey]) return prev;
+      const next = { ...prev };
+      delete next[cardKey];
+      return next;
     });
   };
 
@@ -1357,7 +1441,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
             {savedSearches.map((saved) => (
               <div
                 key={saved.id}
-                onClick={() => loadSavedSearch(saved)}
+                onClick={() => { if (renamingId !== saved.id) loadSavedSearch(saved); }}
                 className="group relative bg-zinc-50 border border-zinc-200 rounded-2xl p-4 hover:shadow-sm hover:border-indigo-200 cursor-pointer transition-all"
               >
                 <button
@@ -1371,9 +1455,34 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
-                <p className="text-sm font-semibold text-zinc-900 truncate pr-8">
-                  {saved.brands.map((b) => b.name).join(' vs ')}
-                </p>
+                {renamingId === saved.id ? (
+                  <input
+                    autoFocus
+                    type="text"
+                    value={renameValue}
+                    maxLength={80}
+                    className="text-sm font-semibold text-zinc-900 w-full pr-8 bg-transparent border-b border-indigo-400 outline-none"
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onBlur={() => commitRename(saved.id, renameValue)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); commitRename(saved.id, renameValue); }
+                      if (e.key === 'Escape') { setRenamingId(null); setRenameValue(''); }
+                    }}
+                  />
+                ) : (
+                  <p
+                    className="text-sm font-semibold text-zinc-900 truncate pr-8 hover:text-indigo-600 transition-colors"
+                    title="Click to rename"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRenamingId(saved.id);
+                      setRenameValue(saved.customName ?? saved.brands.map((b) => b.name).join(' vs '));
+                    }}
+                  >
+                    {saved.customName ?? saved.brands.map((b) => b.name).join(' vs ')}
+                  </p>
+                )}
                 <p className="text-xs text-zinc-600 mt-1 line-clamp-2">
                   {saved.targetAudience || 'No audience provided'}
                 </p>
@@ -1494,7 +1603,19 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
             </section>
 
             {report.brandProfiles.map((profile) => (
-              <section key={profile.brandName} className="lg:col-span-2 bg-white rounded-3xl border border-zinc-200 p-6 space-y-6">
+              <section key={profile.brandName} className="lg:col-span-2 bg-white rounded-3xl border border-zinc-200 overflow-hidden space-y-6">
+                {heroImages[profile.brandName] && (
+                  <div className="w-full h-44 overflow-hidden bg-zinc-100">
+                    <img
+                      src={withImageProxy(heroImages[profile.brandName]!)}
+                      alt={`${profile.brandName} hero`}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      referrerPolicy="origin"
+                    />
+                  </div>
+                )}
+                <div className="px-6 pb-6 space-y-6">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-xl font-semibold text-zinc-900">{profile.brandName}</h3>
@@ -1558,6 +1679,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                                     loading="lazy"
                                     referrerPolicy="origin"
                                     data-fallback-chain={fallbackChain}
+                                    onLoad={() => clearVisualFailureState(cardKey)}
                                     onError={(event) => handleVisualImageError(event, cardKey)}
                                     className={visualClass}
                                   />
@@ -1569,6 +1691,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                                   loading="lazy"
                                   referrerPolicy="origin"
                                   data-fallback-chain={fallbackChain}
+                                  onLoad={() => clearVisualFailureState(cardKey)}
                                   onError={(event) => handleVisualImageError(event, cardKey)}
                                   className={visualClass}
                                 />
@@ -1593,17 +1716,43 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                       onClick={(event) => openComparePopup(event, 'imageryStyle')}
                     >
                       <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-3">Logo System</h4>
-                      {logoUrl ? (
-                        <div className="mb-4 rounded-lg bg-zinc-50 p-3 flex items-center justify-center">
-                          <img
-                            src={logoUrl}
-                            alt={`${profile.brandName} Logo`}
-                            className="max-h-24 max-w-full object-contain"
-                            data-fallback-chain={logoFallbackChain}
-                            onError={advanceImageFallback}
-                          />
-                        </div>
-                      ) : null}
+                      {(() => {
+                        if (!logoUrl) return null;
+                        const processed = processedLogos[profile.brandName];
+                        return (
+                          <div
+                            className="mb-4 rounded-lg p-3 flex items-center justify-center transition-colors duration-700"
+                            style={
+                              processed?.dominantColorHex
+                                ? { backgroundColor: `${processed.dominantColorHex}1A` }
+                                : { backgroundColor: '#f4f4f5' }
+                            }
+                          >
+                            <img
+                              src={processed?.base64Placeholder ?? logoUrl}
+                              data-high-res={processed?.base64Placeholder ? logoUrl : undefined}
+                              alt={`${profile.brandName} Logo`}
+                              className="max-h-24 max-w-full object-contain transition-all duration-500"
+                              style={processed?.base64Placeholder ? { filter: 'blur(6px)', transform: 'scale(1.08)' } : undefined}
+                              onLoad={(e) => {
+                                const img = e.currentTarget;
+                                const highRes = img.dataset.highRes;
+                                if (highRes) {
+                                  img.removeAttribute('data-high-res');
+                                  img.style.filter = '';
+                                  img.style.transform = '';
+                                  img.src = highRes;
+                                } else {
+                                  img.style.filter = '';
+                                  img.style.transform = '';
+                                }
+                              }}
+                              data-fallback-chain={logoFallbackChain}
+                              onError={advanceImageFallback}
+                            />
+                          </div>
+                        );
+                      })()}
                       <p className="text-sm text-zinc-700 mb-2"><span className="font-medium">Primary:</span> {profile.logo.mainLogo}</p>
                       <p className="text-sm text-zinc-700 mb-2"><span className="font-medium">Wordmark:</span> {profile.logo.wordmarkLogotype}</p>
                       <p className="text-sm text-zinc-700 mb-1 font-medium">Variations</p>
@@ -1816,6 +1965,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                     </>
                   );
                 })()}
+                </div>{/* end px-6 pb-6 wrapper */}
               </section>
             ))}
 
@@ -1852,6 +2002,71 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {report && savedSearches.length > 0 && (
+        <section className="w-full max-w-4xl mx-auto mt-6 bg-white rounded-3xl border border-zinc-200 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Clock className="w-5 h-5 text-zinc-400" />
+            <h3 className="text-xl font-semibold text-zinc-900">Your Library</h3>
+            <span className="text-xs text-zinc-400 ml-auto">{savedSearches.length} saved</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
+            {savedSearches.map((saved) => (
+              <div
+                key={saved.id}
+                onClick={() => { if (renamingId !== saved.id) loadSavedSearch(saved); }}
+                className="group relative bg-zinc-50 border border-zinc-200 rounded-2xl p-4 hover:shadow-sm hover:border-indigo-200 cursor-pointer transition-all"
+              >
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteSavedSearch(saved.id);
+                  }}
+                  className="absolute top-3 right-3 p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                  title="Delete saved report"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+                {renamingId === saved.id ? (
+                  <input
+                    autoFocus
+                    type="text"
+                    value={renameValue}
+                    maxLength={80}
+                    className="text-sm font-semibold text-zinc-900 w-full pr-8 bg-transparent border-b border-indigo-400 outline-none"
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onBlur={() => commitRename(saved.id, renameValue)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); commitRename(saved.id, renameValue); }
+                      if (e.key === 'Escape') { setRenamingId(null); setRenameValue(''); }
+                    }}
+                  />
+                ) : (
+                  <p
+                    className="text-sm font-semibold text-zinc-900 truncate pr-8 hover:text-indigo-600 transition-colors"
+                    title="Click to rename"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRenamingId(saved.id);
+                      setRenameValue(saved.customName ?? saved.brands.map((b) => b.name).join(' vs '));
+                    }}
+                  >
+                    {saved.customName ?? saved.brands.map((b) => b.name).join(' vs ')}
+                  </p>
+                )}
+                <p className="text-xs text-zinc-600 mt-1 line-clamp-2">
+                  {saved.targetAudience || 'No audience provided'}
+                </p>
+                <p className="text-xs text-zinc-500 mt-1">
+                  {new Date(saved.date).toLocaleString()}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <AnimatePresence>
         {comparePopup && resultTab === 'profiles' && (

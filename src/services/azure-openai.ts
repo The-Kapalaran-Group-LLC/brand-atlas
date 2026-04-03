@@ -716,7 +716,11 @@ function sanitizeBrandDeepDiveReport(report: BrandDeepDiveReport): BrandDeepDive
       return {
         ...profile,
         website: normalizedWebsite,
-        logoImageUrl: normalizeHttpsUrl(profile.logoImageUrl) || null,
+        logoImageUrl: (() => {
+          const candidate = normalizeHttpsUrl(profile.logoImageUrl) || null;
+          if (!candidate) return null;
+          return isOfficialSourceForWebsite(candidate, normalizedWebsite) ? candidate : null;
+        })(),
         sampleVisuals: (profile.sampleVisuals || [])
           .map((visual) => {
             const url = normalizeHttpsUrl(visual.url);
@@ -959,6 +963,7 @@ Research guidance:
 - Prioritize each brand's full website ecosystem (homepage, product pages, campaign pages, blog/editorial, about, investor/newsroom, design system/style guide if public).
 - Use public first-party sources where possible.
 - If a value cannot be confirmed with high confidence (for example CMYK/Pantone), mark uncertainty in text and avoid fabricating precision.
+- For logo analysis, document usage across multiple website environments (for example: header/nav, footer, product UI, campaign/landing modules, social preview assets, favicon/app icon, dark vs light backgrounds), not just the top-of-page header.
 
 Output requirements:
 - Return a profile for each brand listed.
@@ -966,11 +971,12 @@ Output requirements:
 - Include a cross-brand readout that highlights patterns, white space, and differentiation opportunities.
 - Provide strategic recommendations for visual identity direction across the set.
 - Include image URLs when available:
-  - logoImageUrl: direct URL for the current or most representative logo lockup.
+  - logoImageUrl: direct URL for the current or most representative logo lockup from the brand's own website/domain (or brand-controlled CDN). Do not use third-party logo APIs.
   - sampleVisuals: 2-4 direct image URLs (homepage hero, campaign visual, product visual, etc.) with short titles.
 - Prefer stable, first-party image URLs. If no reliable direct image URL is available, return null for logoImageUrl and an empty sampleVisuals list.
 - For colorPalette values, prefer exact HEX values verified on official same-domain sources when available.
 - If same-domain verification is unavailable, still provide best-estimate HEX values inferred from observable brand visuals and mark usage clearly as estimated/unverified.
+- In logo.logoVariations and logo.symbolsIcons, include concrete environment context notes (where and how marks are deployed across the site ecosystem).
 
 Evidence digest (weighted for source quality and recency):
 ${evidenceDigest}
@@ -1068,6 +1074,7 @@ Correction requirements:
 - If a value cannot be verified confidently from official or credible sources, remove the precision instead of guessing.
 - Keep sources current, high-credibility, and non-duplicative.
 - Preserve useful accurate material from the current report when it remains supportable.
+- For logo analysis, include usage across multiple website environments (header/nav, footer, product UI, campaign modules, social previews, favicon/app icon, dark/light contexts) instead of only top-of-page observations.
 
 Output requirements:
 - Return a profile for each brand listed.
@@ -1075,11 +1082,12 @@ Output requirements:
 - Include a cross-brand readout that highlights patterns, white space, and differentiation opportunities.
 - Provide strategic recommendations for visual identity direction across the set.
 - Include image URLs when available:
-  - logoImageUrl: direct URL for the current or most representative logo lockup.
+  - logoImageUrl: direct URL for the current or most representative logo lockup from the brand's own website/domain (or brand-controlled CDN). Do not use third-party logo APIs.
   - sampleVisuals: 2-4 direct image URLs (homepage hero, campaign visual, product visual, etc.) with short titles.
 - Prefer stable, first-party image URLs. If no reliable direct image URL is available, return null for logoImageUrl and an empty sampleVisuals list.
 - For colorPalette values, prefer exact HEX values verified on official same-domain sources when available.
 - If same-domain verification is unavailable, still provide best-estimate HEX values inferred from observable brand visuals and mark usage clearly as estimated/unverified.
+- In logo.logoVariations and logo.symbolsIcons, include concrete environment context notes (where and how marks are deployed across the site ecosystem).
 
 Evidence digest (weighted for source quality and recency):
 ${evidenceDigest}
