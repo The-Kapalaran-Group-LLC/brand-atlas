@@ -2509,7 +2509,10 @@ export default function App() {
       </main>
 
       <footer className="relative z-10 py-6 text-center no-print">
-        <p className="text-xs text-zinc-400">© 2026 The Kapalaran Group LLC  | All rights reserved</p>
+        {activeExperience !== null && (
+          <p className="text-xs text-zinc-400">AI models can make mistakes. Always double check your work. Remember to think critically.</p>
+        )}
+        <p className="text-[10px] text-zinc-400 mt-1">© 2026 The Kapalaran Group LLC  | All rights reserved</p>
       </footer>
     </div>
   );
