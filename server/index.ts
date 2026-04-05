@@ -3,8 +3,18 @@ import cors from 'cors';
 import db, { initializeDB } from './db';
 import nodemailer from 'nodemailer';
 import { google } from 'googleapis';
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { processImageForUI, type ProcessedImageResult } from './image-processing';
 import { extractBrandImages, type BrandImagesResult } from './brand-images';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load local env for backend runtime (Vite does not inject these into Node process.env).
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+dotenv.config();
 
 const app = express();
 const PORT = 3001;
