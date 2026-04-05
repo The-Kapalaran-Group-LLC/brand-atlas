@@ -58,8 +58,8 @@ export function FeedbackChatWidget() {
       }
 
       const successMessage = data?.emailSent
-        ? 'Thanks. Your message was sent and emailed successfully.'
-        : 'Thanks. Your message was saved. Email delivery is not configured yet.';
+        ? 'Thanks. Your message was saved to Google Sheets and emailed successfully.'
+        : 'Thanks. Your message was saved to Google Sheets.';
 
       setSubmitState({ type: 'success', message: successMessage });
       setMessage('');
@@ -72,7 +72,7 @@ export function FeedbackChatWidget() {
   };
 
   return (
-    <div className="fixed bottom-5 right-5 z-[70] no-print">
+    <div className="fixed bottom-5 right-5 z-[130] pointer-events-auto no-print">
       <AnimatePresence>
         {isOpen && (
           <motion.section

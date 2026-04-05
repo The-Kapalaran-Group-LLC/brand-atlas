@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import db, { initializeDB } from './db';
 import nodemailer from 'nodemailer';
+import { google } from 'googleapis';
 import { processImageForUI, type ProcessedImageResult } from './image-processing';
 import { extractBrandImages, type BrandImagesResult } from './brand-images';
 
@@ -35,8 +36,50 @@ const smtpPass = process.env.SMTP_PASS;
 const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
 const smtpFrom = process.env.SMTP_FROM || smtpUser || 'noreply@localhost';
 
+const googleClientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+const googlePrivateKey = process.env.GOOGLE_PRIVATE_KEY;
+const googleSheetId = process.env.GOOGLE_SHEET_ID;
+
+const getMissingGoogleSheetsConfig = (): string[] => {
+  const missing: string[] = [];
+  if (!googleClientEmail || !googleClientEmail.trim()) missing.push('GOOGLE_CLIENT_EMAIL');
+  if (!googlePrivateKey || !googlePrivateKey.trim()) missing.push('GOOGLE_PRIVATE_KEY');
+  if (!googleSheetId || !googleSheetId.trim()) missing.push('GOOGLE_SHEET_ID');
+  return missing;
+};
+
 const isValidEmail = (value: string): boolean => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+};
+
+const appendFeedbackToGoogleSheet = async (payload: {
+  email?: string;
+  message: string;
+}) => {
+  if (!googleClientEmail || !googlePrivateKey || !googleSheetId) {
+    throw new Error('Google Sheets environment variables are missing.');
+  }
+
+  const auth = new google.auth.JWT({
+    email: googleClientEmail,
+    key: googlePrivateKey.replace(/\\n/g, '\n'),
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+
+  const sheets = google.sheets({ version: 'v4', auth });
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: googleSheetId,
+    range: 'A:C',
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: {
+      values: [[
+        new Date().toISOString(),
+        payload.email || 'Anonymous',
+        payload.message,
+      ]],
+    },
+  });
 };
 
 const sendFeedbackEmail = async (payload: {
@@ -253,6 +296,11 @@ app.post('/api/feedback', async (req, res) => {
   const userAgent = req.header('user-agent') || '';
 
   try {
+    await appendFeedbackToGoogleSheet({
+      email: email || undefined,
+      message,
+    });
+
     const stmt = db.prepare(`
       INSERT INTO feedback_messages (name, email, message, pageUrl, userAgent)
       VALUES (?, ?, ?, ?, ?)
@@ -284,12 +332,14 @@ app.post('/api/feedback', async (req, res) => {
     return res.json({
       success: true,
       feedbackId: result.lastInsertRowid,
+      sheetSaved: true,
       emailSent: emailResult.sent,
       emailError: emailResult.sent ? null : emailResult.reason,
     });
   } catch (error) {
     console.error('Error saving feedback:', error);
-    return res.status(500).json({ error: 'Failed to submit feedback.' });
+    const message = error instanceof Error ? error.message : 'Failed to submit feedback.';
+    return res.status(500).json({ error: message });
   }
 });
 
@@ -472,4 +522,13 @@ app.listen(PORT, () => {
   console.log(`🗄️ Admin server running at http://localhost:${PORT}`);
   console.log(`📊 View searches at http://localhost:${PORT}/admin`);
   console.log(`🖼️ Image proxy running at http://localhost:${PORT}/api/image-proxy`);
+
+  const missingGoogleConfig = getMissingGoogleSheetsConfig();
+  if (missingGoogleConfig.length > 0) {
+    console.warn(
+      `[feedback] Google Sheets feedback sync is disabled. Missing env vars: ${missingGoogleConfig.join(', ')}`,
+    );
+  } else {
+    console.log('[feedback] Google Sheets feedback sync is configured.');
+  }
 });
