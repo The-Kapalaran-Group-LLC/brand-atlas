@@ -13,8 +13,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load local env for backend runtime (Vite does not inject these into Node process.env).
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../.env.local'), quiet: true });
+dotenv.config({ quiet: true });
 
 const app = express();
 const PORT = 3001;
@@ -528,7 +528,7 @@ app.get('/api/brand-images', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🗄️ Admin server running at http://localhost:${PORT}`);
   console.log(`📊 View searches at http://localhost:${PORT}/admin`);
   console.log(`🖼️ Image proxy running at http://localhost:${PORT}/api/image-proxy`);
@@ -541,4 +541,14 @@ app.listen(PORT, () => {
   } else {
     console.log('[feedback] Google Sheets feedback sync is configured.');
   }
+});
+
+server.on('error', (error: NodeJS.ErrnoException) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`[startup] Port ${PORT} is already in use. Stop the existing process or choose a different port.`);
+    process.exit(1);
+  }
+
+  console.error('[startup] Failed to start server:', error.message);
+  process.exit(1);
 });
