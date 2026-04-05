@@ -8,6 +8,13 @@ export interface BrandImagesResult {
 const FETCH_TIMEOUT_MS = 10000;
 const LOGO_HINT = /logo/i;
 
+type LogoSource = 'jsonld' | 'og-logo' | 'header-nav-logo' | 'page-logo' | 'link-logo' | 'icon';
+
+interface LogoCandidate {
+  url: string;
+  source: LogoSource;
+}
+
 function isFaviconLikeUrl(url?: string | null): boolean {
   if (!url) return false;
   return /favicon|apple-touch-icon|android-chrome|mstile|mask-icon/i.test(url);
@@ -141,39 +148,141 @@ function extractFromJsonLdOrg(blocks: Array<Record<string, any>>, key: 'logo' | 
   return null;
 }
 
+function getLogoSourceBaseScore(source: LogoSource): number {
+  switch (source) {
+    case 'jsonld':
+      return 100;
+    case 'og-logo':
+      return 92;
+    case 'header-nav-logo':
+      return 84;
+    case 'page-logo':
+      return 72;
+    case 'link-logo':
+      return 64;
+    case 'icon':
+      return 10;
+    default:
+      return 0;
+  }
+}
+
+function scoreLogoCandidate(candidate: LogoCandidate): number {
+  const lowerUrl = candidate.url.toLowerCase();
+  let score = getLogoSourceBaseScore(candidate.source);
+
+  if (isFaviconLikeUrl(candidate.url)) {
+    score -= 85;
+  }
+
+  if (/(16x16|24x24|32x32|48x48|57x57|60x60|72x72|96x96|120x120|128x128|144x144|152x152|167x167|180x180|192x192|256x256)/.test(lowerUrl)) {
+    score -= 40;
+  }
+
+  if (/sprite|avatar|gravatar/.test(lowerUrl)) {
+    score -= 25;
+  }
+
+  if (/logo|wordmark|brandmark|brand-mark/.test(lowerUrl)) {
+    score += 22;
+  }
+
+  if (/\.svg($|\?)/.test(lowerUrl)) {
+    score += 8;
+  }
+
+  return score;
+}
+
+function pickBestLogoCandidate(candidates: LogoCandidate[]): string | null {
+  if (!candidates.length) return null;
+
+  const deduped: LogoCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (const candidate of candidates) {
+    const key = candidate.url.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(candidate);
+  }
+
+  deduped.sort((a, b) => scoreLogoCandidate(b) - scoreLogoCandidate(a));
+  const best = deduped[0];
+
+  if (!best || scoreLogoCandidate(best) < 15) {
+    return null;
+  }
+
+  return best.url;
+}
+
 function extractLogoUrl($: any, baseUrl: URL): string | null {
-  // Priority A: JSON-LD Organization/Brand logo
+  const candidates: LogoCandidate[] = [];
+
+  // Priority A: JSON-LD Organization/Brand logo.
   const jsonLd = parseJsonLdBlocks($);
   const jsonLdLogo = resolveSecureAbsoluteUrl(extractFromJsonLdOrg(jsonLd, 'logo'), baseUrl);
-  if (jsonLdLogo) return jsonLdLogo;
+  if (jsonLdLogo) {
+    candidates.push({ url: jsonLdLogo, source: 'jsonld' });
+  }
 
-  // Priority B: Meta og:logo
+  // Priority B: Meta og:logo.
   const ogLogo = resolveSecureAbsoluteUrl($('meta[property="og:logo"]').first().attr('content'), baseUrl);
-  if (ogLogo) return ogLogo;
+  if (ogLogo) {
+    candidates.push({ url: ogLogo, source: 'og-logo' });
+  }
 
-  // Priority C: header/nav img with logo-like signal in src/alt/class
-  const headerOrNavLogo = $('header img, nav img')
-    .toArray()
-    .map((el: unknown) => {
-      const src = $(el).attr('src') || $(el).attr('data-src') || '';
-      const alt = $(el).attr('alt') || '';
-      const cls = $(el).attr('class') || '';
-      const ctx = `${src} ${alt} ${cls}`;
-      if (!LOGO_HINT.test(ctx)) return null;
-      return resolveSecureAbsoluteUrl(src, baseUrl);
-    })
-    .find((url: string | null): url is string => Boolean(url));
+  // Priority C: Header/nav images with logo hints.
+  $('header img, nav img').each((_, el) => {
+    const src = $(el).attr('src') || $(el).attr('data-src') || '';
+    const alt = $(el).attr('alt') || '';
+    const cls = $(el).attr('class') || '';
+    const id = $(el).attr('id') || '';
+    const ctx = `${src} ${alt} ${cls} ${id}`;
+    if (!LOGO_HINT.test(ctx)) return;
 
-  if (headerOrNavLogo) return headerOrNavLogo;
+    const resolved = resolveSecureAbsoluteUrl(src, baseUrl);
+    if (resolved) {
+      candidates.push({ url: resolved, source: 'header-nav-logo' });
+    }
+  });
 
-  // Priority D: High-res icons as secondary icon evidence only.
+  // Priority D: Any page image with strong logo hints.
+  $('img[alt*="logo" i], img[class*="logo" i], img[id*="logo" i]').each((_, el) => {
+    const src = $(el).attr('src') || $(el).attr('data-src') || '';
+    const resolved = resolveSecureAbsoluteUrl(src, baseUrl);
+    if (resolved) {
+      candidates.push({ url: resolved, source: 'page-logo' });
+    }
+  });
+
+  // Priority E: Link rel values that explicitly mention logo.
+  $('link[rel*="logo" i]').each((_, el) => {
+    const href = $(el).attr('href') || '';
+    const resolved = resolveSecureAbsoluteUrl(href, baseUrl);
+    if (resolved) {
+      candidates.push({ url: resolved, source: 'link-logo' });
+    }
+  });
+
+  // Priority F: Icon links only as weak fallback evidence.
   const appleTouch = resolveSecureAbsoluteUrl($('link[rel="apple-touch-icon"]').first().attr('href'), baseUrl);
-  if (appleTouch) return appleTouch;
+  if (appleTouch) {
+    candidates.push({ url: appleTouch, source: 'icon' });
+  }
 
   const icon192 = resolveSecureAbsoluteUrl($('link[rel="icon"][sizes="192x192"]').first().attr('href'), baseUrl);
-  if (icon192) return icon192;
+  if (icon192) {
+    candidates.push({ url: icon192, source: 'icon' });
+  }
 
-  // Priority E: Clearbit as final fallback only
+  const best = pickBestLogoCandidate(candidates);
+  if (best) {
+    return best;
+  }
+
+  // Final fallback only.
   return `https://logo.clearbit.com/${baseUrl.hostname}`;
 }
 

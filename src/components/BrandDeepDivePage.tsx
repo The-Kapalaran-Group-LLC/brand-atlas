@@ -315,10 +315,6 @@ function dedupeVisualCards(cards: BrandVisualCard[]): BrandVisualCard[] {
 }
 
 export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
-  const isDevMode =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
   const [brands, setBrands] = useState([
     { id: 'brand-1', name: '', website: '' },
     { id: 'brand-2', name: '', website: '' },
@@ -350,6 +346,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const [processedLogos, setProcessedLogos] = useState<Record<string, { base64Placeholder: string; dominantColorHex: string }>>({});
   const requestedLogosRef = useRef<Set<string>>(new Set());
   const [heroImages, setHeroImages] = useState<Record<string, string | null>>({});
+  const [logoImages, setLogoImages] = useState<Record<string, string | null>>({});
   const requestedHeroRef = useRef<Set<string>>(new Set());
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -372,6 +369,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
     setProcessedLogos({});
     requestedLogosRef.current.clear();
     setHeroImages({});
+    setLogoImages({});
     requestedHeroRef.current.clear();
     setToast('Started a new search.');
   };
@@ -424,6 +422,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
     setProcessedLogos({});
     requestedLogosRef.current.clear();
     setHeroImages({});
+    setLogoImages({});
     requestedHeroRef.current.clear();
     setToast('Loaded saved search.');
   };
@@ -554,10 +553,12 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
       requestedHeroRef.current.add(profile.brandName);
       fetch(`${proxyBase}/api/brand-images?domain=${encodeURIComponent(website)}`)
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-        .then((data: { heroImageUrl: string | null }) => {
+        .then((data: { logoUrl: string | null; heroImageUrl: string | null }) => {
+          setLogoImages((prev) => ({ ...prev, [profile.brandName]: data.logoUrl }));
           setHeroImages((prev) => ({ ...prev, [profile.brandName]: data.heroImageUrl }));
         })
         .catch(() => {
+          setLogoImages((prev) => ({ ...prev, [profile.brandName]: null }));
           setHeroImages((prev) => ({ ...prev, [profile.brandName]: null }));
         });
     });
@@ -932,8 +933,13 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
 
     report.brandProfiles.forEach((profile) => {
 
+      const prioritizedLogoCandidates = [
+        logoImages[profile.brandName],
+        ...buildLargeLogoCandidateUrls(profile.website),
+      ].filter((url): url is string => Boolean(url));
+
       const deterministicCards = dedupeVisualCards(
-        buildLargeLogoCandidateUrls(profile.website).map((url, idx) => ({
+        prioritizedLogoCandidates.map((url, idx) => ({
           label: idx === 0 ? 'Primary Logo' : `Logo Asset ${idx + 1}`,
           url: withImageProxy(url),
           originalUrl: url,
@@ -1013,12 +1019,12 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
       resolvedMap[profile.brandName] = {
         method: candidates[0].method,
         images: candidates[0].images,
-        deterministicLogoUrl: withImageProxy(buildLargeLogoCandidateUrls(profile.website)[0] || ''),
+        deterministicLogoUrl: withImageProxy(prioritizedLogoCandidates[0] || ''),
       };
     });
 
     setBestVisualsByBrand(resolvedMap);
-  }, [report]);
+  }, [logoImages, report]);
 
   const getFailureSourceLabel = (value: string): string => {
     if (!value) return 'unknown source';
@@ -1428,72 +1434,6 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
         {error && <p className="text-sm text-red-500">{error}</p>}
       </motion.form>
 
-      <section className="mt-6 bg-white rounded-3xl border border-zinc-200 p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Clock className="w-5 h-5 text-zinc-400" />
-          <h3 className="text-xl font-semibold text-zinc-900">Your Library</h3>
-          <span className="text-xs text-zinc-400 ml-auto">{savedSearches.length} saved</span>
-        </div>
-        {savedSearches.length === 0 ? (
-          <p className="text-sm text-zinc-500">Run a deep dive to start building your saved search library.</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
-            {savedSearches.map((saved) => (
-              <div
-                key={saved.id}
-                onClick={() => { if (renamingId !== saved.id) loadSavedSearch(saved); }}
-                className="group relative bg-zinc-50 border border-zinc-200 rounded-2xl p-4 hover:shadow-sm hover:border-indigo-200 cursor-pointer transition-all"
-              >
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteSavedSearch(saved.id);
-                  }}
-                  className="absolute top-3 right-3 p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
-                  title="Delete saved report"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-                {renamingId === saved.id ? (
-                  <input
-                    autoFocus
-                    type="text"
-                    value={renameValue}
-                    maxLength={80}
-                    className="text-sm font-semibold text-zinc-900 w-full pr-8 bg-transparent border-b border-indigo-400 outline-none"
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onBlur={() => commitRename(saved.id, renameValue)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') { e.preventDefault(); commitRename(saved.id, renameValue); }
-                      if (e.key === 'Escape') { setRenamingId(null); setRenameValue(''); }
-                    }}
-                  />
-                ) : (
-                  <p
-                    className="text-sm font-semibold text-zinc-900 truncate pr-8 hover:text-indigo-600 transition-colors"
-                    title="Click to rename"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setRenamingId(saved.id);
-                      setRenameValue(saved.customName ?? saved.brands.map((b) => b.name).join(' vs '));
-                    }}
-                  >
-                    {saved.customName ?? saved.brands.map((b) => b.name).join(' vs ')}
-                  </p>
-                )}
-                <p className="text-xs text-zinc-600 mt-1 line-clamp-2">
-                  {saved.targetAudience || 'No audience provided'}
-                </p>
-                <p className="text-xs text-zinc-500 mt-1">
-                  {new Date(saved.date).toLocaleString()}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
       </div>
 
       <AnimatePresence mode="wait">
@@ -1604,27 +1544,11 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
 
             {report.brandProfiles.map((profile) => (
               <section key={profile.brandName} className="lg:col-span-2 bg-white rounded-3xl border border-zinc-200 overflow-hidden space-y-6">
-                {heroImages[profile.brandName] && (
-                  <div className="w-full h-44 overflow-hidden bg-zinc-100">
-                    <img
-                      src={withImageProxy(heroImages[profile.brandName]!)}
-                      alt={`${profile.brandName} hero`}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      referrerPolicy="origin"
-                    />
-                  </div>
-                )}
-                <div className="px-6 pb-6 space-y-6">
+                <div className="px-6 pt-6 pb-6 space-y-6">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-xl font-semibold text-zinc-900">{profile.brandName}</h3>
                     {profile.website && <p className="text-sm text-zinc-500">{profile.website}</p>}
-                    {isDevMode && profile.matchSource && (
-                      <p className="text-xs text-indigo-600 mt-1">
-                        matched by: {profile.matchSource}
-                      </p>
-                    )}
                   </div>
                   <div className="text-right text-xs text-zinc-500">
                     <p className="font-medium">Consistency</p>
@@ -2003,70 +1927,72 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
         )}
       </AnimatePresence>
 
-      {report && savedSearches.length > 0 && (
-        <section className="w-full max-w-4xl mx-auto mt-6 bg-white rounded-3xl border border-zinc-200 p-5">
+      <section className="w-full max-w-4xl mx-auto mt-6 bg-white rounded-3xl border border-zinc-200 p-5">
           <div className="flex items-center gap-2 mb-4">
             <Clock className="w-5 h-5 text-zinc-400" />
             <h3 className="text-xl font-semibold text-zinc-900">Your Library</h3>
             <span className="text-xs text-zinc-400 ml-auto">{savedSearches.length} saved</span>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
-            {savedSearches.map((saved) => (
-              <div
-                key={saved.id}
-                onClick={() => { if (renamingId !== saved.id) loadSavedSearch(saved); }}
-                className="group relative bg-zinc-50 border border-zinc-200 rounded-2xl p-4 hover:shadow-sm hover:border-indigo-200 cursor-pointer transition-all"
-              >
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteSavedSearch(saved.id);
-                  }}
-                  className="absolute top-3 right-3 p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
-                  title="Delete saved report"
+          {savedSearches.length === 0 ? (
+            <p className="text-sm text-zinc-500">Run a deep dive to start building your saved search library.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
+              {savedSearches.map((saved) => (
+                <div
+                  key={saved.id}
+                  onClick={() => { if (renamingId !== saved.id) loadSavedSearch(saved); }}
+                  className="group relative bg-zinc-50 border border-zinc-200 rounded-2xl p-4 hover:shadow-sm hover:border-indigo-200 cursor-pointer transition-all"
                 >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-                {renamingId === saved.id ? (
-                  <input
-                    autoFocus
-                    type="text"
-                    value={renameValue}
-                    maxLength={80}
-                    className="text-sm font-semibold text-zinc-900 w-full pr-8 bg-transparent border-b border-indigo-400 outline-none"
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onBlur={() => commitRename(saved.id, renameValue)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') { e.preventDefault(); commitRename(saved.id, renameValue); }
-                      if (e.key === 'Escape') { setRenamingId(null); setRenameValue(''); }
-                    }}
-                  />
-                ) : (
-                  <p
-                    className="text-sm font-semibold text-zinc-900 truncate pr-8 hover:text-indigo-600 transition-colors"
-                    title="Click to rename"
+                  <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setRenamingId(saved.id);
-                      setRenameValue(saved.customName ?? saved.brands.map((b) => b.name).join(' vs '));
+                      deleteSavedSearch(saved.id);
                     }}
+                    className="absolute top-3 right-3 p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                    title="Delete saved report"
                   >
-                    {saved.customName ?? saved.brands.map((b) => b.name).join(' vs ')}
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  {renamingId === saved.id ? (
+                    <input
+                      autoFocus
+                      type="text"
+                      value={renameValue}
+                      maxLength={80}
+                      className="text-sm font-semibold text-zinc-900 w-full pr-8 bg-transparent border-b border-indigo-400 outline-none"
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onBlur={() => commitRename(saved.id, renameValue)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); commitRename(saved.id, renameValue); }
+                        if (e.key === 'Escape') { setRenamingId(null); setRenameValue(''); }
+                      }}
+                    />
+                  ) : (
+                    <p
+                      className="text-sm font-semibold text-zinc-900 truncate pr-8 hover:text-indigo-600 transition-colors"
+                      title="Click to rename"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRenamingId(saved.id);
+                        setRenameValue(saved.customName ?? saved.brands.map((b) => b.name).join(' vs '));
+                      }}
+                    >
+                      {saved.customName ?? saved.brands.map((b) => b.name).join(' vs ')}
+                    </p>
+                  )}
+                  <p className="text-xs text-zinc-600 mt-1 line-clamp-2">
+                    {saved.targetAudience || 'No audience provided'}
                   </p>
-                )}
-                <p className="text-xs text-zinc-600 mt-1 line-clamp-2">
-                  {saved.targetAudience || 'No audience provided'}
-                </p>
-                <p className="text-xs text-zinc-500 mt-1">
-                  {new Date(saved.date).toLocaleString()}
-                </p>
-              </div>
-            ))}
-          </div>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    {new Date(saved.date).toLocaleString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
-      )}
 
       <AnimatePresence>
         {comparePopup && resultTab === 'profiles' && (
