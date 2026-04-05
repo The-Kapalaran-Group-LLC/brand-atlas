@@ -58,7 +58,7 @@ export function FeedbackChatWidget() {
         throw new Error(data?.error || 'Failed to submit feedback.');
       }
 
-      const successMessage = 'Thanks. Your feedback is greatly appreciated';
+      const successMessage = 'Thanks, your feedback is greatly appreciated.';
 
       setSubmitState({ type: 'success', message: successMessage });
       setMessage('');
@@ -83,8 +83,8 @@ export function FeedbackChatWidget() {
           >
             <header className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
               <div>
-                <p className="text-sm font-semibold text-zinc-900">Send Feedback Anonymously</p>
-                <p className="text-xs text-zinc-500">Messages are shared with administrator</p>
+                <p className="text-sm font-semibold text-zinc-900">Share Feedback</p>
+                <p className="text-xs text-zinc-500">Messages are shared anonymously.</p>
               </div>
               <button
                 type="button"
