@@ -89,6 +89,22 @@ const extractEvidenceLabelsFromText = (text: string): EvidenceLabelFilter[] => {
   return Array.from(labels);
 };
 
+const normalizeSourceTypeValue = (value?: string): string => {
+  return (value || '').trim().toLowerCase();
+};
+
+const mapInsightSourceToSearchSource = (sourceType?: string): string | null => {
+  const normalized = normalizeSourceTypeValue(sourceType);
+  if (!normalized) return null;
+
+  if (normalized.includes('topic') || normalized.includes('specific')) return 'Topic-Specific';
+  if (normalized.includes('alternative')) return 'Alternative Media';
+  if (normalized.includes('niche') || normalized.includes('fringe') || normalized.includes('community')) return 'Niche/Fringe';
+  if (normalized.includes('mainstream') || normalized.includes('authoritative') || normalized.includes('behavioral')) return 'Mainstream';
+
+  return null;
+};
+
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error) {
     return error.message;
@@ -217,6 +233,7 @@ export default function App() {
   const [selectedConfidenceFilters, setSelectedConfidenceFilters] = useState<ConfidenceLevelFilter[]>([]);
   const [selectedEvidenceFilters, setSelectedEvidenceFilters] = useState<EvidenceLabelFilter[]>([]);
   const [selectedTrendStageFilters, setSelectedTrendStageFilters] = useState<TrendStageFilter[]>([]);
+  const [selectedSourceFilters, setSelectedSourceFilters] = useState<string[]>([]);
 
   const [deletingIds, setDeletingIds] = useState<string[]>([]);
   const deleteTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -267,6 +284,15 @@ export default function App() {
         }
       }
 
+      if (selectedSourceFilters.length > 0) {
+        const mappedSource = mapInsightSourceToSearchSource(item.sourceType);
+        const hasSourceMatch = Boolean(mappedSource) && selectedSourceFilters.includes(mappedSource);
+
+        if (!hasSourceMatch) {
+          return false;
+        }
+      }
+
       return true;
     };
 
@@ -276,9 +302,25 @@ export default function App() {
     });
 
     return nextMatrix;
-  }, [matrix, selectedConfidenceFilters, selectedEvidenceFilters, selectedTrendStageFilters]);
+  }, [matrix, selectedConfidenceFilters, selectedEvidenceFilters, selectedTrendStageFilters, selectedSourceFilters]);
 
-  const activeFilterCount = selectedConfidenceFilters.length + selectedEvidenceFilters.length + selectedTrendStageFilters.length;
+  const sourceFilterOptions = useMemo(() => {
+    const configuredSources = (matrixMeta?.sourcesType || [])
+      .filter((source): source is string => typeof source === 'string' && source.trim().length > 0)
+      .map((source) => source.trim());
+
+    if (configuredSources.length > 0) {
+      return Array.from(new Set(configuredSources));
+    }
+
+    return SOURCES_TYPES;
+  }, [matrixMeta]);
+
+  const activeFilterCount =
+    selectedConfidenceFilters.length +
+    selectedEvidenceFilters.length +
+    selectedTrendStageFilters.length +
+    selectedSourceFilters.length;
   const displayMatrix = filteredMatrix || matrix;
   const hasVisibleInsights =
     !!displayMatrix && MATRIX_INSIGHT_KEYS.some((key) => (displayMatrix[key] || []).length > 0);
@@ -2280,6 +2322,7 @@ export default function App() {
                         setSelectedConfidenceFilters([]);
                         setSelectedEvidenceFilters([]);
                         setSelectedTrendStageFilters([]);
+                        setSelectedSourceFilters([]);
                       }}
                       className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
                     >
@@ -2288,7 +2331,7 @@ export default function App() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
                     <div className="flex items-center gap-1.5 mb-2 group/tip relative">
                       <div className="text-[11px] uppercase tracking-wider text-zinc-500">Confidence Level</div>
@@ -2391,6 +2434,42 @@ export default function App() {
                             }`}
                           >
                             {stage}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2 group/tip relative">
+                      <div className="text-[11px] uppercase tracking-wider text-zinc-500">Sources</div>
+                      <div className="relative flex items-center">
+                        <Info className="w-3 h-3 text-zinc-400 cursor-default" />
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
+                          Filter insights by source tags attached to each result, including uploaded document-derived observations when available.
+                          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {sourceFilterOptions.map((source) => {
+                        const selected = selectedSourceFilters.includes(source);
+                        return (
+                          <button
+                            key={source}
+                            type="button"
+                            onClick={() =>
+                              setSelectedSourceFilters((prev) =>
+                                prev.includes(source) ? prev.filter((v) => v !== source) : [...prev, source]
+                              )
+                            }
+                            className={`px-2.5 py-1 rounded-full border text-[11px] font-semibold uppercase tracking-wider transition-colors ${
+                              selected
+                                ? 'bg-zinc-900 text-white border-zinc-900'
+                                : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300'
+                            }`}
+                          >
+                            {source}
                           </button>
                         );
                       })}
