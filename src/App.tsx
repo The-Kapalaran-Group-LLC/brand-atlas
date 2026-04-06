@@ -286,7 +286,7 @@ export default function App() {
 
       if (selectedSourceFilters.length > 0) {
         const mappedSource = mapInsightSourceToSearchSource(item.sourceType);
-        const hasSourceMatch = Boolean(mappedSource) && selectedSourceFilters.includes(mappedSource);
+        const hasSourceMatch = mappedSource !== null && selectedSourceFilters.includes(mappedSource);
 
         if (!hasSourceMatch) {
           return false;
