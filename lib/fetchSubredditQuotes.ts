@@ -1,6 +1,7 @@
 const REDDIT_BASE_URL = 'https://www.reddit.com';
 const DEFAULT_POST_LIMIT = 5;
 const REDDIT_TIMEOUT_MS = 10000;
+const NON_MEANINGFUL_QUOTES = new Set(['removed', 'deleted']);
 
 type RedditPostData = {
   title?: string;
@@ -38,7 +39,7 @@ function sanitizeQuote(value: string): string {
 
 function isMeaningfulQuote(value: string): boolean {
   const normalized = value.toLowerCase();
-  return Boolean(normalized) && normalized !== '[removed]' && normalized !== '[deleted]';
+  return Boolean(normalized) && !NON_MEANINGFUL_QUOTES.has(normalized);
 }
 
 function toPostQuote(post: RedditPostData): string {
