@@ -3,7 +3,7 @@ import sharp from 'sharp';
 
 const W = 1200;
 const H = 630;
-const FONT = 'system-ui, -apple-system, Segoe UI, Avenir Next, sans-serif';
+const FONT = 'ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji';
 
 let out = '';
 out += `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none">\n`;
