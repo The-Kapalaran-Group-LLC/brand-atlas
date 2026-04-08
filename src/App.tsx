@@ -1341,7 +1341,7 @@ export default function App() {
             <h2 className="text-xl md:text-2xl font-medium tracking-tight text-zinc-900 mb-3">
               Choose Your Research Experience
             </h2>
-            <p className="subheader-copy text-zinc-500 mb-10 text-base md:text-lg">
+            <p className="subheader-copy text-zinc-700 mb-10 text-lg md:text-xl font-medium">
               Start with cultural intelligence or go straight into visual identity analysis.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
