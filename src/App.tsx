@@ -55,6 +55,7 @@ type MatrixInsightKey =
 
 type ConfidenceLevelFilter = 'low' | 'medium' | 'high';
 type EvidenceLabelFilter = 'known' | 'inferred' | 'speculative';
+type EvidenceTagLabel = EvidenceLabelFilter | 'analogy';
 type TrendStageFilter = 'emerging' | 'peaking' | 'declining';
 
 const MATRIX_INSIGHT_KEYS: MatrixInsightKey[] = [
@@ -122,7 +123,39 @@ const stripDemographicEvidenceMarkers = (value: string): string => {
     .trim();
 };
 
-const evidenceLabelChipClass = (_label: EvidenceLabelFilter): string => {
+const extractEvidenceTags = (value: string): { cleanText: string; labels: EvidenceTagLabel[] } => {
+  if (!value) {
+    return { cleanText: '', labels: [] };
+  }
+
+  const labels: EvidenceTagLabel[] = [];
+  const markerPattern = /\[(KNOWN|INFERRED|INFERED|SPECULATIVE|ANALOGY)\]|\b(KNOWN|INFERRED|INFERED|SPECULATIVE|ANALOGY)\b(?=\s*[:\-]|\s*$|\.)/g;
+  let match: RegExpExecArray | null = markerPattern.exec(value);
+
+  while (match) {
+    const rawLabel = (match[1] || match[2] || '').toLowerCase();
+    const normalizedLabel: EvidenceTagLabel = rawLabel === 'infered' ? 'inferred' : (rawLabel as EvidenceTagLabel);
+    if (!labels.includes(normalizedLabel)) {
+      labels.push(normalizedLabel);
+    }
+    match = markerPattern.exec(value);
+  }
+
+  const cleanText = value
+    .replace(/\[(KNOWN|INFERRED|INFERED|SPECULATIVE|ANALOGY)\]\s*/gi, '')
+    .replace(/\b(KNOWN|INFERRED|INFERED|SPECULATIVE|ANALOGY)\b\s*[:\-]\s*/gi, '')
+    .replace(/\.(KNOWN|INFERRED|INFERED|SPECULATIVE|ANALOGY)\s*$/i, '.')
+    .replace(/\s+(KNOWN|INFERRED|INFERED|SPECULATIVE|ANALOGY)\s*$/i, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  return { cleanText, labels };
+};
+
+const evidenceLabelChipClass = (label: EvidenceTagLabel): string => {
+  if (label === 'analogy') {
+    return 'bg-zinc-100 text-zinc-600 border border-zinc-200';
+  }
   return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
 };
 
@@ -1534,8 +1567,8 @@ export default function App() {
                 <div className="bg-zinc-50 rounded-xl p-5 mb-8 border border-zinc-100">
                   <h4 className="font-bold text-zinc-900 mb-2">Selected Insight</h4>
                   <p className="text-zinc-700 text-sm">
-                    {stripDemographicEvidenceMarkers(deepDiveInsight.text)}
-                    {extractEvidenceLabelsFromText(deepDiveInsight.text).map((label) => (
+                    {extractEvidenceTags(deepDiveInsight.text).cleanText}
+                    {extractEvidenceTags(deepDiveInsight.text).labels.map((label) => (
                       <span key={`deep-dive-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}>
                         {label}
                       </span>
@@ -1561,7 +1594,16 @@ export default function App() {
                                 Expanded Context
                               </>
                             ),
-                            content: <p className="text-zinc-700 leading-relaxed text-sm">{deepDiveResult.expandedContext}</p>,
+                            content: (
+                              <p className="text-zinc-700 leading-relaxed text-sm">
+                                {extractEvidenceTags(deepDiveResult.expandedContext).cleanText}
+                                {extractEvidenceTags(deepDiveResult.expandedContext).labels.map((label) => (
+                                  <span key={`expanded-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}>
+                                    {label}
+                                  </span>
+                                ))}
+                              </p>
+                            ),
                           },
                           {
                             id: 'real-world-examples',
@@ -1573,11 +1615,21 @@ export default function App() {
                             ),
                             content: (
                               <ul className="space-y-3">
-                                {deepDiveResult.realWorldExamples.map((ex, i) => (
+                                {deepDiveResult.realWorldExamples.map((ex, i) => {
+                                  const parsedExample = extractEvidenceTags(ex);
+                                  return (
                                   <li key={i} className="text-zinc-700 text-sm bg-blue-50/50 p-3 rounded-xl border border-blue-100/50">
-                                    <span>{ex}</span>
+                                    <span>
+                                      {parsedExample.cleanText}
+                                      {parsedExample.labels.map((label) => (
+                                        <span key={`real-world-${i}-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}>
+                                          {label}
+                                        </span>
+                                      ))}
+                                    </span>
                                   </li>
-                                ))}
+                                  );
+                                })}
                               </ul>
                             ),
                           },
@@ -1591,11 +1643,21 @@ export default function App() {
                             ),
                             content: (
                               <ul className="space-y-3">
-                                {deepDiveResult.strategicImplications.map((imp, i) => (
+                                {deepDiveResult.strategicImplications.map((imp, i) => {
+                                  const parsedImplication = extractEvidenceTags(imp);
+                                  return (
                                   <li key={i} className="text-zinc-700 text-sm">
-                                    <span>{imp}</span>
+                                    <span>
+                                      {parsedImplication.cleanText}
+                                      {parsedImplication.labels.map((label) => (
+                                        <span key={`implication-${i}-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}>
+                                          {label}
+                                        </span>
+                                      ))}
+                                    </span>
                                   </li>
-                                ))}
+                                  );
+                                })}
                               </ul>
                             ),
                           },
@@ -1633,7 +1695,14 @@ export default function App() {
                           <Search className="w-5 h-5 text-indigo-500" />
                           Expanded Context
                         </h4>
-                        <p className="text-zinc-700 leading-relaxed text-sm">{deepDiveResult.expandedContext}</p>
+                        <p className="text-zinc-700 leading-relaxed text-sm">
+                          {extractEvidenceTags(deepDiveResult.expandedContext).cleanText}
+                          {extractEvidenceTags(deepDiveResult.expandedContext).labels.map((label) => (
+                            <span key={`expanded-desktop-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}>
+                              {label}
+                            </span>
+                          ))}
+                        </p>
                       </section>
 
                       <section>
@@ -1642,11 +1711,21 @@ export default function App() {
                           Real-World Examples
                         </h4>
                         <ul className="space-y-3">
-                          {deepDiveResult.realWorldExamples.map((ex, i) => (
-                            <li key={i} className="text-zinc-700 text-sm bg-blue-50/50 p-3 rounded-xl border border-blue-100/50">
-                              <span>{ex}</span>
-                            </li>
-                          ))}
+                          {deepDiveResult.realWorldExamples.map((ex, i) => {
+                            const parsedExample = extractEvidenceTags(ex);
+                            return (
+                              <li key={i} className="text-zinc-700 text-sm bg-blue-50/50 p-3 rounded-xl border border-blue-100/50">
+                                <span>
+                                  {parsedExample.cleanText}
+                                  {parsedExample.labels.map((label) => (
+                                    <span key={`real-world-desktop-${i}-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}>
+                                      {label}
+                                    </span>
+                                  ))}
+                                </span>
+                              </li>
+                            );
+                          })}
                         </ul>
                       </section>
 
@@ -1657,11 +1736,21 @@ export default function App() {
                             Strategic Implications
                           </h4>
                           <ul className="space-y-3">
-                            {deepDiveResult.strategicImplications.map((imp, i) => (
-                              <li key={i} className="text-zinc-700 text-sm">
-                                <span>{imp}</span>
-                              </li>
-                            ))}
+                            {deepDiveResult.strategicImplications.map((imp, i) => {
+                              const parsedImplication = extractEvidenceTags(imp);
+                              return (
+                                <li key={i} className="text-zinc-700 text-sm">
+                                  <span>
+                                    {parsedImplication.cleanText}
+                                    {parsedImplication.labels.map((label) => (
+                                      <span key={`implication-desktop-${i}-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}>
+                                        {label}
+                                      </span>
+                                    ))}
+                                  </span>
+                                </li>
+                              );
+                            })}
                           </ul>
                         </section>
                       </div>
@@ -2495,31 +2584,6 @@ export default function App() {
               {!hasVisibleInsights && (
                 <div className="mb-8 p-5 rounded-2xl border border-zinc-200 bg-white text-sm text-zinc-600 no-print">
                   No insights match the selected filters. Adjust or clear filters to repopulate results.
-                </div>
-              )}
-
-              {displayMatrix?.sociological_analysis && (
-                <div className="mb-8 no-print">
-                  <Accordion
-                    defaultOpenFirst={false}
-                    items={[
-                      {
-                        id: 'ai-reasoning',
-                        title: 'AI Reasoning',
-                        content: (
-                          <div className="space-y-3 text-sm leading-relaxed text-zinc-700">
-                            {displayMatrix.sociological_analysis
-                              .split(/\n\s*\n/)
-                              .map((paragraph) => paragraph.trim())
-                              .filter(Boolean)
-                              .map((paragraph, index) => (
-                                <p key={`reasoning-${index}`}>{paragraph}</p>
-                              ))}
-                          </div>
-                        ),
-                      },
-                    ]}
-                  />
                 </div>
               )}
 
