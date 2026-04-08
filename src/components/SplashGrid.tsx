@@ -256,13 +256,13 @@ export function SplashGrid() {
 
       const meshGlow = ctx.createLinearGradient(0, window.innerHeight * 0.4, 0, window.innerHeight);
       meshGlow.addColorStop(0, 'hsla(240, 70%, 70%, 0.08)');
-      meshGlow.addColorStop(1, 'hsla(318, 74%, 68%, 0.15)');
+      meshGlow.addColorStop(1, 'hsla(318, 74%, 68%, 0.12)');
       ctx.fillStyle = meshGlow;
       ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
       const fog = ctx.createLinearGradient(0, window.innerHeight * 0.45, 0, window.innerHeight);
       fog.addColorStop(0, 'hsla(0, 0%, 100%, 0)');
-      fog.addColorStop(1, 'hsla(0, 0%, 100%, 0.5)');
+      fog.addColorStop(1, 'hsla(0, 0%, 100%, 0.4)');
       ctx.fillStyle = fog;
       ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
