@@ -38,7 +38,6 @@ export function ProgressiveLoader({
 
   return (
     <span className={`inline-flex items-center gap-2 ${className}`.trim()}>
-      <span className="inline-flex h-2.5 w-2.5 rounded-full bg-fuchsia-400 animate-pulse" aria-hidden="true" />
       <span>{currentMessage}</span>
       {showProgress && <span>{Math.round(progress)}%</span>}
     </span>

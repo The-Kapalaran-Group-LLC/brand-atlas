@@ -122,6 +122,10 @@ const stripDemographicEvidenceMarkers = (value: string): string => {
     .trim();
 };
 
+const evidenceLabelChipClass = (_label: EvidenceLabelFilter): string => {
+  return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+};
+
 const sanitizeDemographics = (demographics: { age: string; race: string; gender: string }) => ({
   age: stripDemographicEvidenceMarkers(demographics.age),
   race: stripDemographicEvidenceMarkers(demographics.race),
@@ -1509,7 +1513,7 @@ export default function App() {
                     </div>
                     <div>
                       <h3 className="text-xl font-bold text-zinc-900 select-none">Insight Deep Dive</h3>
-                      <p className="text-sm text-zinc-500 select-none">Strategic analysis & implications (Drag to move)</p>
+                      <p className="text-sm text-zinc-500 select-none">Strategic analysis & implications</p>
                     </div>
                   </div>
                   
@@ -1529,7 +1533,14 @@ export default function App() {
 
                 <div className="bg-zinc-50 rounded-xl p-5 mb-8 border border-zinc-100">
                   <h4 className="font-bold text-zinc-900 mb-2">Selected Insight</h4>
-                  <p className="text-zinc-700 text-sm">{stripDemographicEvidenceMarkers(deepDiveInsight.text)}</p>
+                  <p className="text-zinc-700 text-sm">
+                    {stripDemographicEvidenceMarkers(deepDiveInsight.text)}
+                    {extractEvidenceLabelsFromText(deepDiveInsight.text).map((label) => (
+                      <span key={`deep-dive-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}>
+                        {label}
+                      </span>
+                    ))}
+                  </p>
                 </div>
 
                 {isDeepDiveLoading ? (
@@ -1553,25 +1564,6 @@ export default function App() {
                             content: <p className="text-zinc-700 leading-relaxed text-sm">{deepDiveResult.expandedContext}</p>,
                           },
                           {
-                            id: 'strategic-implications',
-                            title: (
-                              <>
-                                <Target className="w-4 h-4 text-emerald-500" />
-                                Strategic Implications
-                              </>
-                            ),
-                            content: (
-                              <ul className="space-y-3">
-                                {deepDiveResult.strategicImplications.map((imp, i) => (
-                                  <li key={i} className="flex gap-3 text-zinc-700 text-sm">
-                                    <span className="text-emerald-500 mt-0.5">•</span>
-                                    <span>{imp}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            ),
-                          },
-                          {
                             id: 'real-world-examples',
                             title: (
                               <>
@@ -1582,9 +1574,26 @@ export default function App() {
                             content: (
                               <ul className="space-y-3">
                                 {deepDiveResult.realWorldExamples.map((ex, i) => (
-                                  <li key={i} className="flex gap-3 text-zinc-700 text-sm bg-blue-50/50 p-3 rounded-xl border border-blue-100/50">
-                                    <span className="text-blue-500 mt-0.5">•</span>
+                                  <li key={i} className="text-zinc-700 text-sm bg-blue-50/50 p-3 rounded-xl border border-blue-100/50">
                                     <span>{ex}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ),
+                          },
+                          {
+                            id: 'strategic-implications',
+                            title: (
+                              <>
+                                <Target className="w-4 h-4 text-emerald-500" />
+                                Strategic Implications
+                              </>
+                            ),
+                            content: (
+                              <ul className="space-y-3">
+                                {deepDiveResult.strategicImplications.map((imp, i) => (
+                                  <li key={i} className="text-zinc-700 text-sm">
+                                    <span>{imp}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -1627,6 +1636,20 @@ export default function App() {
                         <p className="text-zinc-700 leading-relaxed text-sm">{deepDiveResult.expandedContext}</p>
                       </section>
 
+                      <section>
+                        <h4 className="text-lg font-bold text-zinc-900 mb-3 flex items-center gap-2">
+                          <Presentation className="w-5 h-5 text-blue-500" />
+                          Real-World Examples
+                        </h4>
+                        <ul className="space-y-3">
+                          {deepDiveResult.realWorldExamples.map((ex, i) => (
+                            <li key={i} className="text-zinc-700 text-sm bg-blue-50/50 p-3 rounded-xl border border-blue-100/50">
+                              <span>{ex}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+
                       <div className="gap-8">
                         <section>
                           <h4 className="text-lg font-bold text-zinc-900 mb-3 flex items-center gap-2">
@@ -1635,29 +1658,13 @@ export default function App() {
                           </h4>
                           <ul className="space-y-3">
                             {deepDiveResult.strategicImplications.map((imp, i) => (
-                              <li key={i} className="flex gap-3 text-zinc-700 text-sm">
-                                <span className="text-emerald-500 mt-0.5">•</span>
+                              <li key={i} className="text-zinc-700 text-sm">
                                 <span>{imp}</span>
                               </li>
                             ))}
                           </ul>
                         </section>
                       </div>
-
-                      <section>
-                        <h4 className="text-lg font-bold text-zinc-900 mb-3 flex items-center gap-2">
-                          <Presentation className="w-5 h-5 text-blue-500" />
-                          Real-World Examples
-                        </h4>
-                        <ul className="space-y-3">
-                          {deepDiveResult.realWorldExamples.map((ex, i) => (
-                            <li key={i} className="flex gap-3 text-zinc-700 text-sm bg-blue-50/50 p-3 rounded-xl border border-blue-100/50">
-                              <span className="text-blue-500 mt-0.5">•</span>
-                              <span>{ex}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </section>
 
                       {deepDiveResult.sources && deepDiveResult.sources.length > 0 && (
                         <section className="pt-6 border-t border-zinc-100">
@@ -2640,10 +2647,6 @@ function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], on
     return 'bg-zinc-100 text-zinc-600 border border-zinc-200';
   };
 
-  const evidenceLabelClass = (_label: 'known' | 'inferred' | 'speculative') => {
-    return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-  };
-
   const extractEvidenceLabels = (text: string): { cleanText: string; labels: Array<'known' | 'inferred' | 'speculative'> } => {
     const labels: Array<'known' | 'inferred' | 'speculative'> = [];
     const cleanText = text;
@@ -2708,15 +2711,16 @@ function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], on
                         : 'text-zinc-600 hover:bg-zinc-50'
                 }`}
               >
-                <span className="mr-3 mt-0.5 shrink-0 flex items-center gap-1.5">
-                  {item.isHighlyUnique && <Sparkles className={`w-4 h-4 ${isHighlighted ? 'text-indigo-600' : 'text-indigo-500'}`} />}
-                  {showDocumentInsights && item.isFromDocument && <FileText className={`w-4 h-4 ${isHighlighted ? 'text-indigo-600' : 'text-emerald-500'}`} />}
-                  {!item.isHighlyUnique && !(showDocumentInsights && item.isFromDocument) && <span className={isHighlighted ? 'text-indigo-600' : 'text-zinc-300'}>•</span>}
-                </span>
+                {(item.isHighlyUnique || (showDocumentInsights && item.isFromDocument)) && (
+                  <span className="mr-3 mt-0.5 shrink-0 flex items-center gap-1.5">
+                    {item.isHighlyUnique && <Sparkles className={`w-4 h-4 ${isHighlighted ? 'text-indigo-600' : 'text-indigo-500'}`} />}
+                    {showDocumentInsights && item.isFromDocument && <FileText className={`w-4 h-4 ${isHighlighted ? 'text-indigo-600' : 'text-emerald-500'}`} />}
+                  </span>
+                )}
                 <span className="flex-1 pr-8">
                   {cleanText}
                   {labels.map((label) => (
-                    <span key={`${index}-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelClass(label)}`}>
+                    <span key={`${index}-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}>
                       {label}
                     </span>
                   ))}
