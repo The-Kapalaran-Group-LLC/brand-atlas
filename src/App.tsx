@@ -1367,7 +1367,7 @@ export default function App() {
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45 }}
-            className="max-w-3xl mx-auto text-center"
+            className="max-w-3xl mx-auto text-center min-h-[70vh] flex flex-col justify-center"
           >
             <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-6 mx-auto">
               <Sparkles className="w-5 h-5" />
