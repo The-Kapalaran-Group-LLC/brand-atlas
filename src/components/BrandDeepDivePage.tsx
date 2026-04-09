@@ -1238,13 +1238,13 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
         slide.addText(`Wordmark: ${profile.logo.wordmarkLogotype}`, { x: 0.5, y: currentY, w: 4, h: 0.25, fontSize: 10, color: '3F3F46' });
         currentY += 0.4;
         if (exportImages.logoDataUrl) {
-          slide.addImage({ data: exportImages.logoDataUrl, x: 0.5, y: currentY, w: 1.8, h: 0.9, contain: true });
+          slide.addImage({ data: exportImages.logoDataUrl, x: 0.5, y: currentY, w: 1.8, h: 0.9 });
         }
         if (exportImages.visualDataUrls[0]) {
-          slide.addImage({ data: exportImages.visualDataUrls[0], x: 2.6, y: currentY, w: 2.2, h: 1.2, contain: true });
+          slide.addImage({ data: exportImages.visualDataUrls[0], x: 2.6, y: currentY, w: 2.2, h: 1.2 });
         }
         if (exportImages.visualDataUrls[1]) {
-          slide.addImage({ data: exportImages.visualDataUrls[1], x: 4.95, y: currentY, w: 2.2, h: 1.2, contain: true });
+          slide.addImage({ data: exportImages.visualDataUrls[1], x: 4.95, y: currentY, w: 2.2, h: 1.2 });
         }
         currentY += 1.35;
         slide.addText('Primary Colors', { x: 5.2, y: 1.3, w: 4, h: 0.3, fontSize: 12, bold: true, color: '18181B' });
@@ -1685,7 +1685,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                   type="text"
                   value={reportQuestion}
                   onChange={(e) => setReportQuestion(e.target.value)}
-                  placeholder="Ask a question or describe what looks inaccurate"
+                  placeholder="Ask a question about these brand visuals."
                   className="flex-1 px-5 py-4 rounded-2xl border border-indigo-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-zinc-900 shadow-sm"
                   onKeyDown={(e) => e.key === 'Enter' && handleAskQuestion()}
                   disabled={isSubmittingPrompt}
@@ -2076,7 +2076,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
               </section>
             ))}
 
-            <section className="bg-white rounded-3xl border border-zinc-200 p-6">
+            <section className="lg:col-span-2 bg-white rounded-3xl border border-zinc-200 p-6">
               <h3 className="text-lg font-semibold text-zinc-900 mb-3">Opportunity Spaces</h3>
               <ul className="space-y-2">
                 {report.crossBrandReadout.map((item, idx) => (
