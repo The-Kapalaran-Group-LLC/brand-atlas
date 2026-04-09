@@ -1448,7 +1448,7 @@ export default function App() {
                   <ul className="mt-3 space-y-1">
                     {['Audience research', 'Strategy development', 'Campaign & content ideation', 'Creative briefs', 'Pitches'].map((item) => (
                       <li key={item} className="flex items-center gap-2 text-xs text-zinc-500">
-                        <span className="w-1 h-1 rounded-full bg-zinc-300 flex-shrink-0" />
+                        <span className="w-1 h-1 rounded-full bg-zinc-500 flex-shrink-0" />
                         {item}
                       </li>
                     ))}
@@ -1470,7 +1470,7 @@ export default function App() {
                   <ul className="mt-3 space-y-1">
                     {['Competitive research', 'Branding strategy development', 'Visual identity exploration', 'Creative briefs', 'Pitches'].map((item) => (
                       <li key={item} className="flex items-center gap-2 text-xs text-zinc-500">
-                        <span className="w-1 h-1 rounded-full bg-zinc-300 flex-shrink-0" />
+                        <span className="w-1 h-1 rounded-full bg-zinc-500 flex-shrink-0" />
                         {item}
                       </li>
                     ))}
