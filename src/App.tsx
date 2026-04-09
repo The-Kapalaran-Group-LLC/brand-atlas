@@ -1443,7 +1443,7 @@ export default function App() {
                     <Search className="w-4 h-4" /> Cultural Archaeologist
                   </div>
                   <p className="subheader-copy text-sm text-zinc-500">
-                    Generate distinct insights about any audience through a cultural lens.
+                    Generate sharper insights about any audience through a cultural lens.
                   </p>
                 </button>
                 <button
