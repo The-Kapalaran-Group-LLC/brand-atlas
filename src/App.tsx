@@ -9,7 +9,7 @@ import { Search, Loader2, Sparkles, FileText, Presentation, ExternalLink, Info, 
 import { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport } from './services/azure-openai';
 import { generateCulturalMatrix, autoPopulateFields, suggestBrands, askMatrixQuestion, generateDeepDive, generateDeepDivesBatch } from './services/azure-openai';
 import { SplashGrid } from './components/SplashGrid';
-import { BrandDeepDivePage } from './components/BrandDeepDivePage';
+import { BrandDeepDivePage } from './components/VisualDesignExcavator';
 import { TrendLifecycleBadge } from './components/TrendLifecycleBadge';
 import { ProgressiveLoader } from './components/ProgressiveLoader';
 import { Accordion } from './components/Accordion';
@@ -1451,7 +1451,7 @@ export default function App() {
                   className="text-left bg-white/90 border border-zinc-200 rounded-3xl p-6 hover:border-zinc-300 hover:shadow-sm transition-all"
                 >
                   <div className="inline-flex items-center gap-2 text-zinc-800 font-semibold mb-2">
-                    <Sparkles className="w-4 h-4" /> Visual Design Deep Dive
+                    <Sparkles className="w-4 h-4" /> Visual Design Excavator
                     <span className="inline-flex items-center rounded-full border border-amber-300/80 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-700">
                       Beta
                     </span>
@@ -1479,7 +1479,7 @@ export default function App() {
                 onClick={() => setActiveExperience('brand')}
                 className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
               >
-                <Sparkles className="w-4 h-4" /> Visual Design Deep Dive
+                <Sparkles className="w-4 h-4" /> Visual Design Excavator
               </button>
               <button
                 onClick={handleReset}

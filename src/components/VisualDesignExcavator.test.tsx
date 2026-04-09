@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { BrandDeepDivePage } from './BrandDeepDivePage';
+import { BrandDeepDivePage } from './VisualDesignExcavator';
 
 const { generateBrandDeepDive, submitBrandDeepDivePrompt, suggestBrandWebsite } = vi.hoisted(() => ({
   generateBrandDeepDive: vi.fn(),

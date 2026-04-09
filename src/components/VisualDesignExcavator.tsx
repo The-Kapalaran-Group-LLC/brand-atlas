@@ -343,8 +343,6 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const [resultTab, setResultTab] = useState<ResultTab>('profiles');
   const [compareElement, setCompareElement] = useState<CompareElement>('primaryColors');
   const [comparePopup, setComparePopup] = useState<ComparePopupState | null>(null);
-  const [_compareDropdownOpen, _setCompareDropdownOpen] = useState(false);
-  const [_selectedElementToCompare, _setSelectedElementToCompare] = useState<CompareElement | null>(null);
   const [showValidation, setShowValidation] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [fakeProgress, setFakeProgress] = useState(0);
@@ -371,7 +369,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
-  const clearDeepDiveSearch = () => {
+  const clearExcavatorSearch = () => {
     setBrands([
       { id: 'brand-1', name: '', website: '' },
       { id: 'brand-2', name: '', website: '' },
@@ -655,9 +653,9 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
       setSavedSearches(updated);
       localStorage.setItem('visual_design_deep_dives', JSON.stringify(updated));
     } catch (err: unknown) {
-      console.error(err);
       const message = err instanceof Error ? err.message : 'Unknown error';
-      setError(`Failed to generate brand deep dive: ${message}`);
+      console.error('Failed to generate brand excavator:', message);
+      setError(`Failed to generate brand excavator: ${message}`);
     } finally {
       setFakeProgress(100);
       await new Promise((resolve) => setTimeout(resolve, 220));
@@ -712,8 +710,8 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
 
       setReportAnswer(result.answer);
     } catch (err: unknown) {
-      console.error('Failed to process deep dive prompt', err);
       const message = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Failed to process excavator prompt:', message);
       setReportAnswer("Sorry, I couldn't answer that question right now.");
       setError(`Failed to process prompt: ${message}`);
     } finally {
@@ -1209,7 +1207,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
       pres.layout = 'LAYOUT_16x9';
       const titleSlide = pres.addSlide();
       titleSlide.background = { color: 'FAFAFA' };
-      titleSlide.addText('Visual Design Deep Dive Report', { x: 0.5, y: 0.5, w: 9, h: 0.6, fontSize: 48, bold: true, color: '18181B' });
+      titleSlide.addText('Visual Design Excavator Report', { x: 0.5, y: 0.5, w: 9, h: 0.6, fontSize: 48, bold: true, color: '18181B' });
       if (analysisObjective) {
         titleSlide.addText(`Objective: ${analysisObjective}`, { x: 0.5, y: 1.3, w: 9, h: 0.6, fontSize: 16, color: '4F46E5' });
       }
@@ -1256,10 +1254,11 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
           colorY += 0.3;
         });
       }
-      await pres.writeFile({ fileName: `Visual_Design_DeepDive_${new Date().toISOString().split('T')[0]}.pptx` });
+      await pres.writeFile({ fileName: `Visual_Design_Excavator_${new Date().toISOString().split('T')[0]}.pptx` });
       setToast('PowerPoint exported successfully!');
     } catch (err) {
-      console.error('Failed to generate PPTX:', err);
+      const pptxError = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Failed to generate PPTX:', pptxError);
       setToast('Failed to generate PowerPoint.');
     } finally {
       setIsExporting(false);
@@ -1294,7 +1293,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
         return y + 2;
       };
       let y = margin;
-      y = addWrappedText('Visual Design Deep Dive Report', margin, y, 22, true, [24, 24, 27]);
+      y = addWrappedText('Visual Design Excavator Report', margin, y, 22, true, [24, 24, 27]);
       y += 5;
       if (analysisObjective) {
         addWrappedText(`Objective: ${analysisObjective}`, margin, y, 11, true, [79, 70, 229]);
@@ -1384,10 +1383,11 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
           y = addWrappedText(`• ${item}`, margin + 3, y, 10, false, [82, 82, 91]);
         });
       }
-      doc.save(`Visual_Design_DeepDive_${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.save(`Visual_Design_Excavator_${new Date().toISOString().split('T')[0]}.pdf`);
       setToast('PDF exported successfully!');
     } catch (err) {
-      console.error('Failed to generate PDF:', err);
+      const pdfError = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Failed to generate PDF:', pdfError);
       setToast('Failed to generate PDF.');
     } finally {
       setIsExporting(false);
@@ -1406,7 +1406,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
         </button>
         <button
           type="button"
-          onClick={clearDeepDiveSearch}
+          onClick={clearExcavatorSearch}
           className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
         >
           <RefreshCw className="w-4 h-4" /> New Search
@@ -1444,7 +1444,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
           <Sparkles className="w-5 h-5" />
         </div>
         <h1 className="text-4xl md:text-6xl font-medium tracking-tight text-zinc-900 mb-6 select-none">
-          Visual Design <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">Deep Dive</span>
+          Visual Design <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">Excavator</span>
         </h1>
         <p className="text-lg text-zinc-500 max-w-2xl mx-auto leading-relaxed select-none">
           Compare visual identity systems across 1-6 brands.
@@ -1460,7 +1460,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
           className="mb-6 bg-white border border-zinc-200 rounded-2xl px-4 py-3 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 no-print"
         >
           <div className="text-left">
-            <p className="text-xs uppercase tracking-wider text-zinc-500 font-semibold">Visual Design Deep Dive</p>
+            <p className="text-xs uppercase tracking-wider text-zinc-500 font-semibold">Visual Design Excavator</p>
             <p className="text-sm text-zinc-700">
               {brands.filter((b) => b.name.trim()).map((b) => b.name.trim()).slice(0, 3).join(' vs ') || 'Brand comparison ready'}
               {analysisObjective.trim() ? ` • Objective: ${analysisObjective.trim()}` : ''}
@@ -1591,7 +1591,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                Generate Visual Identity Deep Dive
+                Generate Visual Identity Excavator
               </>
             )}
             {isLoading && (
@@ -2117,7 +2117,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
             <span className="text-xs text-zinc-400 ml-auto">{savedSearches.length} saved</span>
           </div>
           {savedSearches.length === 0 ? (
-            <p className="text-sm text-zinc-500">Run a deep dive to start building your saved search library.</p>
+            <p className="text-sm text-zinc-500">Run an excavation to start building your saved search library.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
               {savedSearches.map((saved) => (
