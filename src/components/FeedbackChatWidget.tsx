@@ -48,7 +48,7 @@ export function FeedbackChatWidget() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: trimmedMessage,
+          feedback: trimmedMessage,
           pageUrl: window.location.href,
         }),
       });
