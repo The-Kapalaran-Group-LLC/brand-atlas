@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 
+
 import { AnimatePresence, motion } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { Loader2, MessageSquareText, Send, X } from 'lucide-react';
+import { submitFeedbackToGoogleSheets } from '../api/submitFeedbackToGoogleSheets';
 
 
 const API_BASE_URL =
@@ -43,12 +45,19 @@ export function FeedbackChatWidget() {
     setIsSubmitting(true);
     setSubmitState({ type: 'idle', message: '' });
 
-    // Supabase integration removed. Submission is now a no-op.
-    setTimeout(() => {
-      setSubmitState({ type: 'success', message: 'Feedback submission is disabled.' });
+    try {
+      await submitFeedbackToGoogleSheets({
+        message: trimmedMessage,
+        pageUrl: window.location.href,
+      });
+      setSubmitState({ type: 'success', message: 'Thanks, your feedback is greatly appreciated.' });
       setMessage('');
+    } catch (error) {
+      const errText = error instanceof Error ? error.message : 'Failed to submit feedback.';
+      setSubmitState({ type: 'error', message: errText });
+    } finally {
       setIsSubmitting(false);
-    }, 500);
+    }
   };
 
   const widget = (
