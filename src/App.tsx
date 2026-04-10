@@ -2160,7 +2160,9 @@ export default function App() {
                 >
                   <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
                   <span className="w-full pl-12 pr-4 py-4 text-left block">
-                    {files.length > 0 ? files[0].name : 'Upload Documents (Optional)'}
+                    {files.length > 0
+                      ? files.map(f => f.name).join(', ')
+                      : 'Upload Documents (Optional)'}
                   </span>
                 </button>
                 
