@@ -35,19 +35,12 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function getRequiredEnv(name: 'AZURE_OPENAI_API_KEY' | 'AZURE_OPENAI_ENDPOINT'): string {
-  const value = process.env[name]?.trim();
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
-
+// Use Vite-injected env for AzureOpenAI client
 function getAzureClient(): AzureOpenAI {
   return new AzureOpenAI({
-    apiKey: getRequiredEnv('AZURE_OPENAI_API_KEY'),
-    endpoint: getRequiredEnv('AZURE_OPENAI_ENDPOINT'),
-    apiVersion: process.env.AZURE_OPENAI_API_VERSION || '2024-02-15-preview',
+    apiKey: import.meta.env.VITE_AZURE_OPENAI_API_KEY,
+    endpoint: import.meta.env.VITE_AZURE_OPENAI_ENDPOINT,
+    apiVersion: import.meta.env.VITE_AZURE_OPENAI_API_VERSION || '2024-02-15-preview',
   });
 }
 
