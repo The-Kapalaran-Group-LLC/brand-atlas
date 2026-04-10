@@ -2155,10 +2155,11 @@ export default function App() {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isLoading}
-                  className="w-full relative flex items-center px-4 py-4 bg-white border border-dashed border-zinc-300 rounded-2xl text-zinc-600 hover:bg-zinc-50 hover:border-indigo-300 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                  className="w-full relative flex items-center bg-white border border-dashed border-zinc-300 rounded-2xl text-zinc-600 hover:bg-zinc-50 hover:border-indigo-300 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                  style={{ minHeight: '56px', padding: 0 }}
                 >
                   <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                  <span className="pl-12 flex-1 text-left block">
+                  <span className="w-full pl-12 pr-4 py-4 text-left block">
                     {files.length > 0 ? files[0].name : 'Upload Documents (Optional)'}
                   </span>
                 </button>
