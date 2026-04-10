@@ -4,7 +4,7 @@ import type { FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { Loader2, MessageSquareText, Send, X } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+
 
 const API_BASE_URL =
   (import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL ||
@@ -43,25 +43,12 @@ export function FeedbackChatWidget() {
     setIsSubmitting(true);
     setSubmitState({ type: 'idle', message: '' });
 
-    try {
-      const { error } = await supabase.from('feedback_messages').insert([
-        {
-          message: trimmedMessage,
-          pageUrl: window.location.href,
-        },
-      ]);
-      if (error) {
-        throw new Error(error.message);
-      }
-      const successMessage = 'Thanks, your feedback is greatly appreciated.';
-      setSubmitState({ type: 'success', message: successMessage });
+    // Supabase integration removed. Submission is now a no-op.
+    setTimeout(() => {
+      setSubmitState({ type: 'success', message: 'Feedback submission is disabled.' });
       setMessage('');
-    } catch (error) {
-      const errText = error instanceof Error ? error.message : 'Failed to submit feedback.';
-      setSubmitState({ type: 'error', message: errText });
-    } finally {
       setIsSubmitting(false);
-    }
+    }, 500);
   };
 
   const widget = (
