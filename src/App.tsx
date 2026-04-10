@@ -16,7 +16,7 @@ import { Accordion } from './components/Accordion';
 import { FeedbackChatWidget } from './components/FeedbackChatWidget';
 import pptxgen from 'pptxgenjs';
 
-declare const google: any;
+// Removed Google Slides export and Google Auth modal (Supabase-only)
 
 interface SavedMatrix {
   id: string;
@@ -1233,72 +1233,7 @@ export default function App() {
     });
   };
 
-  const exportToGoogleSlides = () => {
-    const clientId = (import.meta as ImportMeta & { env?: { VITE_GOOGLE_CLIENT_ID?: string } }).env?.VITE_GOOGLE_CLIENT_ID;
-    if (!clientId) {
-      setShowGoogleAuthModal(true);
-      return;
-    }
-    
-    setIsExporting(true);
-    
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.onload = () => {
-      const client = google.accounts.oauth2.initTokenClient({
-        client_id: clientId,
-        scope: 'https://www.googleapis.com/auth/drive.file',
-        callback: async (response: OAuthTokenResponse) => {
-          if (response.error) {
-            console.error(response);
-            setIsExporting(false);
-            setToast("Google Auth failed.");
-            return;
-          }
-          
-          try {
-            setToast("Generating and uploading to Google Slides...");
-            const pres = generatePPTX();
-            if (!pres) throw new Error("No presentation generated");
-            
-            const blob = await pres.write({ outputType: 'blob' }) as Blob;
-            
-            const metadata = {
-              name: `${matrixMeta?.audience} - Cultural Archaeologist`,
-              mimeType: 'application/vnd.google-apps.presentation'
-            };
-            
-            const form = new FormData();
-            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            form.append('file', blob);
-            
-            const uploadRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${response.access_token}`
-              },
-              body: form
-            });
-            
-            const uploadData = await uploadRes.json();
-            if (uploadData.id) {
-              window.open(`https://docs.google.com/presentation/d/${uploadData.id}/edit`, '_blank');
-              setToast("Successfully exported to Google Slides!");
-            } else {
-              throw new Error("Upload failed");
-            }
-          } catch (err) {
-            console.error(err);
-            setToast("Failed to upload to Google Drive.");
-          } finally {
-            setIsExporting(false);
-          }
-        }
-      });
-      client.requestAccessToken();
-    };
-    document.body.appendChild(script);
-  };
+// Removed Google Slides export logic
 
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
 
@@ -1541,45 +1476,7 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* Google Auth Modal */}
-        <AnimatePresence>
-          {showGoogleAuthModal && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            >
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl"
-              >
-                <h3 className="text-xl font-bold mb-4">Google Slides Export Setup</h3>
-                <p className="text-zinc-600 mb-4">
-                  To export directly to Google Slides, you need to provide a Google Client ID.
-                </p>
-                <ol className="list-decimal pl-5 text-sm text-zinc-600 space-y-2 mb-6">
-                  <li>Go to the <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Google Cloud Console</a>.</li>
-                  <li>Create an OAuth Client ID (Web application).</li>
-                  <li>Add <code>{window.location.origin}</code> to Authorized JavaScript origins.</li>
-                  <li>Copy the Client ID.</li>
-                  <li>Open AI Studio <strong>Settings</strong> (⚙️) &gt; <strong>Secrets</strong>.</li>
-                  <li>Add a secret named <code>VITE_GOOGLE_CLIENT_ID</code> and paste your Client ID.</li>
-                </ol>
-                <div className="flex justify-end">
-                  <button 
-                    onClick={() => setShowGoogleAuthModal(false)} 
-                    className="px-6 py-2 bg-zinc-900 text-white rounded-xl font-medium hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900/50 focus:ring-offset-2 transition-colors"
-                  >
-                    Close
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Google Slides export and modal removed for Supabase-only version */}
 
         {/* Deep Dive Modal */}
         <AnimatePresence>
