@@ -1500,7 +1500,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                     value={brand.name}
                     onChange={(e) => updateBrandRow(brand.id, 'name', e.target.value)}
                     placeholder={`Brand ${idx + 1} Name`}
-                    className="w-full pl-12 pr-4 py-3 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    className="w-full pl-12 pr-4 py-3 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-left"
                     disabled={isLoading}
                   />
                 </div>
@@ -1511,7 +1511,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                     value={brand.website}
                     onChange={(e) => updateBrandRow(brand.id, 'website', e.target.value)}
                     placeholder="Website URL (optional)"
-                    className="w-full pl-12 pr-4 py-3 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    className="w-full pl-12 pr-4 py-3 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-left"
                     disabled={isLoading}
                   />
                 </div>
@@ -1552,7 +1552,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
               onChange={(e) => setAnalysisObjective(e.target.value)}
               placeholder="Visual Identity Objective (Required) e.g. Compare distinctiveness and consistency across premium skincare brands"
               rows={3}
-              className="w-full pl-12 pr-4 py-4 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none"
+              className="w-full pl-12 pr-4 py-4 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none text-left"
               disabled={isLoading}
             />
           </div>
@@ -1564,7 +1564,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
               value={targetAudience}
               onChange={(e) => setTargetAudience(e.target.value)}
               placeholder="Target Audience (Optional)"
-              className="w-full pl-12 pr-4 py-4 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              className="w-full pl-12 pr-4 py-4 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-left"
               disabled={isLoading}
             />
           </div>
@@ -1686,7 +1686,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                   value={reportQuestion}
                   onChange={(e) => setReportQuestion(e.target.value)}
                   placeholder="Ask a question about these brand visuals."
-                  className="flex-1 px-5 py-4 rounded-2xl border border-indigo-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-zinc-900 shadow-sm"
+                  className="flex-1 px-5 py-4 rounded-2xl border border-indigo-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-zinc-900 shadow-sm text-left"
                   onKeyDown={(e) => e.key === 'Enter' && handleAskQuestion()}
                   disabled={isSubmittingPrompt}
                 />
@@ -2143,7 +2143,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                       type="text"
                       value={renameValue}
                       maxLength={80}
-                      className="text-sm font-semibold text-zinc-900 w-full pr-8 bg-transparent border-b border-indigo-400 outline-none"
+                      className="text-sm font-semibold text-zinc-900 w-full pr-8 bg-transparent border-b border-indigo-400 outline-none text-left"
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) => setRenameValue(e.target.value)}
                       onBlur={() => commitRename(saved.id, renameValue)}
