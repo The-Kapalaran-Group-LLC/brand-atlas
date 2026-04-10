@@ -1966,6 +1966,32 @@ export default function App() {
             className={`w-full max-w-4xl mt-10 relative flex flex-col gap-4 ${isResearchControlsMinimized ? 'hidden' : ''}`}
           >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="relative flex flex-col w-full">
+                <div className="relative flex items-center w-full">
+                  <Users className="absolute left-4 w-5 h-5 text-zinc-400" />
+                  <input
+                    type="text"
+                    value={audience}
+                    onChange={(e) => {
+                      setAudience(e.target.value);
+                      if (showValidation) setShowValidation(false);
+                    }}
+                    placeholder="Primary Audience (Required) *"
+                    className={`w-full pl-12 pr-12 py-4 bg-white border ${showValidation && !audience.trim() ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : 'border-zinc-200 focus:ring-indigo-500/20 focus:border-indigo-500'} rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 transition-all shadow-sm text-sm`}
+                    disabled={isLoading}
+                    required
+                  />
+                  {isDetecting && !audience.trim() && (
+                    <div className="absolute right-4 flex items-center justify-center">
+                      <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+                    </div>
+                  )}
+                </div>
+                {showValidation && !audience.trim() && (
+                  <span className="text-red-500 text-sm mt-1 ml-2 text-left">Audience is required to generate insights.</span>
+                )}
+              </div>
+              
               <div className="relative flex items-center w-full" ref={brandDropdownRef}>
                 <Tag className="absolute left-4 w-5 h-5 text-zinc-400" />
                 <input
@@ -2071,32 +2097,6 @@ export default function App() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
-              
-              <div className="relative flex flex-col w-full">
-                <div className="relative flex items-center w-full">
-                  <Users className="absolute left-4 w-5 h-5 text-zinc-400" />
-                  <input
-                    type="text"
-                    value={audience}
-                    onChange={(e) => {
-                      setAudience(e.target.value);
-                      if (showValidation) setShowValidation(false);
-                    }}
-                    placeholder="Primary Audience (Required) *"
-                    className={`w-full pl-12 pr-12 py-4 bg-white border ${showValidation && !audience.trim() ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : 'border-zinc-200 focus:ring-indigo-500/20 focus:border-indigo-500'} rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 transition-all shadow-sm text-sm`}
-                    disabled={isLoading}
-                    required
-                  />
-                  {isDetecting && !audience.trim() && (
-                    <div className="absolute right-4 flex items-center justify-center">
-                      <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
-                    </div>
-                  )}
-                </div>
-                {showValidation && !audience.trim() && (
-                  <span className="text-red-500 text-sm mt-1 ml-2 text-left">Audience is required to generate insights.</span>
-                )}
               </div>
 
               <div className="relative flex items-center w-full">
@@ -2288,7 +2288,7 @@ export default function App() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-[288px] mx-auto px-4 py-4 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-zinc-900/50 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all flex items-center justify-center gap-2 text-lg mt-2 select-none relative overflow-hidden"
+              className="w-[288px] mx-auto px-4 py-4 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-zinc-900/50 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all flex items-center justify-center gap-2 text-sm mt-2 select-none relative overflow-hidden"
             >
               {isLoading ? (
                 <ProgressiveLoader

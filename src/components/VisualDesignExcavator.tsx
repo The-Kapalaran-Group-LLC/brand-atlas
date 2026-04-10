@@ -1591,7 +1591,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                Generate Visual Design Report
+                Generate Visual Analysis
               </>
             )}
             {isLoading && (
