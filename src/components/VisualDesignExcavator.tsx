@@ -447,14 +447,17 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
     setToast('Loaded saved search.');
   };
 
-  const renameSavedSearch = (id: string, newName: string) => {
+  const renameSavedSearch = async (id: string, newName: string) => {
     const trimmed = newName.trim();
     if (!trimmed) return;
-    const updated = savedSearches.map((item) =>
-      item.id === id ? { ...item, customName: trimmed } : item
-    );
-    setSavedSearches(updated);
-    localStorage.setItem('visual_design_deep_dives', JSON.stringify(updated));
+    const { data, error } = await supabase
+      .from('brand_deep_dives')
+      .update({ custom_name: trimmed })
+      .eq('id', id)
+      .select();
+    if (!error && data) {
+      setSavedSearches((prev) => prev.map((item) => item.id === id ? { ...item, customName: trimmed } : item));
+    }
   };
 
   const commitRename = (id: string, value: string) => {
@@ -463,30 +466,34 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
     setRenameValue('');
   };
 
-  const deleteSavedSearch = (id: string) => {
+  const deleteSavedSearch = async (id: string) => {
     const deleted = savedSearches.find((item) => item.id === id);
     if (!deleted) return;
 
-    const updated = savedSearches.filter((item) => item.id !== id);
-    setSavedSearches(updated);
-    localStorage.setItem('visual_design_deep_dives', JSON.stringify(updated));
+    const { error } = await supabase
+      .from('brand_deep_dives')
+      .delete()
+      .eq('id', id);
 
-    if (undoDeleteTimeoutRef.current) {
-      clearTimeout(undoDeleteTimeoutRef.current);
-      undoDeleteTimeoutRef.current = null;
+    if (!error) {
+      const updated = savedSearches.filter((item) => item.id !== id);
+      setSavedSearches(updated);
+      if (undoDeleteTimeoutRef.current) {
+        clearTimeout(undoDeleteTimeoutRef.current);
+        undoDeleteTimeoutRef.current = null;
+      }
+      setRecentlyDeletedSearch(deleted);
+      setToast('Saved project deleted.');
+      setUndoToast({ message: `${deleted.brands.map((b) => b.name).join(' vs ')} deleted` });
+      undoDeleteTimeoutRef.current = setTimeout(() => {
+        setRecentlyDeletedSearch(null);
+        setUndoToast(null);
+        undoDeleteTimeoutRef.current = null;
+      }, 8000);
     }
-
-    setRecentlyDeletedSearch(deleted);
-    setToast('Saved project deleted.');
-    setUndoToast({ message: `${deleted.brands.map((b) => b.name).join(' vs ')} deleted` });
-    undoDeleteTimeoutRef.current = setTimeout(() => {
-      setRecentlyDeletedSearch(null);
-      setUndoToast(null);
-      undoDeleteTimeoutRef.current = null;
-    }, 8000);
   };
 
-  const undoDeleteSavedSearch = () => {
+  const undoDeleteSavedSearch = async () => {
     if (!recentlyDeletedSearch) return;
 
     if (undoDeleteTimeoutRef.current) {
@@ -494,25 +501,50 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
       undoDeleteTimeoutRef.current = null;
     }
 
-    const updated = [recentlyDeletedSearch, ...savedSearches.filter((item) => item.id !== recentlyDeletedSearch.id)];
-    setSavedSearches(updated);
-    localStorage.setItem('visual_design_deep_dives', JSON.stringify(updated));
-    setRecentlyDeletedSearch(null);
-    setUndoToast(null);
-    setToast('Deletion undone.');
+    // Re-insert into Supabase
+    const { error } = await supabase.from('brand_deep_dives').insert([
+      {
+        id: recentlyDeletedSearch.id,
+        brands: recentlyDeletedSearch.brands,
+        analysis_objective: recentlyDeletedSearch.analysisObjective,
+        target_audience: recentlyDeletedSearch.targetAudience,
+        report: recentlyDeletedSearch.report,
+        custom_name: recentlyDeletedSearch.customName,
+        created_at: recentlyDeletedSearch.date,
+      },
+    ]);
+    if (!error) {
+      const updated = [recentlyDeletedSearch, ...savedSearches.filter((item) => item.id !== recentlyDeletedSearch.id)];
+      setSavedSearches(updated);
+      setRecentlyDeletedSearch(null);
+      setUndoToast(null);
+      setToast('Deletion undone.');
+    }
   };
 
   useEffect(() => {
-    const raw = localStorage.getItem('visual_design_deep_dives');
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as SavedDeepDiveSearch[];
-      if (Array.isArray(parsed)) {
-        setSavedSearches(parsed);
+    // Load saved deep dives from Supabase
+    (async () => {
+      const { data, error } = await supabase
+        .from('brand_deep_dives')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && Array.isArray(data)) {
+        setSavedSearches(
+          data.map((row) => ({
+            id: row.id,
+            date: row.created_at,
+            brands: row.brands,
+            analysisObjective: row.analysis_objective,
+            targetAudience: row.target_audience,
+            report: row.report,
+            customName: row.custom_name,
+          }))
+        );
+      } else {
+        setSavedSearches([]);
       }
-    } catch {
-      setSavedSearches([]);
-    }
+    })();
   }, []);
 
   useEffect(() => {
@@ -650,21 +682,21 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
         targetAudience,
         report: result,
       };
-      const updated = [nextSaved, ...savedSearches.filter((item) => item.id !== nextSaved.id)].slice(0, 20);
-      setSavedSearches(updated);
-      localStorage.setItem('visual_design_deep_dives', JSON.stringify(updated));
-
       // Persist to Supabase
       try {
-        await supabase.from('brand_deep_dives').insert([
+        const { data, error } = await supabase.from('brand_deep_dives').insert([
           {
+            id: nextSaved.id,
             brands: normalizedBrands,
             analysis_objective: analysisObjective,
             target_audience: targetAudience,
             report: result,
-            created_at: new Date().toISOString(),
+            created_at: nextSaved.date,
           },
-        ]);
+        ]).select();
+        if (!error && data) {
+          setSavedSearches((prev) => [nextSaved, ...prev.filter((item) => item.id !== nextSaved.id)].slice(0, 20));
+        }
       } catch (saveErr) {
         // Do not block UI if Supabase fails
         console.warn('Failed to save brand deep dive to Supabase:', saveErr);
@@ -720,21 +752,21 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
           targetAudience,
           report: result.report,
         };
-        const updated = [nextSaved, ...savedSearches.filter((item) => item.id !== nextSaved.id)].slice(0, 20);
-        setSavedSearches(updated);
-        localStorage.setItem('visual_design_deep_dives', JSON.stringify(updated));
-
         // Persist to Supabase
         try {
-          await supabase.from('brand_deep_dives').insert([
+          const { data, error } = await supabase.from('brand_deep_dives').insert([
             {
+              id: nextSaved.id,
               brands: normalizedBrands,
               analysis_objective: analysisObjective,
               target_audience: targetAudience,
               report: result.report,
-              created_at: new Date().toISOString(),
+              created_at: nextSaved.date,
             },
-          ]);
+          ]).select();
+          if (!error && data) {
+            setSavedSearches((prev) => [nextSaved, ...prev.filter((item) => item.id !== nextSaved.id)].slice(0, 20));
+          }
         } catch (saveErr) {
           // Do not block UI if Supabase fails
           console.warn('Failed to save brand deep dive to Supabase:', saveErr);
