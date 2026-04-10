@@ -17,18 +17,53 @@ export function ProgressiveLoader({
     if (messages.length > 0) {
       return messages;
     }
-
     return ['Working...'];
   }, [messages]);
 
   const [messageIndex, setMessageIndex] = useState(0);
+  const [displayedProgress, setDisplayedProgress] = useState(0);
+  const [forceComplete, setForceComplete] = useState(false);
+
+  // Animate progress smoothly
+  useEffect(() => {
+    if (progress >= 100) {
+      setDisplayedProgress(100);
+      return;
+    }
+    if (progress > displayedProgress) {
+      const step = () => {
+        setDisplayedProgress((prev) => {
+          if (prev >= progress) return prev;
+          return Math.min(prev + Math.max(1, Math.round((progress - prev) / 8)), progress);
+        });
+      };
+      const interval = setInterval(step, 40);
+      return () => clearInterval(interval);
+    } else if (progress < displayedProgress) {
+      setDisplayedProgress(progress);
+    }
+  }, [progress, displayedProgress]);
+
+  // Fallback: if stuck at 99% for >5s, force to 100%
+  useEffect(() => {
+    if (displayedProgress >= 99 && displayedProgress < 100 && !forceComplete) {
+      const timer = setTimeout(() => {
+        setDisplayedProgress(100);
+        setForceComplete(true);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+    if (displayedProgress === 100 && forceComplete) {
+      // Reset forceComplete for next load
+      setTimeout(() => setForceComplete(false), 1000);
+    }
+  }, [displayedProgress, forceComplete]);
 
   useEffect(() => {
     setMessageIndex(0);
     const interval = setInterval(() => {
       setMessageIndex((prev) => (prev + 1) % safeMessages.length);
     }, 2000);
-
     return () => {
       clearInterval(interval);
     };
@@ -39,7 +74,7 @@ export function ProgressiveLoader({
   return (
     <span className={`inline-flex items-center gap-2 ${className}`.trim()}>
       <span>{currentMessage}</span>
-      {showProgress && <span>{Math.round(progress)}%</span>}
+      {showProgress && <span>{Math.round(displayedProgress)}%</span>}
     </span>
   );
 }
