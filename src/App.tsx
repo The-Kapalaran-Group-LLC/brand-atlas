@@ -10,6 +10,46 @@ import { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport } from './serv
 import { generateCulturalMatrix, autoPopulateFields, suggestBrands, askMatrixQuestion, generateDeepDive, generateDeepDivesBatch } from './services/azure-openai';
 import { SplashGrid } from './components/SplashGrid';
 import { BrandDeepDivePage } from './components/VisualDesignExcavator';
+import AdminLibrary from './components/AdminLibrary';
+  // --- Admin Mode State ---
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [isAdminAuthed, setIsAdminAuthed] = useState(false);
+  const [adminPassInput, setAdminPassInput] = useState('');
+  const [showAdminError, setShowAdminError] = useState(false);
+
+  // Check for ?admin=true on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('admin') === 'true') {
+        setIsAdminMode(true);
+      }
+    }
+  }, []);
+
+  // Handle admin passphrase submit
+  const handleAdminPassSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (adminPassInput === import.meta.env.VITE_ADMIN_PASSPHRASE) {
+      setIsAdminAuthed(true);
+      setShowAdminError(false);
+    } else {
+      setShowAdminError(true);
+    }
+  };
+
+  // Handle admin logout
+  const handleAdminLogout = () => {
+    setIsAdminAuthed(false);
+    setAdminPassInput('');
+    setIsAdminMode(false);
+    // Remove ?admin param from URL
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('admin');
+      window.history.replaceState({}, '', url.toString());
+    }
+  };
 import { TrendLifecycleBadge } from './components/TrendLifecycleBadge';
 import { ProgressiveLoader } from './components/ProgressiveLoader';
 import { Accordion } from './components/Accordion';
@@ -1221,6 +1261,50 @@ export default function App() {
       setHasApiKey(true);
     }
   };
+
+  // --- Admin Library Route ---
+  if (isAdminMode && !isAdminAuthed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA] text-zinc-900 font-sans p-4">
+        <form
+          onSubmit={handleAdminPassSubmit}
+          className="bg-white p-8 md:p-12 rounded-3xl border border-zinc-200 shadow-xl max-w-md w-full text-center"
+        >
+          <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <Sparkles className="w-8 h-8" />
+          </div>
+          <h1 className="text-3xl font-bold mb-4 text-zinc-900">Admin Access</h1>
+          <p className="text-zinc-600 mb-8 text-lg">
+            Enter the admin passphrase to access the Brand Atlas Admin Library.
+          </p>
+          <input
+            type="password"
+            value={adminPassInput}
+            onChange={e => setAdminPassInput(e.target.value)}
+            placeholder="Admin Passphrase"
+            className="w-full px-4 py-3 mb-4 border border-zinc-200 rounded-xl text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            autoFocus
+          />
+          {showAdminError && (
+            <div className="text-red-500 text-sm mb-4">Incorrect passphrase. Please try again.</div>
+          )}
+          <button
+            type="submit"
+            className="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-all shadow-lg shadow-indigo-200 hover:shadow-indigo-300 flex items-center justify-center gap-3 text-lg"
+          >
+            <Sparkles className="w-5 h-5" />
+            Enter Admin Library
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  if (isAdminMode && isAdminAuthed) {
+    return (
+      <AdminLibrary onLogout={handleAdminLogout} />
+    );
+  }
 
   if (hasApiKey === false) {
     return (
