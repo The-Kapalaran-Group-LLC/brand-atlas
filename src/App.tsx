@@ -629,10 +629,10 @@ export default function App() {
       setIsSuggestingBrands(true);
       try {
         const suggestions = await suggestBrands(brand);
-        setBrandSuggestions(suggestions);
+        setBrandSuggestions(Array.isArray(suggestions) ? suggestions : []);
       } catch (err: unknown) {
-        console.error("Failed to get brand suggestions:", err);
         const errorMessage = getErrorMessage(err);
+        setToast('Failed to get brand suggestions. Please try again.');
         if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
           setHasQuotaError(true);
         }
@@ -818,20 +818,18 @@ export default function App() {
   const handleDeepDive = async (item: MatrixItem) => {
     if (!matrixMeta) return;
     setDeepDiveInsight(item);
-    
     if (item.deepDive) {
       setDeepDiveResult(item.deepDive);
       return;
     }
-    
     setDeepDiveResult(null);
     setIsDeepDiveLoading(true);
     try {
       const result = await generateDeepDive(item, matrixMeta);
+      if (!result || typeof result !== 'object') throw new Error('No deep dive result');
       setDeepDiveResult(result);
     } catch (err) {
-      console.error(err);
-      setToast("Failed to generate deep dive.");
+      setToast("Failed to generate deep dive. Please try again.");
       setDeepDiveInsight(null);
     } finally {
       setIsDeepDiveLoading(false);
@@ -857,23 +855,33 @@ export default function App() {
     if (!selectedFiles) return;
 
     const newFiles: UploadedFile[] = [];
+    let errored = false;
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
       const reader = new FileReader();
       reader.onload = (event) => {
-        const base64String = (event.target?.result as string).split(',')[1];
-        newFiles.push({
-          name: file.name,
-          mimeType: file.type || 'application/octet-stream',
-          data: base64String
-        });
-        if (newFiles.length === selectedFiles.length) {
-          setFiles(prev => [...prev, ...newFiles]);
+        try {
+          const base64String = (event.target?.result as string).split(',')[1];
+          if (!base64String) throw new Error('File read error');
+          newFiles.push({
+            name: file.name,
+            mimeType: file.type || 'application/octet-stream',
+            data: base64String
+          });
+          if (newFiles.length === selectedFiles.length) {
+            setFiles(prev => [...prev, ...newFiles]);
+          }
+        } catch (err) {
+          errored = true;
+          setToast('Failed to read one or more files.');
         }
+      };
+      reader.onerror = () => {
+        errored = true;
+        setToast('Failed to read one or more files.');
       };
       reader.readAsDataURL(file);
     }
-    
     // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -1044,9 +1052,12 @@ export default function App() {
   };
 
   const exportToPPTX = () => {
-    const pres = generatePPTX();
-    if (pres) {
+    try {
+      const pres = generatePPTX();
+      if (!pres) throw new Error('No presentation generated');
       pres.writeFile({ fileName: `${matrixMeta?.audience.replace(/\s+/g, '_')}_Cultural_Archaeologist.pptx` });
+    } catch (err) {
+      setToast('Failed to export PPTX.');
     }
   };
 
