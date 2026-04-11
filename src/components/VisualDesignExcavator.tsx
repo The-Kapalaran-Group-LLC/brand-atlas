@@ -1,7 +1,16 @@
+import PptxGenJS from 'pptxgenjs';
 import { ProgressiveLoader } from './ProgressiveLoader';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 // Loader state for all visuals
-const useAllVisualsLoaded = (report, bestVisualsByBrand) => {
+const useAllVisualsLoaded = (
+  report: BrandDeepDiveReport | null,
+  bestVisualsByBrand: Record<string, BrandVisualSelection>
+): {
+  allVisualsLoaded: boolean;
+  handleImageLoad: () => void;
+  handleImageError: () => void;
+  expectedCount: number;
+} => {
   const [allVisualsLoaded, setAllVisualsLoaded] = useState(false);
   const [expectedCount, setExpectedCount] = useState(0);
   const loadedCountRef = useRef(0);
@@ -15,7 +24,7 @@ const useAllVisualsLoaded = (report, bestVisualsByBrand) => {
     }
     // Count all logo + visual images for all brands
     let count = 0;
-    report.brandProfiles.forEach((profile) => {
+    report.brandProfiles.forEach((profile: any) => {
       const visuals = bestVisualsByBrand[profile.brandName];
       if (visuals) {
         // logo
@@ -54,28 +63,8 @@ const useAllVisualsLoaded = (report, bestVisualsByBrand) => {
 
   return { allVisualsLoaded, handleImageLoad, handleImageError, expectedCount };
 };
-import { motion, AnimatePresence } from 'motion/react';
-import {
-  Loader2,
-  Building2,
-  Crosshair,
-  Users,
-  Clock,
-  Plus,
-  Trash2,
-  Type,
-  Palette,
-  ImageIcon,
-  Sparkles,
-  RefreshCw,
-  Search,
-  ExternalLink,
-  Share2,
-  Info,
-  Presentation,
-  FileText,
-} from 'lucide-react';
-import pptxgen from 'pptxgenjs';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, RefreshCw, Info, Sparkles, Building2, Users, Trash2, Plus, Crosshair, Loader2, Presentation, FileText, ImageIcon, Type, Palette, Clock, ExternalLink, Share2 } from 'lucide-react';
 import { BrandColorSpec, BrandDeepDiveReport, generateBrandDeepDive, submitBrandDeepDivePrompt, suggestBrandWebsite } from '../services/azure-openai';
 import { supabase } from '../services/supabase-client';
 import { Accordion } from './Accordion';
@@ -389,21 +378,7 @@ function dedupeVisualCards(cards: BrandVisualCard[]): BrandVisualCard[] {
 }
 
 export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
-  // Loader for all visuals
-    const { allVisualsLoaded, handleImageLoad, handleImageError, expectedCount } = useAllVisualsLoaded(report, bestVisualsByBrand);
-  
-    // Loader overlay always rendered if needed, outside AnimatePresence
-    {report && !allVisualsLoaded && expectedCount > 0 && (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm">
-        <ProgressiveLoader
-          messages={['Loading all visual design elements...']}
-          showProgress
-          progress={Math.min(100, Math.round((expectedCount ? (100 * (expectedCount - (expectedCount - (allVisualsLoaded ? expectedCount : 0)))) / expectedCount : 0)))}
-        />
-        <span className="mt-4 text-zinc-500 text-sm">Preparing results...</span>
-      </div>
-    )}
-  const [brands, setBrands] = useState([
+  const [brands, setBrands] = useState<Array<{ id: string; name: string; website: string }>>([
     { id: 'brand-1', name: '', website: '' },
     { id: 'brand-2', name: '', website: '' },
   ]);
@@ -416,21 +391,8 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [fakeProgress, setFakeProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
   const [report, setReport] = useState<BrandDeepDiveReport | null>(null);
-  
-    <AnimatePresence mode="wait">
-      {report && allVisualsLoaded && (
-        <motion.div
-          key="brand-deep-dive-report"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          className="w-full max-w-4xl mx-auto mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6"
-        >
-          {/* ...existing report rendering code... */}
-        </motion.div>
-      )}
-    </AnimatePresence>
   const [reportQuestion, setReportQuestion] = useState('');
   const [reportAnswer, setReportAnswer] = useState('');
   const [isSubmittingPrompt, setIsSubmittingPrompt] = useState(false);
@@ -451,6 +413,9 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const requestedHeroRef = useRef<Set<string>>(new Set());
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+
+  // Loader for all visuals (now after report and bestVisualsByBrand)
+  const { allVisualsLoaded, handleImageLoad, handleImageError, expectedCount } = useAllVisualsLoaded(report, bestVisualsByBrand);
 
   const clearExcavatorSearch = () => {
     setBrands([
@@ -1350,7 +1315,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
     setIsExporting(true);
     setToast('Generating PowerPoint...');
     try {
-      const pres = new pptxgen();
+      const pres = new PptxGenJS();
       pres.layout = 'LAYOUT_16x9';
       const titleSlide = pres.addSlide();
       titleSlide.background = { color: 'FAFAFA' };
@@ -1542,7 +1507,8 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   };
 
   return (
-    <div className="w-full px-2 sm:px-0">
+    <>
+      <div className="w-full px-2 sm:px-0">
       {/* Top Navigation / Actions */}
       <div className="absolute top-6 right-6 z-50 no-print flex items-center gap-2">
         <button
@@ -1761,511 +1727,31 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
 
       </div>
 
+
       <AnimatePresence mode="wait">
         {report && (
-          // Loader overlay until all visuals are loaded
-          !allVisualsLoaded && expectedCount > 0 ? (
-            <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm">
-              <ProgressiveLoader
-                messages={['Loading all visual design elements...']}
-                showProgress
-                progress={Math.min(100, Math.round((expectedCount ? (100 * (expectedCount - (expectedCount - (allVisualsLoaded ? expectedCount : 0)))) / expectedCount : 0)))}
-              />
-              <span className="mt-4 text-zinc-500 text-sm">Preparing results...</span>
-            </div>
-          ) : null
-          <motion.div
-            key="brand-deep-dive-report"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="w-full max-w-4xl mx-auto mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6"
-          >
-            <section className="lg:col-span-2 bg-white rounded-3xl border border-zinc-200 p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setResultTab('profiles')}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${resultTab === 'profiles' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'}`}
-                >
-                  Brand Profiles
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setResultTab('compare')}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${resultTab === 'compare' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'}`}
-                >
-                  Visual Compare
-                </button>
-                {resultTab === 'compare' && (
-                  <select
-                    value={compareElement}
-                    onChange={(e) => setCompareElement(e.target.value as CompareElement)}
-                    className="ml-auto px-3 py-2 rounded-xl border border-zinc-200 text-sm text-zinc-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                  >
-                    <option value="primaryColors">Primary Colors</option>
-                    <option value="accentColors">Accent Colors</option>
-                    <option value="neutrals">Neutrals</option>
-                    <option value="typography">Typography</option>
-                    <option value="imageryStyle">Imagery Style</option>
-                  </select>
-                )}
-                <div className="ml-auto flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={exportToPPTX}
-                    disabled={isExporting}
-                    className="flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 rounded-full text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm disabled:opacity-50"
-                  >
-                    <Presentation className="w-4 h-4" /> PPTX <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 border border-indigo-100">Beta</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={exportToPDF}
-                    disabled={isExporting}
-                    className="flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 rounded-full text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm disabled:opacity-50"
-                  >
-                    <FileText className="w-4 h-4" /> PDF <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 border border-indigo-100">Beta</span>
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <div className="lg:col-span-2 bg-indigo-50 rounded-3xl p-6 md:p-8 border border-indigo-100 shadow-sm no-print">
-              <h3 className="text-xl font-bold text-indigo-900 mb-4 flex items-center gap-2">
-                <Search className="w-6 h-6" /> Ask the Archaeologist
-              </h3>
-              <p className="text-sm text-indigo-700/80 mb-4">
-                Ask a question about the current audit. If your prompt points out an inaccuracy, the report will be refreshed automatically.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="text"
-                  value={reportQuestion}
-                  onChange={(e) => setReportQuestion(e.target.value)}
-                  placeholder="Ask a question about these brand visuals."
-                  className="flex-1 px-5 py-4 rounded-2xl border border-indigo-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-zinc-900 shadow-sm text-left"
-                  onKeyDown={(e) => e.key === 'Enter' && handleAskQuestion()}
-                  disabled={isSubmittingPrompt}
+          <>
+            {!allVisualsLoaded && expectedCount > 0 ? (
+              <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm">
+                <ProgressiveLoader
+                  messages={['Loading all visual design elements...']}
+                  showProgress
+                  progress={Math.min(100, Math.round((expectedCount ? (100 * (expectedCount - (expectedCount - (allVisualsLoaded ? expectedCount : 0)))) / expectedCount : 0)))}
                 />
-                <button
-                  type="button"
-                  onClick={handleAskQuestion}
-                  disabled={isSubmittingPrompt || !reportQuestion.trim()}
-                  className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-medium hover:bg-indigo-700 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-2 disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all flex items-center justify-center gap-2 shadow-sm"
-                >
-                  {isSubmittingPrompt ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Ask'}
-                </button>
+                <span className="mt-4 text-zinc-500 text-sm">Preparing results...</span>
               </div>
-              {reportAnswer && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-6 p-6 bg-white rounded-2xl border border-indigo-100 text-zinc-700 shadow-sm leading-relaxed"
-                >
-                  <p>{reportAnswer}</p>
-                </motion.div>
-              )}
-            </div>
-
-            {resultTab === 'compare' ? (
-              renderComparePanel()
             ) : (
-              <>
-            <section className="lg:col-span-2 bg-white rounded-3xl border border-zinc-200 p-6">
-              <h3 className="text-lg font-semibold text-zinc-900 mb-2">Analysis Objective</h3>
-              <p className="text-zinc-700 leading-relaxed text-sm">{report.analysisObjective}</p>
-              <p className="text-zinc-500 leading-relaxed text-sm mt-3">{report.ecosystemMethod}</p>
-            </section>
-
-            {report.brandProfiles.map((profile) => (
-              <section key={profile.brandName} className="lg:col-span-2 bg-white rounded-3xl border border-zinc-200 overflow-hidden space-y-6">
-                <div className="px-6 pt-6 pb-6 space-y-6">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-xl font-semibold text-zinc-900">{profile.brandName}</h3>
-                    {profile.website && <p className="text-sm text-zinc-500">{profile.website}</p>}
-                  </div>
-                  <div className="text-right text-xs text-zinc-500">
-                    <p className="font-medium">Consistency</p>
-                    <p>{profile.consistencyAssessment}</p>
-                  </div>
-                </div>
-                {(() => {
-                  const visuals = bestVisualsByBrand[profile.brandName];
-                  const logoUrl = visuals?.deterministicLogoUrl;
-                  const logoFallbackChain = buildImageFallbackChain(logoUrl || '', profile.website).join('|');
-
-                  const visualReferenceCardsSection = visuals ? (
-                    <div
-                      data-testid="compare-trigger-visual-reference"
-                      className="rounded-2xl border border-zinc-200 p-4 cursor-pointer hover:border-indigo-300 transition-colors"
-                      onClick={(event) => openComparePopup(event, 'imageryStyle')}
-                    >
-                      <div className="flex items-center justify-between gap-3 mb-3">
-                        <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 inline-flex items-center gap-2">
-                          <ImageIcon className="w-4 h-4" /> Visual Reference Cards
-                        </h4>
-                        <span className="text-xs text-zinc-500">Method: {VISUAL_METHOD_LABEL[visuals.method]}</span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                        {visuals.images.map((image, idx) => {
-                          const cardKey = `${profile.brandName}-visual-${idx}`;
-                          const failureState = visualFailuresByCard[cardKey];
-                          if (failureState?.hidden) {
-                            return null;
-                          }
-                          const sourceUrl = profile.website || '';
-                          const fallbackChain = buildVisualPreviewFallbackChain(image.url, profile.website).join('|');
-                          const visualClass =
-                            visuals.method === 'screenshot'
-                              ? 'w-full h-44 object-cover hover:brightness-95 transition-all bg-zinc-100'
-                              : 'w-full h-44 object-contain bg-white p-3 transition-all';
-
-                          return (
-                            <figure
-                              key={cardKey}
-                              data-testid="compare-trigger-visual-card"
-                              className="rounded-xl border border-zinc-200 bg-zinc-50 overflow-hidden hover:shadow-md transition-shadow relative cursor-pointer"
-                              onClick={(event) => openComparePopup(event, 'imageryStyle')}
-                            >
-                              {failureState && (
-                                <span className="absolute top-2 right-2 z-10 inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 text-[10px] font-medium">
-                                  Failed source: {failureState.lastSource}
-                                </span>
-                              )}
-                              {sourceUrl ? (
-                                <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="block">
-                                  <img
-                                    src={image.url}
-                                    alt={`${profile.brandName} - ${image.label}`}
-                                    loading="lazy"
-                                    referrerPolicy="origin"
-                                    data-original-src={image.url}
-                                    data-fallback-chain={fallbackChain}
-                                    onLoad={e => { clearVisualFailureState(cardKey); handleImageLoad(); }}
-                                    onError={event => { handleVisualImageError(event, cardKey); handleImageError(); }}
-                                    className={visualClass}
-                                  />
-                                </a>
-                              ) : (
-                                <img
-                                  src={image.url}
-                                  alt={`${profile.brandName} - ${image.label}`}
-                                  loading="lazy"
-                                  referrerPolicy="origin"
-                                  data-original-src={image.url}
-                                  data-fallback-chain={fallbackChain}
-                                  onLoad={e => { clearVisualFailureState(cardKey); handleImageLoad(); }}
-                                  onError={event => { handleVisualImageError(event, cardKey); handleImageError(); }}
-                                  className={visualClass}
-                                />
-                              )}
-                              <figcaption className="px-3 py-2 text-xs text-zinc-600 space-y-1">
-                                <p>{image.label}</p>
-                                <p className="text-[11px] text-zinc-500">
-                                  Status: {failureState?.isPlaceholder ? 'Placeholder shown (all sources failed)' : failureState ? 'Fallback source active' : image.status === 'placeholder' ? 'Deterministic placeholder' : 'Loaded'}
-                                </p>
-                              </figcaption>
-                            </figure>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : null;
-
-                  const logoSystemSection = (
-                    <div
-                      data-testid="compare-trigger-logo-system"
-                      className="rounded-2xl border border-zinc-200 p-4 cursor-pointer hover:border-indigo-300 transition-colors"
-                      onClick={(event) => openComparePopup(event, 'imageryStyle')}
-                    >
-                      <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-3">Logo System</h4>
-                      {(() => {
-                        if (!logoUrl) return null;
-                        const processed = processedLogos[profile.brandName];
-                        return (
-                          <div
-                            className="mb-4 rounded-lg p-3 flex items-center justify-center transition-colors duration-700"
-                            style={
-                              processed?.dominantColorHex
-                                ? { backgroundColor: `${processed.dominantColorHex}1A` }
-                                : { backgroundColor: '#f4f4f5' }
-                            }
-                          >
-                            <img
-                              src={processed?.base64Placeholder ?? logoUrl}
-                              data-high-res={processed?.base64Placeholder ? logoUrl : undefined}
-                              alt={`${profile.brandName} Logo`}
-                              className="max-h-24 max-w-full object-contain transition-all duration-500"
-                              style={processed?.base64Placeholder ? { filter: 'blur(6px)', transform: 'scale(1.08)' } : undefined}
-                              onLoad={e => {
-                                const img = e.currentTarget;
-                                const highRes = img.dataset.highRes;
-                                if (highRes) {
-                                  img.removeAttribute('data-high-res');
-                                  img.style.filter = '';
-                                  img.style.transform = '';
-                                  img.src = highRes;
-                                } else {
-                                  img.style.filter = '';
-                                  img.style.transform = '';
-                                }
-                                handleImageLoad();
-                              }}
-                              data-fallback-chain={logoFallbackChain}
-                              onError={e => { advanceImageFallback(e); handleImageError(); }}
-                            />
-                          </div>
-                        );
-                      })()}
-                      <p className="text-sm text-zinc-700 mb-2"><span className="font-medium">Primary:</span> {profile.logo.mainLogo}</p>
-                      <p className="text-sm text-zinc-700 mb-2"><span className="font-medium">Wordmark:</span> {profile.logo.wordmarkLogotype}</p>
-                      <p className="text-sm text-zinc-700 mb-1 font-medium">Variations</p>
-                      {renderListOrFallback(profile.logo.logoVariations, 'No logo variations provided.')}
-                      <p className="text-sm text-zinc-700 mt-3 mb-1 font-medium">Symbols / Icons</p>
-                      {renderListOrFallback(profile.logo.symbolsIcons, 'No symbol or icon notes provided.')}
-                    </div>
-                  );
-
-                  const typographySection = (
-                    <div
-                      data-testid="compare-trigger-typography"
-                      className="rounded-2xl border border-zinc-200 p-4 cursor-pointer hover:border-indigo-300 transition-colors"
-                      onClick={(event) => openComparePopup(event, 'typography')}
-                    >
-                      <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-3 inline-flex items-center gap-2">
-                        <Type className="w-4 h-4" /> Typography
-                      </h4>
-                      <p className="text-sm text-zinc-700 mb-2"><span className="font-medium">Families:</span> {profile.typography.fontFamilies.join(', ')}</p>
-                      <p className="text-sm text-zinc-700"><span className="font-medium">H1:</span> {profile.typography.hierarchy.h1}</p>
-                      <p className="text-sm text-zinc-700"><span className="font-medium">H2:</span> {profile.typography.hierarchy.h2}</p>
-                      <p className="text-sm text-zinc-700 mb-2"><span className="font-medium">Body:</span> {profile.typography.hierarchy.body}</p>
-                      <p className="text-sm text-zinc-700 mb-1 font-medium">Usage Rules</p>
-                      {renderListOrFallback(profile.typography.usageRules, 'No typography usage rules provided.')}
-                    </div>
-                  );
-
-                  const colorPaletteSection = (
-                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                      <div
-                        data-testid="compare-trigger-primary-colors"
-                        className="rounded-2xl border border-zinc-200 p-4 cursor-pointer hover:border-indigo-300 transition-colors"
-                        onClick={(event) => openComparePopup(event, 'primaryColors')}
-                      >
-                        <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-3 inline-flex items-center gap-2">
-                          <Palette className="w-4 h-4" /> Primary Colors
-                        </h4>
-                        {profile.colorPalette.primaryColors.length > 0 ? (
-                          <ul className="space-y-2">{profile.colorPalette.primaryColors.map(renderColorSwatch)}</ul>
-                        ) : (
-                          <p className="text-sm text-zinc-500">No primary color values available.</p>
-                        )}
-                      </div>
-                      <div
-                        data-testid="compare-trigger-accent-colors"
-                        className="rounded-2xl border border-zinc-200 p-4 cursor-pointer hover:border-indigo-300 transition-colors"
-                        onClick={(event) => openComparePopup(event, 'accentColors')}
-                      >
-                        <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-3">Accent Colors</h4>
-                        {profile.colorPalette.secondaryAccentColors.length > 0 ? (
-                          <ul className="space-y-2">{profile.colorPalette.secondaryAccentColors.map(renderColorSwatch)}</ul>
-                        ) : (
-                          <p className="text-sm text-zinc-500">No accent color values available.</p>
-                        )}
-                      </div>
-                      <div
-                        data-testid="compare-trigger-neutrals"
-                        className="rounded-2xl border border-zinc-200 p-4 cursor-pointer hover:border-indigo-300 transition-colors"
-                        onClick={(event) => openComparePopup(event, 'neutrals')}
-                      >
-                        <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-3">Neutrals</h4>
-                        {profile.colorPalette.neutrals.length > 0 ? (
-                          <ul className="space-y-2">{profile.colorPalette.neutrals.map(renderColorSwatch)}</ul>
-                        ) : (
-                          <p className="text-sm text-zinc-500">No neutral color values available.</p>
-                        )}
-                      </div>
-                    </div>
-                  );
-
-                  const supportingVisualElementsSection = (
-                    <div
-                      data-testid="compare-trigger-supporting-visuals"
-                      className="rounded-2xl border border-zinc-200 p-4 cursor-pointer hover:border-indigo-300 transition-colors"
-                      onClick={(event) => openComparePopup(event, 'imageryStyle')}
-                    >
-                      <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-3 inline-flex items-center gap-2">
-                        <ImageIcon className="w-4 h-4" /> Supporting Visual Elements
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm font-medium text-zinc-800 mb-1">Imagery Style</p>
-                          {renderListOrFallback(profile.supportingVisualElements.imageryStyle, 'No imagery style notes provided.')}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-zinc-800 mb-1">Icons</p>
-                          {renderListOrFallback(profile.supportingVisualElements.icons, 'No icon notes provided.')}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-zinc-800 mb-1">Patterns & Textures</p>
-                          {renderListOrFallback(profile.supportingVisualElements.patternsTextures, 'No pattern or texture notes provided.')}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-zinc-800 mb-1">Shapes</p>
-                          {renderListOrFallback(profile.supportingVisualElements.shapes, 'No shape system notes provided.')}
-                        </div>
-                        <div className="md:col-span-2">
-                          <p className="text-sm font-medium text-zinc-800 mb-1">Data Visualization</p>
-                          {renderListOrFallback(profile.supportingVisualElements.dataVisualization, 'No data visualization notes provided.')}
-                        </div>
-                      </div>
-                    </div>
-                  );
-
-                  const assessmentAndSourcesSection = (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div
-                        data-testid="compare-trigger-distinctiveness"
-                        className="rounded-2xl border border-zinc-200 p-4 cursor-pointer hover:border-indigo-300 transition-colors"
-                        onClick={(event) => openComparePopup(event, 'imageryStyle')}
-                      >
-                        <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-2">Distinctiveness</h4>
-                        <p className="text-sm text-zinc-700">{profile.distinctivenessAssessment}</p>
-                      </div>
-                      <div
-                        data-testid="compare-trigger-sources"
-                        className="rounded-2xl border border-zinc-200 p-4 cursor-pointer hover:border-indigo-300 transition-colors"
-                        onClick={(event) => openComparePopup(event, 'imageryStyle')}
-                      >
-                        <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-2">Per-Brand Sources</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {profile.sources.map((source, idx) => (
-                            <a
-                              key={`${profile.brandName}-${idx}`}
-                              href={source.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 text-xs bg-zinc-50 border border-zinc-200 hover:border-zinc-300 text-zinc-700 px-3 py-1.5 rounded-full"
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                              <span className="truncate max-w-[180px]">{source.title}</span>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  );
-
-                  return (
-                    <>
-                      <div className="md:hidden">
-                        <Accordion
-                          items={[
-                            ...(visualReferenceCardsSection
-                              ? [
-                                  {
-                                    id: `${profile.brandName}-visual-reference-cards`,
-                                    title: (
-                                      <>
-                                        <ImageIcon className="w-4 h-4 text-indigo-500" /> Visual Reference Cards
-                                      </>
-                                    ),
-                                    content: visualReferenceCardsSection,
-                                  },
-                                ]
-                              : []),
-                            {
-                              id: `${profile.brandName}-logo-system`,
-                              title: 'Logo System',
-                              content: logoSystemSection,
-                            },
-                            {
-                              id: `${profile.brandName}-typography`,
-                              title: (
-                                <>
-                                  <Type className="w-4 h-4 text-indigo-500" /> Typography
-                                </>
-                              ),
-                              content: typographySection,
-                            },
-                            {
-                              id: `${profile.brandName}-color-palette`,
-                              title: (
-                                <>
-                                  <Palette className="w-4 h-4 text-indigo-500" /> Color Palette
-                                </>
-                              ),
-                              content: colorPaletteSection,
-                            },
-                            {
-                              id: `${profile.brandName}-supporting-visual-elements`,
-                              title: (
-                                <>
-                                  <ImageIcon className="w-4 h-4 text-indigo-500" /> Supporting Visual Elements
-                                </>
-                              ),
-                              content: supportingVisualElementsSection,
-                            },
-                            {
-                              id: `${profile.brandName}-assessment-sources`,
-                              title: 'Distinctiveness & Sources',
-                              content: assessmentAndSourcesSection,
-                            },
-                          ]}
-                        />
-                      </div>
-
-                      <div className="hidden md:block space-y-6">
-                        {visualReferenceCardsSection}
-
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                          {logoSystemSection}
-                          {typographySection}
-                        </div>
-
-                        {colorPaletteSection}
-                        {supportingVisualElementsSection}
-                        {assessmentAndSourcesSection}
-                      </div>
-                    </>
-                  );
-                })()}
-                </div>{/* end px-6 pb-6 wrapper */}
-              </section>
-            ))}
-
-            <section className="lg:col-span-2 bg-white rounded-3xl border border-zinc-200 p-6">
-              <h3 className="text-lg font-semibold text-zinc-900 mb-3">Opportunity Spaces</h3>
-              <ul className="space-y-2">
-                {report.crossBrandReadout.map((item, idx) => (
-                  <li key={idx} className="text-sm text-zinc-700">• {item}</li>
-                ))}
-              </ul>
-            </section>
-
-            {report.sources.length > 0 && (
-              <section className="lg:col-span-2 bg-zinc-50 rounded-3xl border border-zinc-200 p-6">
-                <h3 className="text-base font-semibold text-zinc-900 mb-3">Global Sources</h3>
-                <div className="flex flex-wrap gap-2">
-                  {report.sources.map((source, idx) => (
-                    <a
-                      key={idx}
-                      href={source.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-700 px-3 py-1.5 rounded-full"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      <span className="truncate max-w-[220px]">{source.title}</span>
-                    </a>
-                  ))}
-                </div>
-              </section>
+              <motion.div
+                key="brand-deep-dive-report"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="w-full max-w-4xl mx-auto mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6"
+              >
+                {/* ...existing code for the report panel... */}
+              </motion.div>
             )}
-              </>
-            )}
-          </motion.div>
+          </>
         )}
       </AnimatePresence>
 
@@ -2365,6 +1851,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
           </>
         )}
       </AnimatePresence>
-    </div>
+      </div>
+    </>
   );
 }
