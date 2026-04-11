@@ -25,6 +25,14 @@ export default defineConfig(({ mode }) => {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       hmr: process.env.DISABLE_HMR !== 'true',
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: undefined, // Let Vite/Rollup handle chunk splitting
+        },
+      },
+      chunkSizeWarningLimit: 1200, // Increase chunk size warning limit (in KB)
+    },
     test: {
       environment: 'jsdom',
       setupFiles: ['./src/setupTests.ts'],
