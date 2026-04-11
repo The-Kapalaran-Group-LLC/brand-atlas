@@ -277,20 +277,25 @@ export default function App() {
   // Autopopulate audience from topicFocus, but do NOT autopopulate brand/category
   useEffect(() => {
     let ignore = false;
+    let debounceTimer: NodeJS.Timeout | null = null;
     async function maybeAutopopulate() {
       if (topicFocus && !audience) {
         try {
           const result = await autoPopulateFields(brand, audience, topicFocus);
-          if (!ignore && result.audience && !audience) {
-            setAudience(result.audience);
+          if (!ignore && result && typeof result.audience === 'string' && result.audience.trim() && !audience) {
+            setAudience(result.audience.trim());
           }
         } catch (err) {
-          // fail silently
+          // Optionally log error, but do not crash
+          // console.warn('autoPopulateFields failed', err);
         }
       }
     }
-    maybeAutopopulate();
-    return () => { ignore = true; };
+    debounceTimer = setTimeout(maybeAutopopulate, 400);
+    return () => {
+      ignore = true;
+      if (debounceTimer) clearTimeout(debounceTimer);
+    };
   }, [topicFocus]);
   const [sourcesType, setSourcesType] = useState<string[]>([]);
   const [isSourcesDropdownOpen, setIsSourcesDropdownOpen] = useState(false);
