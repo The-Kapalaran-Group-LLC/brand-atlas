@@ -273,6 +273,25 @@ export default function App() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   
   const [topicFocus, setTopicFocus] = useState('');
+
+  // Autopopulate audience from topicFocus, but do NOT autopopulate brand/category
+  useEffect(() => {
+    let ignore = false;
+    async function maybeAutopopulate() {
+      if (topicFocus && !audience) {
+        try {
+          const result = await autoPopulateFields(brand, audience, topicFocus);
+          if (!ignore && result.audience && !audience) {
+            setAudience(result.audience);
+          }
+        } catch (err) {
+          // fail silently
+        }
+      }
+    }
+    maybeAutopopulate();
+    return () => { ignore = true; };
+  }, [topicFocus]);
   const [sourcesType, setSourcesType] = useState<string[]>([]);
   const [isSourcesDropdownOpen, setIsSourcesDropdownOpen] = useState(false);
   const sourcesDropdownRef = useRef<HTMLDivElement>(null);
