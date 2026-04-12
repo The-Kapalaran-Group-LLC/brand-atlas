@@ -38,6 +38,7 @@ const useAllVisualsLoaded = (
     setAllVisualsLoaded(count === 0); // If no images, consider loaded
   }, [report, bestVisualsByBrand]);
 
+
   const handleImageLoad = useCallback(() => {
     loadedCountRef.current += 1;
     if (loadedCountRef.current >= expectedCount && expectedCount > 0) {

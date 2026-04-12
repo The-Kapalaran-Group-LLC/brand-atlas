@@ -1,3 +1,40 @@
+// Utility: Detailed error logger for debugging and resilience
+export function logDetailedError(error: unknown, context?: string) {
+  if (typeof window !== 'undefined' && window.console) {
+    // Browser environment
+    console.error('[Agent Error]', context || '', error);
+    if (error instanceof Error) {
+      console.error('Stack:', error.stack);
+      console.error('Message:', error.message);
+      if ((error as any).cause) {
+        console.error('Cause:', (error as any).cause);
+      }
+    } else if (typeof error === 'object' && error !== null) {
+      try {
+        console.error('Error details:', JSON.stringify(error, null, 2));
+      } catch {}
+    }
+  } else {
+    // Node or unknown
+    // eslint-disable-next-line no-console
+    console.error('[Agent Error]', context || '', error);
+    if (error instanceof Error) {
+      // eslint-disable-next-line no-console
+      console.error('Stack:', error.stack);
+      // eslint-disable-next-line no-console
+      console.error('Message:', error.message);
+      if ((error as any).cause) {
+        // eslint-disable-next-line no-console
+        console.error('Cause:', (error as any).cause);
+      }
+    } else if (typeof error === 'object' && error !== null) {
+      try {
+        // eslint-disable-next-line no-console
+        console.error('Error details:', JSON.stringify(error, null, 2));
+      } catch {}
+    }
+  }
+}
 import { AzureOpenAI } from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { zodResponseFormat } from "openai/helpers/zod";

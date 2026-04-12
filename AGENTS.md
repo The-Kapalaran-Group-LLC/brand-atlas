@@ -1,3 +1,16 @@
+## Error Handling
+
+- Wrap critical UI trees in Error Boundaries.
+- Provide user-friendly error messages with recovery options.
+- Write extensive `console.log` statements for debugging.
+
+## Unit Testing Strategy
+
+### Test-First Mode
+
+- **When adding new features:** write or update unit tests first, then code to green.
+- **Prefer component tests** for UI state changes.
+- **For regressions:** add a failing test that reproduces the bug, then fix to green.
 # Coding Agent Rules & Guidelines
 
 ## General Principles
