@@ -2,15 +2,17 @@ import PptxGenJS from 'pptxgenjs';
 import { ProgressiveLoader } from './ProgressiveLoader';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 // Loader state for all visuals
-const useAllVisualsLoaded = (
-  report: BrandDeepDiveReport | null,
-  bestVisualsByBrand: Record<string, BrandVisualSelection>
-): {
+type UseAllVisualsLoadedResult = {
   allVisualsLoaded: boolean;
   handleImageLoad: () => void;
   handleImageError: () => void;
   expectedCount: number;
-} => {
+};
+
+const useAllVisualsLoaded = (
+  report: BrandDeepDiveReport | null,
+  bestVisualsByBrand: Record<string, BrandVisualSelection>
+): UseAllVisualsLoadedResult => {
   const [allVisualsLoaded, setAllVisualsLoaded] = useState(false);
   const [expectedCount, setExpectedCount] = useState(0);
   const loadedCountRef = useRef(0);
@@ -27,17 +29,14 @@ const useAllVisualsLoaded = (
     report.brandProfiles.forEach((profile: any) => {
       const visuals = bestVisualsByBrand[profile.brandName];
       if (visuals) {
-        // logo
         if (visuals.deterministicLogoUrl) count += 1;
-        // visual reference cards
         count += visuals.images.length;
       }
     });
     setExpectedCount(count);
     loadedCountRef.current = 0;
-    setAllVisualsLoaded(count === 0); // If no images, consider loaded
+    setAllVisualsLoaded(count === 0);
   }, [report, bestVisualsByBrand]);
-
 
   const handleImageLoad = useCallback(() => {
     loadedCountRef.current += 1;
