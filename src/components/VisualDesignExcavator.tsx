@@ -146,7 +146,7 @@ function withImageProxy(rawUrl: string): string {
 function normalizeHttpUrl(rawUrl?: string | null): string | null {
   if (!rawUrl) return null;
 
-  const trimmed = rawUrl.trim();
+  const trimmed = (rawUrl || '').trim();
   if (!trimmed) return null;
 
   const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
@@ -474,8 +474,8 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const loadSavedSearch = (saved: SavedDeepDiveSearch) => {
     const loadedBrands = saved.brands.slice(0, 6).map((brand, idx) => ({
       id: `brand-loaded-${Date.now()}-${idx}`,
-      name: brand.name,
-      website: brand.website || '',
+      name: (brand.name || '').trim(),
+      website: (brand.website || '').trim(),
     }));
     setBrands(loadedBrands.length > 0 ? loadedBrands : [{ id: 'brand-1', name: '', website: '' }]);
     setAnalysisObjective(saved.analysisObjective || '');
@@ -495,7 +495,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   };
 
   const renameSavedSearch = async (id: string, newName: string) => {
-    const trimmed = newName.trim();
+    const trimmed = (newName || '').trim();
     if (!trimmed) return;
     const { data, error } = await supabase
       .from('brand_deep_dives')
@@ -508,7 +508,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   };
 
   const commitRename = (id: string, value: string) => {
-    if (value.trim()) renameSavedSearch(id, value);
+    if ((value || '').trim()) renameSavedSearch(id, value);
     setRenamingId(null);
     setRenameValue('');
   };
@@ -689,8 +689,8 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
 
     const normalizedBrands = brands
       .map((brand) => ({
-        name: brand.name.trim(),
-        website: brand.website.trim(),
+        name: (brand.name || '').trim(),
+        website: (brand.website || '').trim(),
       }))
       .filter((brand) => brand.name.length > 0)
       .slice(0, 6);
@@ -700,7 +700,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
       return;
     }
 
-    if (!analysisObjective.trim()) {
+    if (!(analysisObjective || '').trim()) {
       setError('Please provide a visual identity objective.');
       return;
     }
@@ -762,14 +762,14 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const getNormalizedBrands = () =>
     brands
       .map((brand) => ({
-        name: brand.name.trim(),
-        website: brand.website.trim(),
+        name: (brand.name || '').trim(),
+        website: (brand.website || '').trim(),
       }))
       .filter((brand) => brand.name.length > 0)
       .slice(0, 6);
 
   const handleAskQuestion = async () => {
-    if (!report || !reportQuestion.trim()) return;
+    if (!report || !(reportQuestion || '').trim()) return;
 
     const normalizedBrands = getNormalizedBrands();
     if (normalizedBrands.length === 0) return;
@@ -832,7 +832,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   };
 
   const canAddBrand = brands.length < 6;
-  const brandCount = brands.filter((brand) => brand.name.trim()).length;
+  const brandCount = brands.filter((brand) => (brand.name || '').trim()).length;
 
   const addBrandRow = () => {
     if (!canAddBrand) return;
@@ -1017,8 +1017,8 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
     });
 
     brands.forEach((brand) => {
-      const hasName = brand.name.trim().length >= 2;
-      const hasWebsite = brand.website.trim().length > 0;
+      const hasName = (brand.name || '').trim().length >= 2;
+      const hasWebsite = (brand.website || '').trim().length > 0;
 
       if (!hasName || hasWebsite) {
         if (websiteLookupTimersRef.current[brand.id]) {
@@ -1041,11 +1041,11 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
             prev.map((current) => {
               if (current.id !== brand.id) return current;
 
-              if (current.website.trim()) {
+              if ((current.website || '').trim()) {
                 return current;
               }
 
-              if (current.name.trim().toLowerCase() !== brand.name.trim().toLowerCase()) {
+              if (((current.name || '').trim().toLowerCase()) !== ((brand.name || '').trim().toLowerCase())) {
                 return current;
               }
 
@@ -1575,8 +1575,8 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
           <div className="text-left">
             <p className="text-xs uppercase tracking-wider text-zinc-500 font-semibold">Visual Design Excavator</p>
             <p className="text-sm text-zinc-700">
-              {brands.filter((b) => b.name.trim()).map((b) => b.name.trim()).slice(0, 3).join(' vs ') || 'Brand comparison ready'}
-              {analysisObjective.trim() ? ` • Objective: ${analysisObjective.trim()}` : ''}
+              {brands.filter((b) => (b.name || '').trim()).map((b) => (b.name || '').trim()).slice(0, 3).join(' vs ') || 'Brand comparison ready'}
+              {(analysisObjective || '').trim() ? ` • Objective: ${(analysisObjective || '').trim()}` : ''}
             </p>
           </div>
           <button
