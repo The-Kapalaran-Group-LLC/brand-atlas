@@ -281,20 +281,19 @@ export default function App() {
   
   const [topicFocus, setTopicFocus] = useState('');
 
-  // Autopopulate audience from topicFocus, but do NOT autopopulate brand/category
+  // Autopopulate audience from topicFocus on every topic change
   useEffect(() => {
     let ignore = false;
     let debounceTimer: NodeJS.Timeout | null = null;
     async function maybeAutopopulate() {
-      if (topicFocus && !audience) {
+      if (topicFocus) {
         try {
           const result = await autoPopulateFields(brand, audience, topicFocus);
-          if (!ignore && result && typeof result.audience === 'string' && result.audience.trim() && !audience) {
+          if (!ignore && result && typeof result.audience === 'string' && result.audience.trim()) {
             setAudience(result.audience.trim());
           }
         } catch (err) {
           // Optionally log error, but do not crash
-          // console.warn('autoPopulateFields failed', err);
         }
       }
     }
