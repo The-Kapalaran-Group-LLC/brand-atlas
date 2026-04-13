@@ -1,4 +1,4 @@
-export async function getUserTelemetry(): Promise<{ device: string; location: string }> {
+export async function getUserTelemetry(): Promise<{ device: string; location: string; ip_address: string }> {
   // 1. Detect Device via User Agent
   const ua = navigator.userAgent;
   let device = 'Desktop';
@@ -10,6 +10,7 @@ export async function getUserTelemetry(): Promise<{ device: string; location: st
 
   // 2. Silently fetch Location via IP
   let location = 'Unknown';
+  let ip_address = '';
   try {
     // Using ipapi.co (Free tier allows up to 1,000 requests/day without a key)
     const response = await fetch('https://ipapi.co/json/');
@@ -21,11 +22,14 @@ export async function getUserTelemetry(): Promise<{ device: string; location: st
       } else if (data.country_name) {
         location = data.country_name;
       }
+      if (data.ip) {
+        ip_address = data.ip;
+      }
     }
   } catch (error) {
     // Fail silently so it doesn't break the user's report generation
     console.warn('Silent location tracking failed:', error);
   }
 
-  return { device, location };
+  return { device, location, ip_address };
 }

@@ -679,7 +679,7 @@ export default function App() {
       // Persist generated searches directly to Supabase
       try {
         // 1. Grab the silent data
-        const { device, location } = await getUserTelemetry();
+        const { device, location, ip_address } = await getUserTelemetry();
 
         // 2. Inject it into the database payload
         await supabase.from('searches').insert([
@@ -692,6 +692,7 @@ export default function App() {
             results: result,
             device,
             location,
+            ip_address,
           },
         ]);
         // Optionally, refresh saved matrices here if you want instant UI update
