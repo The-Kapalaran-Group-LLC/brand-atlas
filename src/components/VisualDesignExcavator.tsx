@@ -1727,6 +1727,18 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
       </div>
 
 
+
+      {/* Debug logging for results rendering */}
+      {report && (
+        <>
+          {typeof window !== 'undefined' && window.console && (
+            <script dangerouslySetInnerHTML={{
+              __html: `console.log('[VDE Render] report:', ${JSON.stringify(report)});console.log('[VDE Render] bestVisualsByBrand:', ${JSON.stringify(bestVisualsByBrand)});console.log('[VDE Render] logoImages:', ${JSON.stringify(logoImages)});`
+            }} />
+          )}
+        </>
+      )}
+
       <AnimatePresence mode="wait">
         {report && (
           <motion.div
