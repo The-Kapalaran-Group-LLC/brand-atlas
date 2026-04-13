@@ -20,6 +20,10 @@ Copy `.env.example` to `.env` and fill in these values:
 - `AZURE_OPENAI_ENDPOINT`
 - `AZURE_OPENAI_API_VERSION`
 - `AZURE_OPENAI_DEPLOYMENT_NAME`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+For deployed environments (Vercel/Netlify/Azure/etc), set the same `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` values in the host's environment-variable settings so browser clients all write to the same Supabase project.
 
 For the feedback chat widget (bottom-right popup), configure:
 
