@@ -673,15 +673,12 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   }, []);
 
   useEffect(() => {
-    if (report && !isLoading) {
-      setIsSearchControlsMinimized(true);
-      return;
-    }
-
-    if (!report) {
+      if (report) {
+        setIsSearchControlsMinimized(true);
+        return;
+      }
       setIsSearchControlsMinimized(false);
-    }
-  }, [report, isLoading]);
+    }, [report]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1567,7 +1564,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
 
       <div className="w-full max-w-4xl mx-auto space-y-6 md:space-y-8">
 
-      {isSearchControlsMinimized && report && !isLoading && (
+      {isSearchControlsMinimized && report && (
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
