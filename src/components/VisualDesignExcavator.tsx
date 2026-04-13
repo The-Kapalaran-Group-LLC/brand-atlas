@@ -1,4 +1,3 @@
-  // ...existing code...
 import PptxGenJS from 'pptxgenjs';
 import { ProgressiveLoader } from './ProgressiveLoader';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -379,8 +378,6 @@ function dedupeVisualCards(cards: BrandVisualCard[]): BrandVisualCard[] {
 }
 
 export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
-
-  // --- All state declarations moved to top for correct scope ---
   const [brands, setBrands] = useState<Array<{ id: string; name: string; website: string }>>([
     { id: 'brand-1', name: '', website: '' },
     { id: 'brand-2', name: '', website: '' },
@@ -389,12 +386,12 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const [targetAudience, setTargetAudience] = useState('');
   const [resultTab, setResultTab] = useState<ResultTab>('profiles');
   const [compareElement, setCompareElement] = useState<CompareElement>('primaryColors');
-  const [showValidation, setShowValidation] = useState(false);
   const [comparePopup, setComparePopup] = useState<ComparePopupState | null>(null);
+  const [showValidation, setShowValidation] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [fakeProgress, setFakeProgress] = useState(0);
-
   const [error, setError] = useState<string | null>(null);
+
   const [report, setReport] = useState<BrandDeepDiveReport | null>(null);
   const [reportQuestion, setReportQuestion] = useState('');
   const [reportAnswer, setReportAnswer] = useState('');
@@ -708,18 +705,20 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
     setBestVisualsByBrand({});
 
     try {
-
       const result = await generateBrandDeepDive({
         brands: normalizedBrands,
         analysisObjective,
         targetAudience,
       });
 
-      console.log('BrandDeepDive result:', result);
+      // Debug log
+      if (typeof window !== 'undefined' && window.console) {
+        console.log('[BrandDeepDive] API result:', result);
+      }
+
       if (!result) {
-        setError('No report was generated. Please try again or check your input.');
-        setReport(null);
-        setIsSearchControlsMinimized(false);
+        setError('No results were returned from the brand deep dive API. Please try again.');
+        setIsLoading(false);
         return;
       }
 
@@ -1737,28 +1736,24 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
             exit={{ opacity: 0, y: -20 }}
             className="w-full max-w-4xl mx-auto mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6"
           >
-            {/* Brand Deep Dive Report Panel */}
-            {report.brandProfiles.map((profile, idx) => {
+            {report.brandProfiles.map((profile) => {
               const visuals = bestVisualsByBrand[profile.brandName];
-              const logoUrl = visuals?.images?.[0]?.url || '';
+              const logoUrl = visuals?.deterministicLogoUrl || logoImages[profile.brandName] || null;
               return (
-                <div key={profile.brandName} className="bg-white rounded-2xl border border-zinc-200 p-6 mb-6 flex flex-col items-center">
-                  <h2 className="text-2xl font-semibold text-zinc-900 mb-2">{profile.brandName}</h2>
+                <div key={profile.brandName} className="bg-white rounded-2xl border border-zinc-200 p-6 flex flex-col items-center">
+                  <p className="text-lg font-semibold text-zinc-900 mb-2">{profile.brandName}</p>
                   {logoUrl && (
                     <img
                       src={logoUrl}
                       alt={`${profile.brandName} Logo`}
-                      className="w-32 h-32 object-contain mb-4 border border-zinc-100 bg-zinc-50 rounded-xl"
-                      onLoad={handleImageLoad}
-                      onError={(e) => handleVisualImageError(e, `${profile.brandName}-visual-0`)}
+                      className="w-32 h-16 object-contain mb-4"
+                      data-testid="brand-logo"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                      }}
                     />
                   )}
-                  <div className="w-full text-left">
-                    <p className="text-sm text-zinc-700 mb-2"><span className="font-medium">Website:</span> {profile.website}</p>
-                    <p className="text-sm text-zinc-700 mb-2"><span className="font-medium">Distinctiveness:</span> {profile.distinctivenessAssessment}</p>
-                    <p className="text-sm text-zinc-700 mb-2"><span className="font-medium">Logo System:</span> Primary: {profile.logo.mainLogo}, Wordmark: {profile.logo.wordmarkLogotype}</p>
-                    <p className="text-sm text-zinc-700 mb-2"><span className="font-medium">Typography:</span> {profile.typography.fontFamilies.join(', ')}</p>
-                  </div>
+                  {/* ...other profile details... */}
                 </div>
               );
             })}

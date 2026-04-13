@@ -65,8 +65,8 @@ describe('App Component', () => {
 
   it('shows loading state when generating', async () => {
     // Mock generateCulturalMatrix to delay
-    const azureOpenai = await import('./services/azure-openai');
-    vi.spyOn(azureOpenai, 'generateCulturalMatrix').mockImplementation(() => new Promise(() => {}));
+    const { generateCulturalMatrix } = await import('./services/azure-openai');
+    vi.spyOn(generateCulturalMatrix, 'default').mockImplementation(() => new Promise(() => {}));
     render(<App />);
     await waitForSplashToDisappear();
     fireEvent.change(screen.getByPlaceholderText(/Primary Audience/i), { target: { value: 'Gen Z' } });
