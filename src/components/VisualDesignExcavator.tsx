@@ -1,11 +1,4 @@
-  // Restore: Always minimize controls and show results panel immediately after report is generated
-  useEffect(() => {
-    if (report) {
-      setIsSearchControlsMinimized(true);
-    } else {
-      setIsSearchControlsMinimized(false);
-    }
-  }, [report]);
+  // ...existing code...
 import PptxGenJS from 'pptxgenjs';
 import { ProgressiveLoader } from './ProgressiveLoader';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -386,6 +379,8 @@ function dedupeVisualCards(cards: BrandVisualCard[]): BrandVisualCard[] {
 }
 
 export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
+
+  // --- All state declarations moved to top for correct scope ---
   const [brands, setBrands] = useState<Array<{ id: string; name: string; website: string }>>([
     { id: 'brand-1', name: '', website: '' },
     { id: 'brand-2', name: '', website: '' },
@@ -394,22 +389,12 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const [targetAudience, setTargetAudience] = useState('');
   const [resultTab, setResultTab] = useState<ResultTab>('profiles');
   const [compareElement, setCompareElement] = useState<CompareElement>('primaryColors');
-  const [comparePopup, setComparePopup] = useState<ComparePopupState | null>(null);
   const [showValidation, setShowValidation] = useState(false);
+  const [comparePopup, setComparePopup] = useState<ComparePopupState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [fakeProgress, setFakeProgress] = useState(0);
-  // ...existing code...
 
-  // Restore: Always minimize controls and show results panel immediately after report is generated
-  useEffect(() => {
-    if (report) {
-      setIsSearchControlsMinimized(true);
-    } else {
-      setIsSearchControlsMinimized(false);
-    }
-  }, [report]);
   const [error, setError] = useState<string | null>(null);
-
   const [report, setReport] = useState<BrandDeepDiveReport | null>(null);
   const [reportQuestion, setReportQuestion] = useState('');
   const [reportAnswer, setReportAnswer] = useState('');
