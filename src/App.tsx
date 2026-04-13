@@ -8,7 +8,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { Search, Loader2, Sparkles, FileText, Presentation, ExternalLink, Info, Tag, Users, Filter, ChevronDown, Check, Clock, Trash2, Target, Upload, X, RefreshCw, Calendar, Activity } from 'lucide-react';
 import { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport } from './services/azure-openai';
-import { generateCulturalMatrix, autoPopulateFields, suggestBrands, askMatrixQuestion, generateDeepDive, generateDeepDivesBatch } from './services/azure-openai';
+import { generateCulturalMatrix, suggestBrands, askMatrixQuestion, generateDeepDive, generateDeepDivesBatch } from './services/azure-openai';
 import { SplashGrid } from './components/SplashGrid';
 import { BrandDeepDivePage } from './components/VisualDesignExcavator';
 import { TrendLifecycleBadge } from './components/TrendLifecycleBadge';
@@ -18,7 +18,7 @@ import { FeedbackChatWidget } from './components/FeedbackChatWidget';
 import pptxgen from 'pptxgenjs';
 import { supabase } from './services/supabase-client';
 
-// Removed Google Slides export and Google Auth modal (Supabase-only)
+
 
 interface SavedMatrix {
   id: string;
@@ -280,29 +280,6 @@ export default function App() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   
   const [topicFocus, setTopicFocus] = useState('');
-
-  // Autopopulate audience from topicFocus on every topic change
-  useEffect(() => {
-    let ignore = false;
-    let debounceTimer: NodeJS.Timeout | null = null;
-    async function maybeAutopopulate() {
-      if (topicFocus) {
-        try {
-          const result = await autoPopulateFields(brand, audience, topicFocus);
-          if (!ignore && result && typeof result.audience === 'string' && result.audience.trim()) {
-            setAudience(result.audience.trim());
-          }
-        } catch (err) {
-          // Optionally log error, but do not crash
-        }
-      }
-    }
-    debounceTimer = setTimeout(maybeAutopopulate, 400);
-    return () => {
-      ignore = true;
-      if (debounceTimer) clearTimeout(debounceTimer);
-    };
-  }, [topicFocus]);
   const [sourcesType, setSourcesType] = useState<string[]>([]);
   const [isSourcesDropdownOpen, setIsSourcesDropdownOpen] = useState(false);
   const sourcesDropdownRef = useRef<HTMLDivElement>(null);
@@ -1897,19 +1874,9 @@ export default function App() {
                 <input
                   type="text"
                   value={brand}
-                  onChange={async (e) => {
-                    const newBrand = e.target.value;
-                    setBrand(newBrand);
+                  onChange={(e) => {
+                    setBrand(e.target.value);
                     setIsBrandDropdownOpen(true);
-                    // Always autopopulate audience when brand changes
-                    try {
-                      const result = await autoPopulateFields(newBrand, '', topicFocus);
-                      if (result.audience && result.audience.trim()) {
-                        setAudience(result.audience.trim());
-                      }
-                    } catch (err) {
-                      // Silent fail, do not block typing
-                    }
                   }}
                   onFocus={() => setIsBrandDropdownOpen(true)}
                   onKeyDown={e => {
