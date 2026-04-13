@@ -1982,12 +1982,15 @@ export default function App() {
                                   }}
                                   className="flex-1 text-left px-4 py-3 flex flex-col focus:outline-none focus:bg-zinc-50 rounded-xl transition-colors"
                                 >
-                                  <span className="font-medium text-zinc-900">{sm.brand || 'General Audience'}</span>
+                                  <span className="font-medium text-zinc-900">{(sm.brand || 'General Audience').trim()}</span>
                                   <span className="text-xs text-zinc-500">
-                                    Audience: {sm.audience} 
-                                    {sm.topicFocus && ` • Topic: ${sm.topicFocus}`} 
-                                    {sm.sourcesType && sm.sourcesType.length > 0 && ` • Sources: ${sm.sourcesType.join(', ')}`} 
-                                     • {new Date(sm.date).toLocaleDateString()}
+                                    Audience: {(sm.audience || '').trim()}
+                                    {sm.topicFocus && ` • Topic: ${(sm.topicFocus || '').trim()}`}
+                                    {sm.sourcesType && sm.sourcesType.length > 0 && ` • Sources: ${sm.sourcesType.join(', ')}`}
+                                    {(() => {
+                                      const dateObj = sm.date ? new Date(sm.date) : null;
+                                      return dateObj && !isNaN(dateObj.getTime()) ? ` • ${dateObj.toLocaleDateString()}` : '';
+                                    })()}
                                   </span>
                                 </button>
                                 <button
@@ -2305,7 +2308,10 @@ export default function App() {
                       </span>
                     )}
                     <span className="inline-flex items-center gap-1 px-2 py-1 text-zinc-400 text-xs rounded-md ml-auto">
-                      {new Date(sm.date).toLocaleDateString()}
+                      {(() => {
+                        const dateObj = sm.date ? new Date(sm.date) : null;
+                        return dateObj && !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString() : '';
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -2723,7 +2729,10 @@ export default function App() {
                   </div>
                   <p className="text-zinc-500 text-xs font-medium mb-2 line-clamp-2 flex-1">{sm.audience}</p>
                   <span className="text-zinc-400 text-[10px] mt-auto">
-                    {new Date(sm.date).toLocaleDateString()}
+                    {(() => {
+                      const dateObj = sm.date ? new Date(sm.date) : null;
+                      return dateObj && !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString() : '';
+                    })()}
                   </span>
                 </div>
               ))}
