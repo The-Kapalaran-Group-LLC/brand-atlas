@@ -1950,21 +1950,21 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                           </p>
                           <div className="space-y-1">
                             {profile.logo.mainLogo && (
-                              <p className="text-sm text-zinc-700"><span className="font-medium text-zinc-900">Primary:</span> {profile.logo.mainLogo}</p>
+                              <p className="text-sm text-zinc-700"><span className="font-medium text-zinc-900">Primary:</span> {profile.logo.mainLogo.replace(/\b(INFERRED|known|speculative)\b:? ?/gi, '')}</p>
                             )}
                             {profile.logo.wordmarkLogotype && (
-                              <p className="text-sm text-zinc-700"><span className="font-medium text-zinc-900">Wordmark:</span> {profile.logo.wordmarkLogotype}</p>
+                              <p className="text-sm text-zinc-700"><span className="font-medium text-zinc-900">Wordmark:</span> {profile.logo.wordmarkLogotype.replace(/\b(INFERRED|known|speculative)\b:? ?/gi, '')}</p>
                             )}
                             {profile.logo.logoVariations.length > 0 && (
                               <div>
                                 <p className="text-xs font-medium text-zinc-500 mt-2 mb-1">Variations</p>
-                                {renderListOrFallback(profile.logo.logoVariations, 'No variations documented.')}
+                                {renderListOrFallback(profile.logo.logoVariations.map(v => v.replace(/\b(INFERRED|known|speculative)\b:? ?/gi, '')), 'No variations documented.')}
                               </div>
                             )}
                             {profile.logo.symbolsIcons.length > 0 && (
                               <div>
                                 <p className="text-xs font-medium text-zinc-500 mt-2 mb-1">Symbols & Icons</p>
-                                {renderListOrFallback(profile.logo.symbolsIcons, 'No symbol data.')}
+                                {renderListOrFallback(profile.logo.symbolsIcons.map(v => v.replace(/\b(INFERRED|known|speculative)\b:? ?/gi, '')), 'No symbol data.')}
                               </div>
                             )}
                           </div>
@@ -1981,7 +1981,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                               onClick={(e) => openComparePopup(e, 'primaryColors')}
                             >
                               <p className="text-xs font-semibold text-zinc-600 mb-2">Primary</p>
-                              <ul className="space-y-2">{profile.colorPalette.primaryColors.map(renderColorSwatch)}</ul>
+                              <ul className="space-y-2">{profile.colorPalette.primaryColors.map(c => renderColorSwatch({...c, name: c.name.replace(/\b(INFERRED|known|speculative)\b:? ?/gi, '')}))}</ul>
                             </div>
                           )}
                           {profile.colorPalette.secondaryAccentColors.length > 0 && (
@@ -1990,7 +1990,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                               onClick={(e) => openComparePopup(e, 'accentColors')}
                             >
                               <p className="text-xs font-semibold text-zinc-600 mb-2">Accent</p>
-                              <ul className="space-y-2">{profile.colorPalette.secondaryAccentColors.map(renderColorSwatch)}</ul>
+                              <ul className="space-y-2">{profile.colorPalette.secondaryAccentColors.map(c => renderColorSwatch({...c, name: c.name.replace(/\b(INFERRED|known|speculative)\b:? ?/gi, '')}))}</ul>
                             </div>
                           )}
                           {profile.colorPalette.neutrals.length > 0 && (
@@ -1999,7 +1999,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                               onClick={(e) => openComparePopup(e, 'neutrals')}
                             >
                               <p className="text-xs font-semibold text-zinc-600 mb-2">Neutrals</p>
-                              <ul className="space-y-2">{profile.colorPalette.neutrals.map(renderColorSwatch)}</ul>
+                              <ul className="space-y-2">{profile.colorPalette.neutrals.map(c => renderColorSwatch({...c, name: c.name.replace(/\b(INFERRED|known|speculative)\b:? ?/gi, '')}))}</ul>
                             </div>
                           )}
                         </div>
@@ -2014,7 +2014,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                           {profile.typography.fontFamilies.length > 0 && (
                             <p className="text-sm text-zinc-700">
                               <span className="font-medium text-zinc-900">Families:</span>{' '}
-                              {profile.typography.fontFamilies.join(', ')}
+                              {profile.typography.fontFamilies.map(f => f.replace(/\b(INFERRED|known|speculative)\b:? ?/gi, '')).join(', ')}
                             </p>
                           )}
                           <div className="grid grid-cols-3 gap-2 mt-2">
@@ -2032,7 +2032,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                           {profile.typography.usageRules.length > 0 && (
                             <div>
                               <p className="text-xs font-medium text-zinc-500 mt-2 mb-1">Usage Rules</p>
-                              {renderListOrFallback(profile.typography.usageRules, '')}
+                              {renderListOrFallback(profile.typography.usageRules.map(v => v.replace(/\b(INFERRED|known|speculative)\b:? ?/gi, '')), '')}
                             </div>
                           )}
                         </div>
@@ -2046,25 +2046,25 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                               onClick={(e) => openComparePopup(e, 'imageryStyle')}
                             >
                               <p className="text-xs font-semibold text-zinc-600 mb-1">Imagery Style</p>
-                              {renderListOrFallback(profile.supportingVisualElements.imageryStyle, '')}
+                              {renderListOrFallback(profile.supportingVisualElements.imageryStyle.map(v => v.replace(/\b(INFERRED|known|speculative)\b:? ?/gi, '')), '')}
                             </div>
                           )}
                           {profile.supportingVisualElements.icons.length > 0 && (
                             <div>
                               <p className="text-xs font-semibold text-zinc-600 mb-1">Icons</p>
-                              {renderListOrFallback(profile.supportingVisualElements.icons, '')}
+                              {renderListOrFallback(profile.supportingVisualElements.icons.map(v => v.replace(/\b(INFERRED|known|speculative)\b:? ?/gi, '')), '')}
                             </div>
                           )}
                           {profile.supportingVisualElements.patternsTextures.length > 0 && (
                             <div>
                               <p className="text-xs font-semibold text-zinc-600 mb-1">Patterns & Textures</p>
-                              {renderListOrFallback(profile.supportingVisualElements.patternsTextures, '')}
+                              {renderListOrFallback(profile.supportingVisualElements.patternsTextures.map(v => v.replace(/\b(INFERRED|known|speculative)\b:? ?/gi, '')), '')}
                             </div>
                           )}
                           {profile.supportingVisualElements.shapes.length > 0 && (
                             <div>
                               <p className="text-xs font-semibold text-zinc-600 mb-1">Shapes</p>
-                              {renderListOrFallback(profile.supportingVisualElements.shapes, '')}
+                              {renderListOrFallback(profile.supportingVisualElements.shapes.map(v => v.replace(/\b(INFERRED|known|speculative)\b:? ?/gi, '')), '')}
                             </div>
                           )}
                         </div>
@@ -2180,40 +2180,6 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
               </div>
             )}
 
-            {/* ── Ask a Question About the Report ── */}
-            <section className="bg-zinc-50 rounded-3xl border border-zinc-200 p-6">
-              <h4 className="text-lg font-bold text-zinc-900 mb-4 flex items-center gap-2">
-                <Search className="w-5 h-5 text-indigo-500" /> Ask About This Analysis
-              </h4>
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  value={reportQuestion}
-                  onChange={(e) => setReportQuestion(e.target.value)}
-                  placeholder="e.g. Which brand has the most distinct color system?"
-                  className="flex-1 px-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm"
-                  onKeyDown={(e) => e.key === 'Enter' && handleAskQuestion()}
-                  disabled={isSubmittingPrompt}
-                />
-                <button
-                  type="button"
-                  onClick={handleAskQuestion}
-                  disabled={isSubmittingPrompt || !reportQuestion.trim()}
-                  className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
-                >
-                  {isSubmittingPrompt ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Ask'}
-                </button>
-              </div>
-              {reportAnswer && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 p-4 bg-white rounded-2xl border border-zinc-100 text-sm text-zinc-700 leading-relaxed"
-                >
-                  {reportAnswer}
-                </motion.div>
-              )}
-            </section>
           </motion.div>
         )}
       </AnimatePresence>
