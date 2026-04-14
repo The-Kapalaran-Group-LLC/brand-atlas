@@ -1746,29 +1746,388 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="w-full max-w-4xl mx-auto mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6"
+            className="w-full max-w-4xl mx-auto mt-8 space-y-6"
           >
-            {report.brandProfiles.map((profile) => {
-              const visuals = bestVisualsByBrand[profile.brandName];
-              const logoUrl = visuals?.deterministicLogoUrl || logoImages[profile.brandName] || null;
-              return (
-                <div key={profile.brandName} className="bg-white rounded-2xl border border-zinc-200 p-6 flex flex-col items-center">
-                  <p className="text-lg font-semibold text-zinc-900 mb-2">{profile.brandName}</p>
-                  {logoUrl && (
-                    <img
-                      src={logoUrl}
-                      alt={`${profile.brandName} Logo`}
-                      className="w-32 h-16 object-contain mb-4"
-                      data-testid="brand-logo"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
-                  )}
-                  {/* ...other profile details... */}
+            {/* ── Tab Bar ── */}
+            <div className="flex gap-2 border-b border-zinc-200 pb-0">
+              <button
+                type="button"
+                onClick={() => setResultTab('profiles')}
+                className={`px-5 py-2.5 text-sm font-semibold rounded-t-xl border-b-2 transition-colors focus:outline-none ${
+                  resultTab === 'profiles'
+                    ? 'border-indigo-600 text-indigo-700 bg-indigo-50'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-800 hover:bg-zinc-50'
+                }`}
+              >
+                <span className="flex items-center gap-2"><ImageIcon className="w-4 h-4" /> Brand Profiles</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setResultTab('compare')}
+                className={`px-5 py-2.5 text-sm font-semibold rounded-t-xl border-b-2 transition-colors focus:outline-none ${
+                  resultTab === 'compare'
+                    ? 'border-indigo-600 text-indigo-700 bg-indigo-50'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-800 hover:bg-zinc-50'
+                }`}
+              >
+                <span className="flex items-center gap-2"><Palette className="w-4 h-4" /> Compare</span>
+              </button>
+              <div className="ml-auto flex items-center gap-2 pb-2">
+                <button
+                  type="button"
+                  onClick={exportToPPTX}
+                  disabled={isExporting}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-zinc-200 rounded-full text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50"
+                >
+                  <Presentation className="w-3.5 h-3.5" /> PPTX
+                </button>
+                <button
+                  type="button"
+                  onClick={exportToPDF}
+                  disabled={isExporting}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-zinc-200 rounded-full text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50"
+                >
+                  <FileText className="w-3.5 h-3.5" /> PDF
+                </button>
+              </div>
+            </div>
+
+            {/* ── Profiles Tab ── */}
+            {resultTab === 'profiles' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {report.brandProfiles.map((profile) => {
+                  const visuals = bestVisualsByBrand[profile.brandName];
+                  const logoUrl = processedLogos[profile.brandName]?.base64Placeholder
+                    || visuals?.deterministicLogoUrl
+                    || logoImages[profile.brandName]
+                    || null;
+                  const visibleVisualCards = (visuals?.images || []).filter((_, idx) => {
+                    const failureState = visualFailuresByCard[`${profile.brandName}-visual-${idx}`];
+                    return !failureState?.hidden;
+                  });
+
+                  return (
+                    <section
+                      key={profile.brandName}
+                      className="bg-white rounded-3xl border border-zinc-200 p-6 space-y-6 shadow-sm"
+                    >
+                      {/* Brand Header */}
+                      <div className="flex items-start gap-4">
+                        {logoUrl && (
+                          <div className="w-14 h-14 rounded-xl border border-zinc-100 bg-zinc-50 flex items-center justify-center overflow-hidden shrink-0">
+                            <img
+                              src={logoUrl}
+                              alt={`${profile.brandName} logo`}
+                              className="w-full h-full object-contain p-1"
+                              onLoad={handleImageLoad}
+                              onError={(e) => {
+                                handleImageError();
+                                (e.currentTarget as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-xl font-bold text-zinc-900">{profile.brandName}</h3>
+                          {profile.website && (
+                            <a
+                              href={profile.website}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-indigo-600 transition-colors mt-0.5"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              {profile.website}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Visual Preview Strip */}
+                      {visibleVisualCards.length > 0 && (
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                          {visibleVisualCards.slice(0, 4).map((card, idx) => {
+                            const cardKey = `${profile.brandName}-visual-${idx}`;
+                            const fallbackChain = buildVisualPreviewFallbackChain(card.url, profile.website);
+                            return (
+                              <div key={cardKey} className="shrink-0 w-40 h-24 rounded-xl border border-zinc-100 overflow-hidden bg-zinc-50">
+                                <img
+                                  src={card.url}
+                                  alt={card.label}
+                                  data-original-src={card.url}
+                                  data-fallback-chain={fallbackChain.join('|')}
+                                  className="w-full h-full object-cover"
+                                  onLoad={handleImageLoad}
+                                  onError={(e) => handleVisualImageError(e, cardKey)}
+                                  onClick={() => clearVisualFailureState(cardKey)}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Distinctiveness */}
+                      {profile.distinctivenessAssessment && (
+                        <div className="bg-zinc-50 rounded-2xl p-4 border border-zinc-100">
+                          <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Distinctiveness Assessment</p>
+                          <p className="text-sm text-zinc-700 leading-relaxed">{profile.distinctivenessAssessment}</p>
+                        </div>
+                      )}
+
+                      {/* Logo System */}
+                      <div
+                        className="space-y-2 cursor-pointer"
+                        onClick={(e) => openComparePopup(e, 'primaryColors')}
+                      >
+                        <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <ImageIcon className="w-3.5 h-3.5" /> Logo System
+                        </p>
+                        <div className="space-y-1">
+                          {profile.logo.mainLogo && (
+                            <p className="text-sm text-zinc-700"><span className="font-medium text-zinc-900">Primary:</span> {profile.logo.mainLogo}</p>
+                          )}
+                          {profile.logo.wordmarkLogotype && (
+                            <p className="text-sm text-zinc-700"><span className="font-medium text-zinc-900">Wordmark:</span> {profile.logo.wordmarkLogotype}</p>
+                          )}
+                          {profile.logo.logoVariations.length > 0 && (
+                            <div>
+                              <p className="text-xs font-medium text-zinc-500 mt-2 mb-1">Variations</p>
+                              {renderListOrFallback(profile.logo.logoVariations, 'No variations documented.')}
+                            </div>
+                          )}
+                          {profile.logo.symbolsIcons.length > 0 && (
+                            <div>
+                              <p className="text-xs font-medium text-zinc-500 mt-2 mb-1">Symbols & Icons</p>
+                              {renderListOrFallback(profile.logo.symbolsIcons, 'No symbol data.')}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Color Palette */}
+                      <div className="space-y-3">
+                        <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Palette className="w-3.5 h-3.5" /> Color Palette
+                        </p>
+                        {profile.colorPalette.primaryColors.length > 0 && (
+                          <div
+                            className="cursor-pointer hover:bg-zinc-50 rounded-xl p-2 -mx-2 transition-colors"
+                            onClick={(e) => openComparePopup(e, 'primaryColors')}
+                          >
+                            <p className="text-xs font-semibold text-zinc-600 mb-2">Primary</p>
+                            <ul className="space-y-2">{profile.colorPalette.primaryColors.map(renderColorSwatch)}</ul>
+                          </div>
+                        )}
+                        {profile.colorPalette.secondaryAccentColors.length > 0 && (
+                          <div
+                            className="cursor-pointer hover:bg-zinc-50 rounded-xl p-2 -mx-2 transition-colors"
+                            onClick={(e) => openComparePopup(e, 'accentColors')}
+                          >
+                            <p className="text-xs font-semibold text-zinc-600 mb-2">Accent</p>
+                            <ul className="space-y-2">{profile.colorPalette.secondaryAccentColors.map(renderColorSwatch)}</ul>
+                          </div>
+                        )}
+                        {profile.colorPalette.neutrals.length > 0 && (
+                          <div
+                            className="cursor-pointer hover:bg-zinc-50 rounded-xl p-2 -mx-2 transition-colors"
+                            onClick={(e) => openComparePopup(e, 'neutrals')}
+                          >
+                            <p className="text-xs font-semibold text-zinc-600 mb-2">Neutrals</p>
+                            <ul className="space-y-2">{profile.colorPalette.neutrals.map(renderColorSwatch)}</ul>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Typography */}
+                      <div
+                        className="space-y-2 cursor-pointer hover:bg-zinc-50 rounded-xl p-2 -mx-2 transition-colors"
+                        onClick={(e) => openComparePopup(e, 'typography')}
+                      >
+                        <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Type className="w-3.5 h-3.5" /> Typography
+                        </p>
+                        {profile.typography.fontFamilies.length > 0 && (
+                          <p className="text-sm text-zinc-700">
+                            <span className="font-medium text-zinc-900">Families:</span>{' '}
+                            {profile.typography.fontFamilies.join(', ')}
+                          </p>
+                        )}
+                        <div className="grid grid-cols-3 gap-2 mt-2">
+                          {[
+                            { label: 'H1', value: profile.typography.hierarchy.h1 },
+                            { label: 'H2', value: profile.typography.hierarchy.h2 },
+                            { label: 'Body', value: profile.typography.hierarchy.body },
+                          ].map(({ label, value }) => value && (
+                            <div key={label} className="bg-zinc-50 rounded-lg p-2 border border-zinc-100">
+                              <p className="text-[10px] font-bold text-zinc-400 uppercase mb-0.5">{label}</p>
+                              <p className="text-xs text-zinc-700 leading-tight">{value}</p>
+                            </div>
+                          ))}
+                        </div>
+                        {profile.typography.usageRules.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-zinc-500 mt-2 mb-1">Usage Rules</p>
+                            {renderListOrFallback(profile.typography.usageRules, '')}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Supporting Visual Elements */}
+                      <div className="space-y-3">
+                        <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Supporting Visual Elements</p>
+                        {profile.supportingVisualElements.imageryStyle.length > 0 && (
+                          <div
+                            className="cursor-pointer hover:bg-zinc-50 rounded-xl p-2 -mx-2 transition-colors"
+                            onClick={(e) => openComparePopup(e, 'imageryStyle')}
+                          >
+                            <p className="text-xs font-semibold text-zinc-600 mb-1">Imagery Style</p>
+                            {renderListOrFallback(profile.supportingVisualElements.imageryStyle, '')}
+                          </div>
+                        )}
+                        {profile.supportingVisualElements.icons.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-zinc-600 mb-1">Icons</p>
+                            {renderListOrFallback(profile.supportingVisualElements.icons, '')}
+                          </div>
+                        )}
+                        {profile.supportingVisualElements.patternsTextures.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-zinc-600 mb-1">Patterns & Textures</p>
+                            {renderListOrFallback(profile.supportingVisualElements.patternsTextures, '')}
+                          </div>
+                        )}
+                        {profile.supportingVisualElements.shapes.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-zinc-600 mb-1">Shapes</p>
+                            {renderListOrFallback(profile.supportingVisualElements.shapes, '')}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Sources */}
+                      {(profile.sampleVisuals || []).length > 0 && (
+                        <div>
+                          <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">Sources</p>
+                          <div className="flex flex-wrap gap-2">
+                            {(profile.sampleVisuals || []).map((source, idx) => (
+                              <a
+                                key={idx}
+                                href={source.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-full transition-colors"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                <span className="truncate max-w-[160px]">{source.title}</span>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── Compare Tab ── */}
+            {resultTab === 'compare' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="lg:col-span-2 flex flex-wrap gap-2 mb-2">
+                  {[
+                    { key: 'primaryColors', label: 'Primary Colors', icon: <Palette className="w-3.5 h-3.5" /> },
+                    { key: 'accentColors', label: 'Accent Colors', icon: <Palette className="w-3.5 h-3.5" /> },
+                    { key: 'neutrals', label: 'Neutrals', icon: <Palette className="w-3.5 h-3.5" /> },
+                    { key: 'typography', label: 'Typography', icon: <Type className="w-3.5 h-3.5" /> },
+                    { key: 'imageryStyle', label: 'Imagery Style', icon: <ImageIcon className="w-3.5 h-3.5" /> },
+                  ].map(({ key, label, icon }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setCompareElement(key as CompareElement)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
+                        compareElement === key
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300'
+                      }`}
+                    >
+                      {icon} {label}
+                    </button>
+                  ))}
                 </div>
-              );
-            })}
+                {renderComparePanel()}
+              </div>
+            )}
+
+            {/* ── Cross-Brand Readout & Strategic Recommendations ── */}
+            {(report.crossBrandReadout?.length > 0 || report.strategicRecommendations?.length > 0) && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {report.crossBrandReadout?.length > 0 && (
+                  <section className="bg-indigo-50 rounded-3xl border border-indigo-100 p-6">
+                    <h4 className="text-sm font-bold text-indigo-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" /> Opportunity Spaces
+                    </h4>
+                    <ul className="space-y-3">
+                      {report.crossBrandReadout.map((item, idx) => (
+                        <li key={idx} className="text-sm text-indigo-800 flex items-start gap-2 leading-relaxed">
+                          <span className="text-indigo-400 mt-0.5 shrink-0">•</span>
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+                {report.strategicRecommendations?.length > 0 && (
+                  <section className="bg-white rounded-3xl border border-zinc-200 p-6">
+                    <h4 className="text-sm font-bold text-zinc-900 uppercase tracking-wider mb-4">Strategic Recommendations</h4>
+                    <ul className="space-y-3">
+                      {report.strategicRecommendations.map((item, idx) => (
+                        <li key={idx} className="text-sm text-zinc-700 flex items-start gap-2 leading-relaxed">
+                          <span className="text-indigo-500 font-bold shrink-0">{idx + 1}.</span>
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+              </div>
+            )}
+
+            {/* ── Ask a Question About the Report ── */}
+            <section className="bg-zinc-50 rounded-3xl border border-zinc-200 p-6">
+              <h4 className="text-lg font-bold text-zinc-900 mb-4 flex items-center gap-2">
+                <Search className="w-5 h-5 text-indigo-500" /> Ask About This Analysis
+              </h4>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={reportQuestion}
+                  onChange={(e) => setReportQuestion(e.target.value)}
+                  placeholder="e.g. Which brand has the most distinct color system?"
+                  className="flex-1 px-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAskQuestion()}
+                  disabled={isSubmittingPrompt}
+                />
+                <button
+                  type="button"
+                  onClick={handleAskQuestion}
+                  disabled={isSubmittingPrompt || !reportQuestion.trim()}
+                  className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                >
+                  {isSubmittingPrompt ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Ask'}
+                </button>
+              </div>
+              {reportAnswer && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 p-4 bg-white rounded-2xl border border-zinc-100 text-sm text-zinc-700 leading-relaxed"
+                >
+                  {reportAnswer}
+                </motion.div>
+              )}
+            </section>
           </motion.div>
         )}
       </AnimatePresence>
