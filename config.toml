@@ -1,0 +1,40 @@
+model = "gpt-5.4-mini"  
+model_provider = "azure"
+model_reasoning_effort = "medium"
+model_max_tokens = 120000
+
+[model_providers.azure]
+name = "Azure OpenAI"
+base_url = "https://cultarchazure-resource.openai.azure.com/openai/v1"
+env_key = "AZURE_OPENAI_API_KEY"
+wire_api = "responses"
+
+[features]
+multi_agent = true
+
+[projects."/Users/brussell"]
+trust_level = "trusted"
+
+[projects."/Users/brussell/Downloads/Code/Cultural Archeologist"]
+trust_level = "trusted"
+
+[projects."/Users/brussell/Downloads/Code/Cultural Archeologist/cultural-archaeologist-azure-claude-fixed"]
+trust_level = "trusted"
+
+[notice.model_migrations]
+"gpt-5.4-mini" = "gpt-5.4"
+
+[plugins."github@openai-curated"]
+enabled = true
+
+[plugins."linear@openai-curated"]
+enabled = true
+
+[plugins."figma@openai-curated"]
+enabled = true
+
+[mcp_servers.supabase]
+url = "https://mcp.supabase.com/mcp?project_ref=ofvpetcgufslyvwrlnqp"
+
+[mcp]
+remote_mcp_client_enabled = true

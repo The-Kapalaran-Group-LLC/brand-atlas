@@ -1418,7 +1418,7 @@ export default function App() {
         {activeExperience === 'research' && (
           <>
             {/* Top Navigation / Actions */}
-            <div className="absolute top-6 right-6 z-50 no-print flex items-center gap-2">
+            <div className="absolute top-6 right-6 z-50 no-print flex flex-col items-end gap-3 sm:flex-row sm:items-center sm:gap-2">
               <button
                 onClick={() => setActiveExperience('brand')}
                 className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"

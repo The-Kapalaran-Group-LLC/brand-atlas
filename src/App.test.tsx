@@ -84,4 +84,16 @@ describe('App Component', () => {
     fireEvent.change(brandInput, { target: { value: 'Ni' } });
     await waitFor(() => expect(screen.getByText(/Failed to get brand suggestions/i)).toBeInTheDocument());
   });
+
+  it('stacks the top action buttons on mobile to add spacing', async () => {
+    render(<App />);
+    await waitForSplashToDisappear();
+    fireEvent.click(screen.getByText(/Cultural Archaeologist/i));
+
+    const actionBar = screen.getByRole('button', { name: /visual design excavator/i }).parentElement;
+
+    expect(actionBar).toHaveClass('flex-col');
+    expect(actionBar).toHaveClass('gap-3');
+    expect(actionBar).toHaveClass('sm:flex-row');
+  });
 });
