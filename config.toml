@@ -1,11 +1,11 @@
-model = "gpt-5.4-mini"  
+model = "gpt-5.3-codex"  
 model_provider = "azure"
 model_reasoning_effort = "medium"
-model_max_tokens = 120000
+model_max_tokens = 60000
 
 [model_providers.azure]
 name = "Azure OpenAI"
-base_url = "https://cultarchazure-resource.openai.azure.com/openai/v1"
+base_url = "https://cultarchazure-resource.cognitiveservices.azure.com/openai/v1"
 env_key = "AZURE_OPENAI_API_KEY"
 wire_api = "responses"
 
@@ -20,9 +20,6 @@ trust_level = "trusted"
 
 [projects."/Users/brussell/Downloads/Code/Cultural Archeologist/cultural-archaeologist-azure-claude-fixed"]
 trust_level = "trusted"
-
-[notice.model_migrations]
-"gpt-5.4-mini" = "gpt-5.4"
 
 [plugins."github@openai-curated"]
 enabled = true
