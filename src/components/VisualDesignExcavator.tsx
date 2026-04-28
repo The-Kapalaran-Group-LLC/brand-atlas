@@ -68,6 +68,7 @@ import { Search, RefreshCw, Info, Sparkles, Building2, Users, Trash2, Plus, Cros
 import { BrandColorSpec, BrandDeepDiveReport, generateBrandDeepDive, submitBrandDeepDivePrompt, suggestBrandWebsite } from '../services/azure-openai';
 import { supabase } from '../services/supabase-client';
 import { Accordion } from './Accordion';
+import { ToastBanner } from './ToastBanner';
 
 interface BrandDeepDivePageProps {
   onBack: () => void;
@@ -400,7 +401,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
   const [bestVisualsByBrand, setBestVisualsByBrand] = useState<Record<string, BrandVisualSelection>>({});
   const [visualFailuresByCard, setVisualFailuresByCard] = useState<Record<string, { attempts: number; lastSource: string; isPlaceholder: boolean; hidden?: boolean; retried?: boolean }>>({});
   const [isExporting, setIsExporting] = useState(false);
-  const [, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedDeepDiveSearch[]>([]);
   const websiteLookupTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const undoDeleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1514,21 +1515,26 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
     <>
       <div className="w-full px-2 sm:px-0">
       {/* Top Navigation / Actions */}
-      <div className="absolute top-6 right-6 z-50 no-print flex items-center gap-2">
+      <div className="absolute top-6 right-6 z-50 no-print flex flex-col items-end gap-3 sm:flex-row sm:items-center sm:gap-2">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+          className="flex items-center gap-2.5 sm:gap-2 px-4 py-2.5 sm:py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
         >
           <Search className="w-4 h-4" /> Cultural Archaeologist
         </button>
         <button
           type="button"
           onClick={clearExcavatorSearch}
-          className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+          className="flex items-center gap-2.5 sm:gap-2 px-4 py-2.5 sm:py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
         >
           <RefreshCw className="w-4 h-4" /> New Search
         </button>
       </div>
+
+      <ToastBanner
+        toast={toast}
+        onDismiss={() => setToast(null)}
+      />
 
       <AnimatePresence>
         {undoToast && (
@@ -1536,7 +1542,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-4 text-sm no-print"
+            className={`fixed ${toast ? 'top-20' : 'top-6'} left-1/2 -translate-x-1/2 z-50 bg-zinc-900 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-4 text-sm no-print`}
           >
             <Info className="w-4 h-4 text-indigo-400" />
             <span>{undoToast.message}</span>
@@ -1565,7 +1571,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
           <span className="align-super ml-3 inline-block px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold tracking-wide border border-indigo-200">Beta</span>
         </h1>
         <p className="text-lg text-zinc-500 max-w-2xl mx-auto leading-relaxed select-none">
-          Compare visual identity systems across 1-6 brands.
+          Compare visual identity systems of up to 1-6 brands.
         </p>
       </motion.div>
 
@@ -1772,12 +1778,12 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
               >
                 <span className="flex items-center gap-2"><Palette className="w-4 h-4" /> Compare</span>
               </button>
-              <div className="ml-auto flex items-center gap-2 pb-2">
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-3 sm:gap-2 pb-2">
                 <button
                   type="button"
                   onClick={exportToPPTX}
                   disabled={isExporting}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-zinc-200 rounded-full text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 sm:gap-1.5 px-3.5 sm:px-3 py-2 sm:py-1.5 bg-white border border-zinc-200 rounded-full text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50"
                 >
                   <Presentation className="w-3.5 h-3.5" /> PPTX
                 </button>
@@ -1785,7 +1791,7 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                   type="button"
                   onClick={exportToPDF}
                   disabled={isExporting}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-zinc-200 rounded-full text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 sm:gap-1.5 px-3.5 sm:px-3 py-2 sm:py-1.5 bg-white border border-zinc-200 rounded-full text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50"
                 >
                   <FileText className="w-3.5 h-3.5" /> PDF
                 </button>
@@ -2090,26 +2096,6 @@ export function BrandDeepDivePage({ onBack }: BrandDeepDivePageProps) {
                           </div>
                         )}
 
-                        {/* Sources */}
-                        {(profile.sampleVisuals || []).length > 0 && (
-                          <div>
-                            <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">Sources</p>
-                            <div className="flex flex-wrap gap-2">
-                              {(profile.sampleVisuals || []).map((source, idx) => (
-                                <a
-                                  key={idx}
-                                  href={source.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-full transition-colors"
-                                >
-                                  <ExternalLink className="w-3 h-3" />
-                                  <span className="truncate max-w-[160px]">{source.title}</span>
-                                </a>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                       </section>
                     );
                   })}
