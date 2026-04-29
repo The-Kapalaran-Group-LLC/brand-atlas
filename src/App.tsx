@@ -261,9 +261,16 @@ export default function App() {
   const skipSplashToHome =
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('home') === '1';
   const isDirectCulturalRoute =
-    typeof window !== 'undefined' && window.location.pathname === '/cultural-archaeologist';
+    typeof window !== 'undefined' &&
+    (window.location.pathname === '/cultural-archaeologist' || window.location.hash === '#cultural-archaeologist');
   const isDirectVisualDesignRoute =
-    typeof window !== 'undefined' && window.location.pathname === '/visual-design-excavator';
+    typeof window !== 'undefined' &&
+    (
+      window.location.pathname === '/design-excavator' ||
+      window.location.hash === '#design-excavator' ||
+      window.location.pathname === '/visual-design-excavator' ||
+      window.location.hash === '#visual-design-excavator'
+    );
   // Instantly skip splash in test environments
   const [showSplash, setShowSplash] = useState(() => {
     if (skipSplashToHome || isDirectCulturalRoute || isDirectVisualDesignRoute) {
@@ -1397,7 +1404,7 @@ export default function App() {
                   </ul>
                 </button>
                 <button
-                  onClick={() => window.location.assign('/brand-navigator')}
+                  onClick={() => window.location.assign('/#brand-navigator')}
                   className="text-left bg-white/90 border border-zinc-200/80 border-[1px] rounded-3xl p-6 hover:border-zinc-300 hover:shadow-sm transition-all h-full flex flex-col justify-start main-box-hover"
                 >
                   <div className="inline-flex items-center gap-2 text-zinc-800 font-semibold mb-2 text-lg md:text-xl items-start">
@@ -1462,13 +1469,13 @@ export default function App() {
             {/* Top Navigation / Actions */}
             <div className="absolute top-6 right-6 z-50 no-print flex flex-col items-end gap-3 sm:flex-row sm:items-center sm:gap-2">
               <button
-                onClick={() => window.location.assign('/brand-navigator')}
+                onClick={() => window.location.assign('/#brand-navigator')}
                 className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
               >
                 <CompassRoseIcon className="w-4 h-4" /> Brand Navigator
               </button>
               <button
-                onClick={() => window.location.assign('/visual-design-excavator')}
+                onClick={() => window.location.assign('/#design-excavator')}
                 className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
               >
                 <Palette className="w-4 h-4" /> Design Excavator
