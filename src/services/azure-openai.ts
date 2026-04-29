@@ -36,7 +36,11 @@ export function logDetailedError(error: unknown, context?: string) {
   }
 }
 import { AzureOpenAI } from "openai";
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import type {
+  ChatCompletion,
+  ChatCompletionCreateParamsNonStreaming,
+  ChatCompletionMessageParam,
+} from "openai/resources/chat/completions";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { buildBrandWebsiteContextPrompt, fetchBrandWebsiteContext } from './brand-web-context';
@@ -207,6 +211,101 @@ function getAzureAI() {
 }
 
 const getDeploymentName = () => process.env.AZURE_OPENAI_DEPLOYMENT_NAME || "gpt-4o";
+
+type RetryableDeploymentError = {
+  status?: number;
+  code?: string;
+  message?: string;
+};
+
+const normalizeDeploymentName = (value?: string): string => (value || '').trim();
+
+export function getDeploymentCandidatesFromEnv(env: NodeJS.ProcessEnv = process.env): string[] {
+  const candidates = [
+    normalizeDeploymentName(env.AZURE_OPENAI_PRIMARY_DEPLOYMENT_NAME),
+    normalizeDeploymentName(env.AZURE_OPENAI_DEPLOYMENT_NAME),
+    normalizeDeploymentName(env.AZURE_OPENAI_FALLBACK_DEPLOYMENT_NAME),
+    'gpt-4o',
+  ].filter(Boolean);
+
+  return Array.from(new Set(candidates));
+}
+
+export function shouldRetryWithAlternateDeployment(error: unknown): boolean {
+  const details = error as RetryableDeploymentError | undefined;
+  const status = details?.status;
+  const code = (details?.code || '').toLowerCase();
+  const message = (details?.message || '').toLowerCase();
+
+  if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {
+    return true;
+  }
+
+  if (status === 400) {
+    if (
+      code === 'invalid_prompt' ||
+      code === 'content_filter' ||
+      message.includes('policy') ||
+      message.includes('content filter') ||
+      message.includes('invalid prompt')
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function createChatCompletionWithFallback(
+  requestParams: Omit<ChatCompletionCreateParamsNonStreaming, 'model'>
+): Promise<ChatCompletion> {
+  const client = getAzureAI();
+  const deployments = getDeploymentCandidatesFromEnv();
+  const initialDeployment = getDeploymentName();
+  const orderedDeployments = Array.from(
+    new Set([
+      initialDeployment,
+      ...deployments,
+    ].map((value) => value.trim()).filter(Boolean))
+  );
+
+  let lastError: unknown;
+
+  for (let index = 0; index < orderedDeployments.length; index += 1) {
+    const deployment = orderedDeployments[index];
+    const hasAnotherDeployment = index < orderedDeployments.length - 1;
+
+    try {
+      const response = await client.chat.completions.create({
+        ...requestParams,
+        model: deployment,
+      });
+
+      if (deployment !== initialDeployment) {
+        console.warn('[azure-openai] Recovered by switching deployment:', {
+          from: initialDeployment,
+          to: deployment,
+        });
+      }
+
+      return response;
+    } catch (error) {
+      lastError = error;
+      console.error('[azure-openai] Deployment call failed:', {
+        deployment,
+        status: (error as RetryableDeploymentError)?.status,
+        code: (error as RetryableDeploymentError)?.code,
+        message: (error as RetryableDeploymentError)?.message,
+      });
+
+      if (!hasAnotherDeployment || !shouldRetryWithAlternateDeployment(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Azure OpenAI call failed for all deployments.');
+}
 
 // Zod schemas for structured outputs
 const DeepDiveReportSchema = z.object({
@@ -554,8 +653,7 @@ async function runStructuredCall<T extends z.ZodTypeAny>(params: {
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
-      const response = await getAzureAI().chat.completions.create({
-        model: getDeploymentName(),
+      const response = await createChatCompletionWithFallback({
         temperature: outputTemperature(params.outputType),
         messages: params.messages,
         response_format: zodResponseFormat(params.schema, params.schemaName),
@@ -1479,8 +1577,7 @@ export async function suggestBrandWebsite(brandName: string): Promise<string | n
   if (!normalized) return null;
 
   try {
-    const response = await getAzureAI().chat.completions.create({
-      model: getDeploymentName(),
+    const response = await createChatCompletionWithFallback({
       messages: [
         {
           role: "system",
@@ -1523,8 +1620,7 @@ export async function suggestBrandWebsite(brandName: string): Promise<string | n
 export async function suggestBrands(partialName: string): Promise<string[]> {
   if (!partialName || partialName.length < 2) return [];
   try {
-    const response = await getAzureAI().chat.completions.create({
-      model: getDeploymentName(),
+    const response = await createChatCompletionWithFallback({
       messages: [
         { role: "user", content: `Suggest 5 well-known brands, categories, or companies that match or start with the partial name: "${partialName}".` }
       ],
@@ -1550,8 +1646,7 @@ export async function autoPopulateFields(
   audience: string,
   topicFocus: string
 ): Promise<{ brand?: string, audience?: string, topicFocus?: string }> {
-  const response = await getAzureAI().chat.completions.create({
-    model: getDeploymentName(),
+  const response = await createChatCompletionWithFallback({
     messages: [
       { role: "user", content: `Given the following partial information about a marketing or cultural strategy:
 Brand or Category: ${brand || "(empty)"}
