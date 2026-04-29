@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { processImageForUI, type ProcessedImageResult } from './image-processing';
 import { extractBrandImages, type BrandImagesResult } from './brand-images';
+import { extractBrandWebContext, type BrandWebContextResult } from './brand-web-context';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -210,6 +211,8 @@ app.get('/api/process-image', async (req, res) => {
 // ── Brand images (logo + hero) ───────────────────────────────────────────
 const BRAND_IMAGES_CACHE_TTL_MS = 30 * 60 * 1_000; // 30 min
 const brandImagesCache = new Map<string, { result: BrandImagesResult; expiresAt: number }>();
+const BRAND_WEB_CONTEXT_CACHE_TTL_MS = 15 * 60 * 1_000; // 15 min
+const brandWebContextCache = new Map<string, { result: BrandWebContextResult; expiresAt: number }>();
 
 app.get('/api/brand-images', async (req, res) => {
   const rawDomain = Array.isArray(req.query.domain) ? req.query.domain[0] : req.query.domain;
@@ -249,6 +252,49 @@ app.get('/api/brand-images', async (req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(502).json({ error: `Failed to extract brand images: ${message}` });
+  }
+});
+
+// ── Brand web context (homepage + corporate pages) ───────────────────────────
+app.get('/api/brand-web-context', async (req, res) => {
+  const rawTarget = Array.isArray(req.query.target) ? req.query.target[0] : req.query.target;
+  const rawBrand = Array.isArray(req.query.brand) ? req.query.brand[0] : req.query.brand;
+
+  if (!rawTarget || typeof rawTarget !== 'string') {
+    return res.status(400).json({ error: 'Missing target query parameter.' });
+  }
+
+  let parsedUrl: URL;
+  try {
+    const withProtocol = /^https?:\/\//i.test(rawTarget.trim())
+      ? rawTarget.trim()
+      : `https://${rawTarget.trim()}`;
+    parsedUrl = new URL(withProtocol);
+  } catch {
+    return res.status(400).json({ error: 'Invalid target parameter.' });
+  }
+
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return res.status(400).json({ error: 'Only http/https targets are allowed.' });
+  }
+
+  if (isDisallowedHost(parsedUrl.hostname)) {
+    return res.status(403).json({ error: 'Host is not allowed.' });
+  }
+
+  const cacheKey = `${(rawBrand || '').toString().trim().toLowerCase()}::${parsedUrl.toString().toLowerCase()}`;
+  const cached = brandWebContextCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.result);
+  }
+
+  try {
+    const result = await extractBrandWebContext(parsedUrl.toString(), typeof rawBrand === 'string' ? rawBrand : '');
+    brandWebContextCache.set(cacheKey, { result, expiresAt: Date.now() + BRAND_WEB_CONTEXT_CACHE_TTL_MS });
+    return res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(502).json({ error: `Failed to extract brand web context: ${message}` });
   }
 });
 

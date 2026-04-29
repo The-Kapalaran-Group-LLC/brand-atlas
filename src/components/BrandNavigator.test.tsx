@@ -155,4 +155,47 @@ describe('BrandNavigator', () => {
 
     expect(await screen.findByRole('button', { name: /generate analysis/i })).toBeInTheDocument();
   });
+
+  it('renders high-level summary for each brand result', async () => {
+    generateBrandResearchMatrix.mockResolvedValue({
+      analysisObjective: 'test objective',
+      ecosystemMethod: 'test method',
+      results: [
+        {
+          brandName: 'Patagonia',
+          highLevelSummary: 'Purpose-led outdoor brand with premium durability positioning.',
+          brandMission: 'Save our home planet.',
+          brandPositioning: {
+            taglines: ['We’re in business to save our home planet'],
+            keyMessagesAndClaims: ['Built to last'],
+            valueProposition: 'Durable gear that aligns with environmental values.',
+            voiceAndTone: 'Direct and principled',
+          },
+          keyOfferingsProductsServices: ['Outerwear'],
+          strategicMoatsStrengths: ['Brand trust'],
+          potentialThreatsWeaknesses: ['Premium pricing pressure'],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: [],
+          socialMediaChannels: [],
+          sources: [],
+        },
+      ],
+      sources: [],
+    });
+
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+
+    fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
+
+    expect(await screen.findByText(/high-level summary/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText('Purpose-led outdoor brand with premium durability positioning.')
+    ).toBeInTheDocument();
+  });
 });

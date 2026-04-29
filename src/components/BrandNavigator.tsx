@@ -35,6 +35,7 @@ interface SavedMatrix {
 }
 
 type BrandResultSectionKey =
+  | 'highLevelSummary'
   | 'brandMission'
   | 'brandPositioning'
   | 'keyOfferingsProductsServices'
@@ -47,6 +48,7 @@ type BrandResultSectionKey =
   | 'recentNews';
 
 const BRAND_RESULT_SECTION_KEYS: BrandResultSectionKey[] = [
+  'highLevelSummary',
   'brandMission',
   'brandPositioning',
   'keyOfferingsProductsServices',
@@ -689,6 +691,7 @@ export default function BrandNavigator() {
   };
 
   const sectionTitleMap: Record<BrandResultSectionKey, string> = {
+    highLevelSummary: 'High-Level Summary',
     brandMission: 'Brand Mission',
     brandPositioning: 'Brand Positioning',
     keyOfferingsProductsServices: 'Key Offerings / Products / Services',
@@ -703,6 +706,8 @@ export default function BrandNavigator() {
 
   const sectionLinesForBrand = (brand: BrandResultEntry, key: BrandResultSectionKey): string[] => {
     switch (key) {
+      case 'highLevelSummary':
+        return [brand.highLevelSummary || 'N/A'];
       case 'brandMission':
         return [brand.brandMission || 'N/A'];
       case 'brandPositioning': {
@@ -1867,6 +1872,7 @@ type BrandResultAudience = {
 
 type BrandResultEntry = {
   brandName?: string;
+  highLevelSummary?: string;
   brandMission?: string;
   brandPositioning?: {
     taglines?: string[];
@@ -1926,6 +1932,10 @@ function BrandResultCard({
       <h3 className="text-2xl font-bold text-zinc-900 mb-4">{brandName}</h3>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-sm text-zinc-700">
+        <BrandCriteriaSection title="High-level summary" className="lg:col-span-2">
+          <p>{brandResult.highLevelSummary || 'N/A'}</p>
+        </BrandCriteriaSection>
+
         <BrandCriteriaSection title="Brand mission">
           <p>{brandResult.brandMission || 'N/A'}</p>
         </BrandCriteriaSection>

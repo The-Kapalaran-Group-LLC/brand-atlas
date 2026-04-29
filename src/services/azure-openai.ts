@@ -39,6 +39,7 @@ import { AzureOpenAI } from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
+import { buildBrandWebsiteContextPrompt, fetchBrandWebsiteContext } from './brand-web-context';
 
 export interface MatrixItem {
   text: string;
@@ -103,6 +104,7 @@ export interface BrandResearchPositioning {
 
 export interface BrandResearchResult {
   brandName: string;
+  highLevelSummary: string;
   brandMission: string;
   brandPositioning: BrandResearchPositioning;
   keyOfferingsProductsServices: string[];
@@ -1617,6 +1619,7 @@ const BrandResearchMatrixSchema = z.object({
   results: z.array(
     z.object({
       brandName: z.string(),
+      highLevelSummary: z.string(),
       brandMission: z.string(),
       brandPositioning: z.object({
         taglines: z.array(z.string()),
@@ -1812,6 +1815,43 @@ export async function generateBrandResearchMatrix(
     'brand'
   );
 
+  const websiteTargets = await Promise.all(
+    sanitizedBrands.map(async (brandName) => {
+      const guessedWebsite = await suggestBrandWebsite(brandName);
+      return {
+        brand: brandName,
+        website: guessedWebsite,
+      };
+    })
+  );
+
+  const websiteContexts = (
+    await Promise.all(
+      websiteTargets
+        .filter((item) => Boolean(item.website))
+        .map(async (item) => {
+          try {
+            return await fetchBrandWebsiteContext(item.brand, item.website!);
+          } catch (error) {
+            console.error('[brand-research] Failed to fetch website grounding context', {
+              brand: item.brand,
+              website: item.website,
+              error,
+            });
+            return null;
+          }
+        })
+    )
+  ).filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+  console.log('[brand-research] Website grounding summary', {
+    brandCount: sanitizedBrands.length,
+    groundedBrands: websiteContexts.length,
+    domains: websiteContexts.map((item) => item.website),
+  });
+
+  const websiteGroundingContext = buildBrandWebsiteContextPrompt(websiteContexts);
+
   const evidenceDigest = await gatherEvidenceForTopic(
     `Brands: ${brandContext}; Audience: ${audience || 'n/a'}; Topic: ${topicFocus || 'n/a'}; Generations: ${(generations || []).join(', ') || 'n/a'}`,
     'brand'
@@ -1823,29 +1863,32 @@ Requirements:
 - Use the same research rigor: recent evidence (2024-2026), explicit uncertainty handling, and source grounding.
 - Return one complete result object per brand in "results".
 - Each brand result must include:
-  1) brandMission
-  2) brandPositioning:
+  1) highLevelSummary (2-4 sentence executive summary of strategy, positioning, and market posture)
+  2) brandMission
+  3) brandPositioning:
      - taglines
      - keyMessagesAndClaims
      - valueProposition
      - voiceAndTone
-  3) keyOfferingsProductsServices
-  4) strategicMoatsStrengths
-  5) potentialThreatsWeaknesses
-  6) targetAudiences:
+  4) keyOfferingsProductsServices
+  5) strategicMoatsStrengths
+  6) potentialThreatsWeaknesses
+  7) targetAudiences:
      - audience
      - priority
      - inferredRoleToConsumers
      - functionalBenefits
      - emotionalBenefits
-  7) recentCampaigns
-  8) keyMarketingChannels
-  9) socialMediaChannels with channel and full URL
+  8) recentCampaigns
+  9) keyMarketingChannels
+  10) socialMediaChannels with channel and full URL
 - Keep entries concise and specific (no vague filler).
 - Provide sources at both the per-brand level and global level.
 
 Evidence digest (quality and date weighted):
-${evidenceDigest}`;
+${evidenceDigest}
+
+${websiteGroundingContext ? `\n${websiteGroundingContext}` : ''}`;
 
   const messages: ChatCompletionMessageParam[] = [
     { role: 'system', content: systemInstruction },
