@@ -18,4 +18,13 @@ describe('navigation-routes', () => {
   it('resolves root view to brand navigator for direct BrandNavigator path', () => {
     expect(resolveRootView('/BrandNavigator', '')).toBe('brand-navigator');
   });
+
+  it('resolves root view to brand navigator when hash points to brand navigator from any path', () => {
+    expect(resolveRootView('/visual-design-excavator', '#brand-navigator')).toBe('brand-navigator');
+  });
+
+  it('resolves root view to app when hash points to app routes even on brand navigator path', () => {
+    expect(resolveRootView('/brand-navigator', '#cultural-archaeologist')).toBe('app');
+    expect(resolveRootView('/brand-navigator', '#design-excavator')).toBe('app');
+  });
 });

@@ -1,4 +1,4 @@
-import {StrictMode} from 'react';
+import {StrictMode, useEffect, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 
 import App from './App.tsx';
@@ -8,18 +8,49 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { resolveRootView } from './services/navigation-routes';
 import './index.css';
 
-const rootView = resolveRootView(window.location.pathname, window.location.hash);
-console.log('[routing] Resolved root view:', {
-  rootView,
-  pathname: window.location.pathname,
-  hash: window.location.hash,
-});
-const RootApp = rootView === 'privacy-policy' ? PrivacyPolicy : (rootView === 'brand-navigator' ? BrandNavigator : App);
+function RootRouter() {
+  const [locationState, setLocationState] = useState(() => ({
+    pathname: window.location.pathname,
+    hash: window.location.hash,
+  }));
+
+  useEffect(() => {
+    const handleLocationChange = () => {
+      setLocationState({
+        pathname: window.location.pathname,
+        hash: window.location.hash,
+      });
+    };
+
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, []);
+
+  const rootView = resolveRootView(locationState.pathname, locationState.hash);
+  console.log('[routing] Resolved root view:', {
+    rootView,
+    pathname: locationState.pathname,
+    hash: locationState.hash,
+  });
+
+  if (rootView === 'privacy-policy') {
+    return <PrivacyPolicy />;
+  }
+  if (rootView === 'brand-navigator') {
+    return <BrandNavigator />;
+  }
+  return <App />;
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <RootApp />
+      <RootRouter />
     </ErrorBoundary>
   </StrictMode>,
 );

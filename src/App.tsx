@@ -16,6 +16,7 @@ import { TrendLifecycleBadge } from './components/TrendLifecycleBadge';
 import { ProgressiveLoader } from './components/ProgressiveLoader';
 import { Accordion } from './components/Accordion';
 import { FeedbackChatWidget } from './components/FeedbackChatWidget';
+import { navigateToHashRoute } from './services/navigation';
 import pptxgen from 'pptxgenjs';
 import { supabase } from './services/supabase-client';
 
@@ -1404,7 +1405,7 @@ export default function App() {
                   </ul>
                 </button>
                 <button
-                  onClick={() => window.location.assign('/#brand-navigator')}
+                  onClick={() => navigateToHashRoute('brand-navigator')}
                   className="text-left bg-white/90 border border-zinc-200/80 border-[1px] rounded-3xl p-6 hover:border-zinc-300 hover:shadow-sm transition-all h-full flex flex-col justify-start main-box-hover"
                 >
                   <div className="inline-flex items-center gap-2 text-zinc-800 font-semibold mb-2 text-lg md:text-xl items-start">
@@ -1469,7 +1470,7 @@ export default function App() {
             {/* Top Navigation / Actions */}
             <div className="absolute top-6 right-6 z-50 no-print flex flex-col items-end gap-3 sm:flex-row sm:items-center sm:gap-2">
               <button
-                onClick={() => window.location.assign('/#brand-navigator')}
+                onClick={() => navigateToHashRoute('brand-navigator')}
                 className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
               >
                 <CompassRoseIcon className="w-4 h-4" /> Brand Navigator

@@ -66,6 +66,7 @@ const useAllVisualsLoaded = (
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Info, Users, Trash2, Plus, Crosshair, Loader2, Presentation, FileText, ImageIcon, Type, Palette, Clock, ExternalLink, Share2, Globe, Tag, Sparkles, ArrowLeft, RefreshCw } from 'lucide-react';
 import { CompassRoseIcon } from './icons/CompassRoseIcon';
+import { navigateToHashRoute } from '../services/navigation';
 import {
   BrandColorSpec,
   BrandDeepDiveReport as VisualDesignReport,
@@ -1538,7 +1539,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             <Search className="w-4 h-4" /> Cultural Archaeologist
           </button>
           <button
-            onClick={() => window.location.assign('/#brand-navigator')}
+            onClick={() => navigateToHashRoute('brand-navigator')}
             className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
           >
             <CompassRoseIcon className="w-4 h-4" /> Brand Navigator

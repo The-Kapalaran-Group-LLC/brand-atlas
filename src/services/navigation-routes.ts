@@ -22,6 +22,15 @@ const normalizeHash = (hash: string): string => {
   return normalized.startsWith('#') ? normalized : `#${normalized}`;
 };
 
+const isAppExperienceHash = (hash: string): boolean => {
+  const normalizedHash = normalizeHash(hash);
+  return (
+    normalizedHash === '#cultural-archaeologist' ||
+    normalizedHash === '#design-excavator' ||
+    normalizedHash === '#visual-design-excavator'
+  );
+};
+
 export const isPrivacyPolicyPath = (pathname: string): boolean => {
   return normalizePathname(pathname) === '/privacy-policy';
 };
@@ -44,6 +53,12 @@ export const isBrandNavigatorRoute = (pathname: string, hash: string): boolean =
 };
 
 export const resolveRootView = (pathname: string, hash: string): RootView => {
+  if (isBrandNavigatorRoute('/', hash)) {
+    return 'brand-navigator';
+  }
+  if (isAppExperienceHash(hash)) {
+    return 'app';
+  }
   if (isPrivacyPolicyPath(pathname)) {
     return 'privacy-policy';
   }
