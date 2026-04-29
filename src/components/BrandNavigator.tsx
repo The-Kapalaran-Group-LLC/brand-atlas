@@ -425,6 +425,7 @@ export default function BrandNavigator() {
 
     setIsSuggestingBrands(true);
     const timer = setTimeout(async () => {
+      setIsSuggestingBrands(true);
       try {
         let suggestions: string[] = [];
         try {
