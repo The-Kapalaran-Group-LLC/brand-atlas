@@ -63,6 +63,7 @@ const emptyMatrix = {
 
 describe('BrandNavigator', () => {
   beforeEach(() => {
+    window.history.pushState({}, '', '/');
     vi.clearAllMocks();
     suggestBrands.mockResolvedValue(['Nike', 'Adidas']);
     generateBrandResearchMatrix.mockResolvedValue(emptyMatrix);
@@ -134,5 +135,12 @@ describe('BrandNavigator', () => {
     await waitFor(() => {
       expect(generateBrandResearchMatrix).toHaveBeenCalledWith('', ['Patagonia'], [], '', [], []);
     });
+  });
+
+  it('opens research experience immediately when hash route targets brand navigator', async () => {
+    window.history.pushState({}, '', '/#brand-navigator');
+    render(<BrandNavigator />);
+
+    expect(await screen.findByRole('button', { name: /generate analysis/i })).toBeInTheDocument();
   });
 });

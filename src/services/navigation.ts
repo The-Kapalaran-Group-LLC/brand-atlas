@@ -4,6 +4,28 @@ const normalizeHashTarget = (target: string): string => {
   return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
 };
 
+export const navigateToHomeDashboard = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  console.log('[navigation] Navigating to dashboard route:', {
+    pathname: window.location.pathname,
+    search: window.location.search,
+    hash: window.location.hash,
+  });
+
+  const nextUrl = '/?home=1';
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (currentUrl === nextUrl) {
+    window.dispatchEvent(new Event('popstate'));
+    return;
+  }
+
+  window.history.pushState({}, '', nextUrl);
+  window.dispatchEvent(new Event('popstate'));
+};
+
 export const navigateToHashRoute = (target: string): void => {
   if (typeof window === 'undefined') {
     return;

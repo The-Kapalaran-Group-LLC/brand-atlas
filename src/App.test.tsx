@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 // Mock azure-openai service for async flows
 vi.mock('./services/azure-openai', async () => {
@@ -12,6 +12,11 @@ vi.mock('./services/azure-openai', async () => {
 });
 
 describe('App Component', () => {
+  beforeEach(() => {
+    window.history.pushState({}, '', '/');
+    vi.clearAllMocks();
+  });
+
   async function waitForSplashToDisappear() {
     // Wait for splash screen to be fully unmounted (not in DOM)
     await waitFor(() => {
@@ -19,11 +24,15 @@ describe('App Component', () => {
     }, { timeout: 3000 });
   }
 
+  async function openResearchExperience() {
+    fireEvent.click(screen.getByRole('button', { name: /cultural archaeologist/i }));
+    await screen.findByPlaceholderText(/Brand or Category \(Optional\)/i);
+  }
+
   it('renders the main heading', async () => {
     render(<App />);
     await waitForSplashToDisappear();
-    // Click the experience button to show main form
-    fireEvent.click(screen.getByText(/Cultural Archaeologist/i));
+    await openResearchExperience();
     expect(screen.getByPlaceholderText(/Brand or Category \(Optional\)/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Primary Audience \(Required\) \*/i)).toBeInTheDocument();
   });
@@ -31,7 +40,7 @@ describe('App Component', () => {
   it('has input fields for brand and audience', async () => {
     render(<App />);
     await waitForSplashToDisappear();
-    fireEvent.click(screen.getByText(/Cultural Archaeologist/i));
+    await openResearchExperience();
     expect(screen.getByPlaceholderText(/Brand or Category \(Optional\)/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Primary Audience \(Required\) \*/i)).toBeInTheDocument();
   });
@@ -39,7 +48,7 @@ describe('App Component', () => {
   it('shows brand suggestions as user types', async () => {
     render(<App />);
     await waitForSplashToDisappear();
-    fireEvent.click(screen.getByText(/Cultural Archaeologist/i));
+    await openResearchExperience();
     const brandInput = screen.getByPlaceholderText(/Brand or Category \(Optional\)/i);
     fireEvent.change(brandInput, { target: { value: 'N' } });
     fireEvent.change(brandInput, { target: { value: 'Ni' } });
@@ -50,7 +59,7 @@ describe('App Component', () => {
   it('keeps topic input editable', async () => {
     render(<App />);
     await waitForSplashToDisappear();
-    fireEvent.click(screen.getByText(/Cultural Archaeologist/i));
+    await openResearchExperience();
     const topicInput = screen.getByPlaceholderText(/Topic Focus \(Optional\)/i);
     fireEvent.change(topicInput, { target: { value: 'Sneakers' } });
     await waitFor(() => expect(screen.getByDisplayValue('Sneakers')).toBeInTheDocument());
@@ -59,7 +68,7 @@ describe('App Component', () => {
   it('shows validation error if audience is empty on generate', async () => {
     render(<App />);
     await waitForSplashToDisappear();
-    fireEvent.click(screen.getByText(/Cultural Archaeologist/i));
+    await openResearchExperience();
     const generateBtn = screen.getByRole('button', { name: /generate/i });
     fireEvent.click(generateBtn);
     expect(await screen.findByText(/Audience is required/i)).toBeInTheDocument();
@@ -71,7 +80,7 @@ describe('App Component', () => {
     vi.spyOn(azure, 'generateCulturalMatrix').mockImplementation(() => new Promise(() => {}));
     render(<App />);
     await waitForSplashToDisappear();
-    fireEvent.click(screen.getByText(/Cultural Archaeologist/i));
+    await openResearchExperience();
     fireEvent.change(screen.getByPlaceholderText(/Primary Audience/i), { target: { value: 'Gen Z' } });
     const generateBtn = screen.getByRole('button', { name: /generate/i });
     fireEvent.click(generateBtn);
@@ -83,7 +92,7 @@ describe('App Component', () => {
     vi.mocked(suggestBrands).mockRejectedValueOnce(new Error('API error'));
     render(<App />);
     await waitForSplashToDisappear();
-    fireEvent.click(screen.getByText(/Cultural Archaeologist/i));
+    await openResearchExperience();
     const brandInput = screen.getByPlaceholderText(/Brand or Category/i);
     fireEvent.change(brandInput, { target: { value: 'Ni' } });
     await waitFor(() => expect(screen.getByText(/Failed to get brand suggestions/i)).toBeInTheDocument());
@@ -92,7 +101,7 @@ describe('App Component', () => {
   it('stacks the top action buttons on mobile to add spacing', async () => {
     render(<App />);
     await waitForSplashToDisappear();
-    fireEvent.click(screen.getByText(/Cultural Archaeologist/i));
+    await openResearchExperience();
 
     const actionBar = screen.getByRole('button', { name: /design excavator/i }).parentElement;
 

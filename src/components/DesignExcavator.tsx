@@ -1533,7 +1533,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         {/* Top Navigation / Actions */}
         <div className="absolute top-6 right-6 z-50 no-print flex items-center gap-2">
           <button
-            onClick={() => window.location.assign('/#cultural-archaeologist')}
+            onClick={() => navigateToHashRoute('cultural-archaeologist')}
             className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
           >
             <Search className="w-4 h-4" /> Cultural Archaeologist

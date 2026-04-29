@@ -9,7 +9,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Loader2, Sparkles, FileText, Presentation, ExternalLink, Info, Tag, Users, Filter, ChevronDown, Check, Clock, Trash2, Target, Upload, X, RefreshCw, Palette, ArrowLeft } from 'lucide-react';
 import { BrandResearchMatrix, UploadedFile } from '../services/azure-openai';
 import { generateBrandResearchMatrix, suggestBrands } from '../services/azure-openai';
-import { isBrandNavigatorPath } from '../services/navigation-routes';
+import { navigateToHashRoute, navigateToHomeDashboard } from '../services/navigation';
+import { isBrandNavigatorRoute } from '../services/navigation-routes';
 import { SplashGrid } from './SplashGrid';
 import { BrandDeepDivePage } from './DesignExcavator';
 import { ProgressiveLoader } from './ProgressiveLoader';
@@ -92,7 +93,7 @@ export default function BrandNavigator() {
   const SPLASH_DURATION_MS = 3000;
   const isDirectBrandNavigatorRoute =
     typeof window !== 'undefined' &&
-    isBrandNavigatorPath(window.location.pathname);
+    isBrandNavigatorRoute(window.location.pathname, window.location.hash);
   console.log('[BrandNavigator] Route context:', {
     pathname: typeof window !== 'undefined' ? window.location.pathname : '',
     hash: typeof window !== 'undefined' ? window.location.hash : '',
@@ -999,7 +1000,7 @@ export default function BrandNavigator() {
                   </ul>
                 </button>
                 <button
-                  onClick={() => window.location.assign('/visual-design-excavator')}
+                  onClick={() => navigateToHashRoute('design-excavator')}
                   className="text-left bg-white/90 border border-zinc-200/80 border-[1px] rounded-3xl p-6 hover:border-zinc-300 hover:shadow-sm transition-all h-full flex flex-col justify-start main-box-hover"
                 >
                   <div className="inline-flex items-center gap-2 text-zinc-800 font-semibold mb-2 text-lg md:text-xl items-start">
@@ -1027,7 +1028,7 @@ export default function BrandNavigator() {
 
         {(activeExperience === 'brand' || hasOpenedBrand) && (
           <div className={activeExperience === 'brand' ? '' : 'hidden'}>
-            <BrandDeepDivePage onBack={() => window.location.assign('/?home=1')} />
+            <BrandDeepDivePage onBack={() => navigateToHomeDashboard()} />
           </div>
         )}
 
@@ -1035,7 +1036,7 @@ export default function BrandNavigator() {
           <>
             <div className="absolute top-6 left-6 z-50 no-print">
               <button
-                onClick={() => window.location.assign('/?home=1')}
+                onClick={() => navigateToHomeDashboard()}
                 className="inline-flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400/40 focus:ring-offset-2 rounded-md"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -1045,13 +1046,13 @@ export default function BrandNavigator() {
             {/* Top Navigation / Actions */}
             <div className="absolute top-6 right-6 z-50 no-print flex flex-col items-end gap-3 sm:flex-row sm:items-center sm:gap-2">
               <button
-                onClick={() => window.location.assign('/cultural-archaeologist')}
+                onClick={() => navigateToHashRoute('cultural-archaeologist')}
                 className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
               >
                 <Search className="w-4 h-4" /> Cultural Archaeologist
               </button>
               <button
-                onClick={() => window.location.assign('/visual-design-excavator')}
+                onClick={() => navigateToHashRoute('design-excavator')}
                 className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
               >
                 <Palette className="w-4 h-4" /> Design Excavator

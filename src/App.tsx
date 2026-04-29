@@ -16,7 +16,7 @@ import { TrendLifecycleBadge } from './components/TrendLifecycleBadge';
 import { ProgressiveLoader } from './components/ProgressiveLoader';
 import { Accordion } from './components/Accordion';
 import { FeedbackChatWidget } from './components/FeedbackChatWidget';
-import { navigateToHashRoute } from './services/navigation';
+import { navigateToHashRoute, navigateToHomeDashboard } from './services/navigation';
 import pptxgen from 'pptxgenjs';
 import { supabase } from './services/supabase-client';
 
@@ -259,22 +259,36 @@ const persistSavedMatrices = (matrices: SavedMatrix[]): boolean => {
 
 export default function App() {
   const SPLASH_DURATION_MS = 3000;
-  const skipSplashToHome =
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('home') === '1';
-  const isDirectCulturalRoute =
-    typeof window !== 'undefined' &&
-    (window.location.pathname === '/cultural-archaeologist' || window.location.hash === '#cultural-archaeologist');
-  const isDirectVisualDesignRoute =
-    typeof window !== 'undefined' &&
-    (
-      window.location.pathname === '/design-excavator' ||
-      window.location.hash === '#design-excavator' ||
-      window.location.pathname === '/visual-design-excavator' ||
-      window.location.hash === '#visual-design-excavator'
-    );
+  const resolveExperienceFromLocation = (): 'research' | 'brand' | null => {
+    if (typeof window === 'undefined') return null;
+
+    const pathname = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+
+    if (
+      pathname === '/design-excavator' ||
+      hash === '#design-excavator' ||
+      pathname === '/visual-design-excavator' ||
+      hash === '#visual-design-excavator'
+    ) {
+      return 'brand';
+    }
+
+    if (pathname === '/cultural-archaeologist' || hash === '#cultural-archaeologist') {
+      return 'research';
+    }
+
+    return null;
+  };
+  const shouldSkipSplashForLocation = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    const skipSplashToHome = new URLSearchParams(window.location.search).get('home') === '1';
+    return skipSplashToHome || resolveExperienceFromLocation() !== null;
+  };
+  const initialExperience = resolveExperienceFromLocation();
   // Instantly skip splash in test environments
   const [showSplash, setShowSplash] = useState(() => {
-    if (skipSplashToHome || isDirectCulturalRoute || isDirectVisualDesignRoute) {
+    if (shouldSkipSplashForLocation()) {
       return false;
     }
     if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
@@ -283,11 +297,7 @@ export default function App() {
     return true;
   });
   const [isSplashHeld, setIsSplashHeld] = useState(false);
-  const [activeExperience, setActiveExperience] = useState<'research' | 'brand' | null>(() => {
-    if (isDirectVisualDesignRoute) return 'brand';
-    if (isDirectCulturalRoute) return 'research';
-    return null;
-  });
+  const [activeExperience, setActiveExperience] = useState<'research' | 'brand' | null>(initialExperience);
   const [hasOpenedBrand, setHasOpenedBrand] = useState(false);
   const [brand, setBrand] = useState('');
   const [audience, setAudience] = useState('');
@@ -464,6 +474,32 @@ export default function App() {
   const splashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const splashStartedAtRef = useRef<number | null>(null);
   const splashRemainingMsRef = useRef<number>(SPLASH_DURATION_MS);
+
+  useEffect(() => {
+    const syncExperienceFromLocation = () => {
+      const nextExperience = resolveExperienceFromLocation();
+      const shouldSkipSplash = shouldSkipSplashForLocation();
+      console.log('[App] Syncing experience from location:', {
+        pathname: window.location.pathname,
+        search: window.location.search,
+        hash: window.location.hash,
+        nextExperience,
+        shouldSkipSplash,
+      });
+      if (shouldSkipSplash) {
+        setShowSplash(false);
+      }
+      setActiveExperience(nextExperience);
+    };
+
+    window.addEventListener('hashchange', syncExperienceFromLocation);
+    window.addEventListener('popstate', syncExperienceFromLocation);
+
+    return () => {
+      window.removeEventListener('hashchange', syncExperienceFromLocation);
+      window.removeEventListener('popstate', syncExperienceFromLocation);
+    };
+  }, []);
 
   useEffect(() => {
     if (activeExperience === 'brand') {
@@ -1386,7 +1422,7 @@ export default function App() {
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
                 <button
-                  onClick={() => setActiveExperience('research')}
+                  onClick={() => navigateToHashRoute('cultural-archaeologist')}
                   className="text-left bg-white/90 border border-zinc-200/80 border-[1px] rounded-3xl p-6 hover:border-zinc-300 hover:shadow-sm transition-all h-full flex flex-col justify-start main-box-hover"
                 >
                   <div className="inline-flex items-center gap-2 text-zinc-800 font-semibold mb-2 text-lg md:text-xl items-start">
@@ -1424,7 +1460,7 @@ export default function App() {
                   </ul>
                 </button>
                 <button
-                  onClick={() => setActiveExperience('brand')}
+                  onClick={() => navigateToHashRoute('design-excavator')}
                   className="text-left bg-white/90 border border-zinc-200/80 border-[1px] rounded-3xl p-6 hover:border-zinc-300 hover:shadow-sm transition-all h-full flex flex-col justify-start main-box-hover"
                 >
                   <div className="inline-flex items-center gap-2 text-zinc-800 font-semibold mb-2 text-lg md:text-xl items-start">
@@ -1452,7 +1488,7 @@ export default function App() {
 
         {(activeExperience === 'brand' || hasOpenedBrand) && (
           <div className={activeExperience === 'brand' ? '' : 'hidden'}>
-            <BrandDeepDivePage onBack={() => window.location.assign('/?home=1')} />
+            <BrandDeepDivePage onBack={() => navigateToHomeDashboard()} />
           </div>
         )}
 
@@ -1460,7 +1496,7 @@ export default function App() {
           <>
             <div className="absolute top-6 left-6 z-50 no-print">
               <button
-                onClick={() => window.location.assign('/?home=1')}
+                onClick={() => navigateToHomeDashboard()}
                 className="inline-flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400/40 focus:ring-offset-2 rounded-md"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -1476,7 +1512,7 @@ export default function App() {
                 <CompassRoseIcon className="w-4 h-4" /> Brand Navigator
               </button>
               <button
-                onClick={() => window.location.assign('/#design-excavator')}
+                onClick={() => navigateToHashRoute('design-excavator')}
                 className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
               >
                 <Palette className="w-4 h-4" /> Design Excavator
