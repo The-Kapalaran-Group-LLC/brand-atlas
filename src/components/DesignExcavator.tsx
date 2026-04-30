@@ -1688,13 +1688,13 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           <div className="relative md:col-span-2">
-            <Crosshair className="absolute left-4 top-4 w-5 h-5 text-zinc-400" />
+            <Crosshair className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
             <textarea
               value={analysisObjective}
               onChange={(e) => setAnalysisObjective(e.target.value)}
               placeholder="Visual Identity Objective (Optional)"
-              rows={2}
-              className="w-full pl-12 pr-4 py-3 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none text-left"
+              rows={1}
+              className="w-full h-[56px] pl-12 pr-4 py-4 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none text-left"
               disabled={isLoading}
             />
           </div>
