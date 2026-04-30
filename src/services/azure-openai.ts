@@ -488,6 +488,21 @@ type SessionMode = 'cultural' | 'brand' | 'matrix-qa' | 'brand-qa';
 type OutputType = 'json-metadata' | 'analysis' | 'creative';
 type ModelTier = 'default' | 'core';
 
+function getApiBaseUrl(): string {
+  const configured = (((import.meta as any).env?.VITE_API_BASE_URL as string) || '').trim();
+  if (configured) {
+    return configured.replace(/\/$/, '');
+  }
+
+  // In browsers, default to same-origin so deployments do not accidentally call localhost.
+  if (typeof window !== 'undefined') {
+    return '';
+  }
+
+  // In non-browser runtimes, keep localhost fallback for local server-side workflows.
+  return 'http://localhost:3001';
+}
+
 const sessionResearchBrief = new Map<SessionMode, string>();
 
 const SubQueryPlanSchema = z.object({
@@ -731,9 +746,7 @@ async function gatherEvidenceForTopic(topic: string, mode: SessionMode): Promise
   // Fetch real backend search results in parallel; do not ask the model to invent URLs.
   const searchPromises = queries.map(async (query) => {
     try {
-      const baseUrl = typeof window !== 'undefined'
-        ? ((import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL || 'http://localhost:3001')
-        : 'http://localhost:3001';
+      const baseUrl = getApiBaseUrl();
       const res = await fetch(`${baseUrl}/api/search?q=${encodeURIComponent(query)}`);
       if (!res.ok) return '';
       const data = await res.json();
@@ -1808,9 +1821,7 @@ export async function generateCulturalMatrix(audience: string, brand?: string, g
     // Naive subreddit guess based on the first word of the audience
     const subredditGuess = audience.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '');
     if (subredditGuess) {
-      const baseUrl = typeof window !== 'undefined'
-        ? ((import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL || 'http://localhost:3001')
-        : 'http://localhost:3001';
+      const baseUrl = getApiBaseUrl();
       const res = await fetch(`${baseUrl}/api/reddit?subreddit=${encodeURIComponent(subredditGuess)}`);
       if (res.ok) {
         const data = await res.json();

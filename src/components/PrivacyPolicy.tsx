@@ -1,4 +1,9 @@
 export default function PrivacyPolicy() {
+  const currentSiteUrl =
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'https://cultural-archeologist.com';
+
   return (
     <div className="min-h-screen bg-[#FAFAFA] text-zinc-900">
       <main className="max-w-4xl mx-auto px-6 py-12 md:py-16">
@@ -7,7 +12,7 @@ export default function PrivacyPolicy() {
           <p className="text-sm text-zinc-600 mb-6"><strong>Effective Date: April 28, 2026</strong></p>
 
           <p className="text-zinc-700 leading-relaxed mb-6">
-            Welcome to Brand Atlas (https://brandatlas.vercel.app/). This Privacy Policy explains how The Kapalaran Group, LLC collects,
+            Welcome to Brand Atlas ({currentSiteUrl}). This Privacy Policy explains how The Kapalaran Group, LLC collects,
             uses, discloses, and safeguards your information when you visit our website and use our services.
           </p>
 
@@ -60,7 +65,7 @@ export default function PrivacyPolicy() {
           <p className="text-sm text-zinc-600 mb-6"><strong>Effective Date: April 28, 2026</strong></p>
 
           <p className="text-zinc-700 leading-relaxed mb-6">
-            These Terms of Use ("Terms") govern your access to and use of Brand Atlas (https://brandatlas.vercel.app/). By accessing or using our website,
+            These Terms of Use ("Terms") govern your access to and use of Brand Atlas ({currentSiteUrl}). By accessing or using our website,
             you agree to be bound by these Terms. If you disagree with any part of the terms, then you may not access the service.
           </p>
 

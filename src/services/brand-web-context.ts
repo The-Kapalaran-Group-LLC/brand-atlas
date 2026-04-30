@@ -11,7 +11,9 @@ export interface BrandWebsiteContext {
 }
 
 const getApiBaseUrl = (): string => {
-  const configured = (((import.meta as any).env?.VITE_IMAGE_PROXY_BASE_URL as string) || '').trim();
+  const configured =
+    (((import.meta as any).env?.VITE_API_BASE_URL as string) || '').trim() ||
+    (((import.meta as any).env?.VITE_IMAGE_PROXY_BASE_URL as string) || '').trim();
   if (configured) {
     return configured.replace(/\/$/, '');
   }
