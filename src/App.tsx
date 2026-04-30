@@ -117,7 +117,7 @@ const getErrorMessage = (error: unknown): string => {
   return String(error);
 };
 
-const stripDemographicEvidenceMarkers = (value: string): string => {
+const stripDemographicEvidenceMarkers = (value: string | null | undefined): string => {
   if (!value) return '';
 
   return value
@@ -201,7 +201,7 @@ const evidenceLabelChipClass = (label: EvidenceTagLabel): string => {
   return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
 };
 
-const sanitizeDemographics = (demographics: { age: string; race: string; gender: string }) => ({
+const sanitizeDemographics = (demographics: { age?: string | null; race?: string | null; gender?: string | null }) => ({
   age: stripDemographicEvidenceMarkers(demographics.age),
   race: stripDemographicEvidenceMarkers(demographics.race),
   gender: stripDemographicEvidenceMarkers(demographics.gender),

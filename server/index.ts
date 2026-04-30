@@ -5,6 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fetchAudienceContext } from '../lib/grounding.js';
+import { fetchSubredditQuotes } from '../lib/fetchSubredditQuotes.js';
 import { processImageForUI, type ProcessedImageResult } from './image-processing';
 import { extractBrandImages, type BrandImagesResult } from './brand-images';
 import { extractBrandWebContext, type BrandWebContextResult } from './brand-web-context';
@@ -295,6 +297,28 @@ app.get('/api/brand-web-context', async (req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(502).json({ error: `Failed to extract brand web context: ${message}` });
+  }
+});
+
+app.get('/api/search', async (req, res) => {
+  const query = req.query.q as string;
+  if (!query) return res.status(400).json({ error: 'Missing query' });
+  try {
+    const context = await fetchAudienceContext(query);
+    res.json({ context });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/reddit', async (req, res) => {
+  const subreddit = req.query.subreddit as string;
+  if (!subreddit) return res.status(400).json({ error: 'Missing subreddit' });
+  try {
+    const quotes = await fetchSubredditQuotes(subreddit);
+    res.json({ quotes });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

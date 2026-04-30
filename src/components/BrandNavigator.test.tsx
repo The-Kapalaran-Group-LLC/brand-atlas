@@ -224,7 +224,11 @@ describe('BrandNavigator', () => {
       expect(supabaseInsert).toHaveBeenCalled();
     });
 
-    const firstInsertPayload = supabaseInsert.mock.calls[0][0]?.[0];
+    const firstInsertPayload = (supabaseInsert as any).mock.calls[0]?.[0]?.[0];
+    expect(firstInsertPayload).toBeDefined();
+    if (!firstInsertPayload) {
+      throw new Error('Expected first supabase insert payload.');
+    }
     expect(firstInsertPayload.custom_name).toMatch(/^BN\|/);
     expect(firstInsertPayload.brand).toBe('Patagonia');
     expect(firstInsertPayload.matrix).toEqual(emptyMatrix);

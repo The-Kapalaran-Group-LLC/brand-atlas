@@ -69,9 +69,9 @@ export interface Source {
 }
 
 export interface Demographics {
-  age: string;
-  race: string;
-  gender: string;
+  age?: string | null;
+  race?: string | null;
+  gender?: string | null;
 }
 
 export interface CulturalMatrix {
@@ -257,18 +257,37 @@ export function shouldRetryWithAlternateDeployment(error: unknown): boolean {
   return false;
 }
 
-async function createChatCompletionWithFallback(
-  requestParams: Omit<ChatCompletionCreateParamsNonStreaming, 'model'>
-): Promise<ChatCompletion> {
-  const client = getAzureAI();
-  const deployments = getDeploymentCandidatesFromEnv();
+function getOrderedDeployments(modelTier: ModelTier): string[] {
   const initialDeployment = getDeploymentName();
-  const orderedDeployments = Array.from(
+  const deployments = getDeploymentCandidatesFromEnv();
+  const coreDeployment = normalizeDeploymentName(process.env.AZURE_OPENAI_CORE_DEPLOYMENT_NAME);
+
+  if (modelTier === 'core') {
+    return Array.from(
+      new Set([
+        coreDeployment,
+        normalizeDeploymentName(process.env.AZURE_OPENAI_PRIMARY_DEPLOYMENT_NAME),
+        initialDeployment,
+        ...deployments,
+      ].map((value) => value.trim()).filter(Boolean))
+    );
+  }
+
+  return Array.from(
     new Set([
       initialDeployment,
       ...deployments,
     ].map((value) => value.trim()).filter(Boolean))
   );
+}
+
+async function createChatCompletionWithFallback(
+  requestParams: Omit<ChatCompletionCreateParamsNonStreaming, 'model'>,
+  modelTier: ModelTier = 'default'
+): Promise<ChatCompletion> {
+  const client = getAzureAI();
+  const orderedDeployments = getOrderedDeployments(modelTier);
+  const initialDeployment = orderedDeployments[0] || getDeploymentName();
 
   let lastError: unknown;
 
@@ -467,6 +486,7 @@ Analogical reasoning protocol:
 
 type SessionMode = 'cultural' | 'brand' | 'matrix-qa' | 'brand-qa';
 type OutputType = 'json-metadata' | 'analysis' | 'creative';
+type ModelTier = 'default' | 'core';
 
 const sessionResearchBrief = new Map<SessionMode, string>();
 
@@ -646,6 +666,7 @@ async function runStructuredCall<T extends z.ZodTypeAny>(params: {
   messages: ChatCompletionMessageParam[];
   mode: SessionMode;
   outputType: OutputType;
+  modelTier?: ModelTier;
   qualityGate?: (parsed: z.infer<T>) => boolean;
   maxRetries?: number;
 }): Promise<z.infer<T>> {
@@ -658,7 +679,7 @@ async function runStructuredCall<T extends z.ZodTypeAny>(params: {
         temperature: outputTemperature(params.outputType),
         messages: params.messages,
         response_format: zodResponseFormat(params.schema, params.schemaName),
-      });
+      }, params.modelTier || 'default');
 
       const text = response.choices[0].message.content || '{}';
       const parsed = params.schema.parse(JSON.parse(text));
@@ -707,25 +728,25 @@ async function gatherEvidenceForTopic(topic: string, mode: SessionMode): Promise
   const queries = await createTargetedSubQueries(topic, mode);
   if (!queries.length) return 'Evidence digest unavailable.';
 
-  const evidence = await runStructuredCall({
-    schema: EvidenceBundleSchema,
-    schemaName: 'evidence_bundle',
-    mode,
-    outputType: 'analysis',
-    messages: [
-      {
-        role: 'system',
-        content: composeSystemPrompt('Collect evidence across queries and classify source quality.', mode),
-      },
-      {
-        role: 'user',
-        content: `Topic:\n${topic}\n\nTargeted sub-queries:\n${queries.map((query, idx) => `${idx + 1}. ${query}`).join('\n')}\n\nFor each query, return 2-4 evidence items with title, URL, publishedAt (if known), concise summary, and provisional source type.`,
-      },
-    ],
-    qualityGate: (parsed) => parsed.evidence.length >= 6,
+  // Fetch real backend search results in parallel; do not ask the model to invent URLs.
+  const searchPromises = queries.map(async (query) => {
+    try {
+      const baseUrl = typeof window !== 'undefined'
+        ? ((import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL || 'http://localhost:3001')
+        : 'http://localhost:3001';
+      const res = await fetch(`${baseUrl}/api/search?q=${encodeURIComponent(query)}`);
+      if (!res.ok) return '';
+      const data = await res.json();
+      return `Query: ${query}\nResults:\n${data.context}`;
+    } catch {
+      return '';
+    }
   });
 
-  return filterAndWeightEvidence(evidence.evidence);
+  const searchResults = await Promise.all(searchPromises);
+  const digest = searchResults.filter(Boolean).join('\n\n');
+
+  return digest ? digest.slice(0, 15000) : 'Evidence digest unavailable.';
 }
 
 function isThinStructuredPayload(payload: unknown): boolean {
@@ -762,6 +783,7 @@ async function runDevilsAdvocatePass(topic: string, draft: unknown, mode: Sessio
     schemaName: 'devils_advocate',
     mode,
     outputType: 'analysis',
+    modelTier: 'core',
     messages: [
       {
         role: 'system',
@@ -1681,9 +1703,9 @@ const SourceSchema = z.object({
 
 const CulturalMatrixSchema = z.object({
   demographics: z.object({
-    age: z.string(),
-    race: z.string(),
-    gender: z.string()
+    age: z.string().nullable().describe("Return null if no specific statistical evidence is found."),
+    race: z.string().nullable().describe("Return null if no specific statistical evidence is found."),
+    gender: z.string().nullable().describe("Return null if no specific statistical evidence is found.")
   }),
   sociological_analysis: z.string().describe("A concise two-paragraph sociological summary of the socio-economic, historical, and cultural forces shaping this audience."),
   moments: z.array(MatrixItemSchema),
@@ -1781,6 +1803,25 @@ export async function generateCulturalMatrix(audience: string, brand?: string, g
     `Audience: ${audience}; Brand: ${brand || 'n/a'}; Topic: ${topicFocus || 'n/a'}; Generations: ${(generations || []).join(', ') || 'n/a'}`,
     'cultural'
   );
+  let redditVerbatim = "";
+  try {
+    // Naive subreddit guess based on the first word of the audience
+    const subredditGuess = audience.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '');
+    if (subredditGuess) {
+      const baseUrl = typeof window !== 'undefined'
+        ? ((import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL || 'http://localhost:3001')
+        : 'http://localhost:3001';
+      const res = await fetch(`${baseUrl}/api/reddit?subreddit=${encodeURIComponent(subredditGuess)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.quotes && data.quotes.length > 0) {
+          redditVerbatim = `\n\nRaw Social Listening Verbatim (Reddit):\n${data.quotes.join('\n')}`;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fetch Reddit verbatim:", e);
+  }
 
   const prompt = `Generate a comprehensive cultural archaeologist report for the following audience: "${audience}"${contextStr}.${topicStr}${generationStr}${filesStr}${sourcesTypeStr}
     
@@ -1808,7 +1849,8 @@ export async function generateCulturalMatrix(audience: string, brand?: string, g
     Also provide a rough demographic breakdown (age, race, gender) for this audience in the context of the brand/category.
 
     Evidence digest (quality and date weighted):
-    ${evidenceDigest}`;
+    ${evidenceDigest}
+    ${redditVerbatim}`;
 
   // Note: Azure OpenAI does not have a built-in "googleSearch" tool like Gemini.
   // To achieve similar web-grounding, you would need to implement an external search tool
