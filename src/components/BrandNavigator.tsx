@@ -19,6 +19,8 @@ import { CompassRoseIcon } from './icons/CompassRoseIcon';
 import pptxgen from 'pptxgenjs';
 import { supabase } from '../services/supabase-client';
 
+const BRAND_NAVIGATOR_TABLE = 'BrandNavigator';
+
 
 
 interface SavedMatrix {
@@ -131,6 +133,44 @@ const parseBrandsInput = (value: string): string[] => {
     .map((item) => item.trim())
     .filter(Boolean);
   return Array.from(new Set(parsed));
+};
+
+const buildBrandNavigatorCustomName = (
+  brands: string[],
+  audience: string,
+  topic: string
+): string => {
+  const brandSegment = brands.length > 0 ? brands.join('+') : 'General';
+  const audienceSegment = audience.trim() || 'AnyAudience';
+  const topicSegment = topic.trim() || 'GeneralTopic';
+  const timestamp = new Date().toISOString();
+  return `BN|${brandSegment}|${audienceSegment}|${topicSegment}|${timestamp}`;
+};
+
+const EMPTY_BRAND_RESEARCH_MATRIX: BrandResearchMatrix = {
+  analysisObjective: '',
+  ecosystemMethod: '',
+  results: [],
+  sources: [],
+};
+
+const normalizeSavedMatrixRow = (row: any): SavedMatrix => {
+  return {
+    id: String(row?.id || `bn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+    date: row?.created_at || row?.createdAt || new Date().toISOString(),
+    brand: row?.brand || '',
+    audience: row?.audience || '',
+    generations: Array.isArray(row?.generations) ? row.generations : [],
+    topicFocus: row?.topic_focus ?? row?.topicFocus ?? undefined,
+    sourcesType: Array.isArray(row?.sources_type)
+      ? row.sources_type
+      : Array.isArray(row?.sourcesType)
+        ? row.sourcesType
+        : [],
+    hasUploadedDocuments: Boolean(row?.has_uploaded_documents ?? row?.hasUploadedDocuments),
+    customName: row?.custom_name ?? row?.customName ?? undefined,
+    matrix: row?.matrix || row?.results || EMPTY_BRAND_RESEARCH_MATRIX,
+  };
 };
 
 export default function BrandNavigator() {
@@ -355,11 +395,14 @@ export default function BrandNavigator() {
   useEffect(() => {
     const fetchSavedMatrices = async () => {
       const { data, error } = await supabase
-        .from('searches')
+        .from(BRAND_NAVIGATOR_TABLE)
         .select('*')
-        .order('createdAt', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(20);
-      if (!error) setSavedMatrices(data || []);
+      if (!error) {
+        const normalizedRows = (data || []).map(normalizeSavedMatrixRow);
+        setSavedMatrices(normalizedRows);
+      }
     };
     fetchSavedMatrices();
   }, []);
@@ -563,14 +606,17 @@ export default function BrandNavigator() {
         const { device, location, ip_address } = await getUserTelemetry();
 
         // 2. Inject it into the database payload
-        await supabase.from('searches').insert([
+        const customName = buildBrandNavigatorCustomName(brandsForGenerate, audience, topicFocus);
+        await supabase.from(BRAND_NAVIGATOR_TABLE).insert([
           {
+            custom_name: customName,
             brand: brandContext || null,
-            audience,
-            topicFocus: topicFocus || null,
+            audience: audience || null,
+            topic_focus: topicFocus || null,
             generations: selectedGenerations,
-            sourcesType,
-            results: result,
+            sources_type: sourcesType,
+            has_uploaded_documents: hasUploadedDocuments,
+            matrix: result,
             device,
             location,
             ip_address,
@@ -635,7 +681,7 @@ export default function BrandNavigator() {
   };
 
   const deleteSavedMatrix = async (id: string) => {
-    await supabase.from('searches').delete().eq('id', id);
+    await supabase.from(BRAND_NAVIGATOR_TABLE).delete().eq('id', id);
     // Optionally, refresh saved matrices here
   };
 

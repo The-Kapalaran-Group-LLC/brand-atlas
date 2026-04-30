@@ -8,12 +8,18 @@ const {
   askMatrixQuestion,
   generateDeepDive,
   generateDeepDivesBatch,
+  supabaseFrom,
+  supabaseInsert,
+  supabaseLimit,
 } = vi.hoisted(() => ({
   generateBrandResearchMatrix: vi.fn(),
   suggestBrands: vi.fn(),
   askMatrixQuestion: vi.fn(),
   generateDeepDive: vi.fn(),
   generateDeepDivesBatch: vi.fn(),
+  supabaseFrom: vi.fn(),
+  supabaseInsert: vi.fn(async () => ({ data: null, error: null })),
+  supabaseLimit: vi.fn(async () => ({ data: [], error: null })),
 }));
 
 vi.mock('../services/azure-openai', () => ({
@@ -34,12 +40,12 @@ vi.mock('../services/telemetry', () => ({
 
 vi.mock('../services/supabase-client', () => ({
   supabase: {
-    from: vi.fn(() => {
+    from: supabaseFrom.mockImplementation(() => {
       const builder: any = {};
       builder.select = vi.fn(() => builder);
       builder.order = vi.fn(() => builder);
-      builder.limit = vi.fn(async () => ({ data: [], error: null }));
-      builder.insert = vi.fn(async () => ({ data: null, error: null }));
+      builder.limit = supabaseLimit;
+      builder.insert = supabaseInsert;
       builder.delete = vi.fn(() => builder);
       builder.eq = vi.fn(async () => ({ data: null, error: null }));
       return builder;
@@ -65,6 +71,9 @@ describe('BrandNavigator', () => {
   beforeEach(() => {
     window.history.pushState({}, '', '/');
     vi.clearAllMocks();
+    supabaseFrom.mockClear();
+    supabaseInsert.mockClear();
+    supabaseLimit.mockClear();
     suggestBrands.mockResolvedValue(['Nike', 'Adidas']);
     generateBrandResearchMatrix.mockResolvedValue(emptyMatrix);
     askMatrixQuestion.mockResolvedValue({ answer: 'ok', relevantInsights: [] });
@@ -197,5 +206,27 @@ describe('BrandNavigator', () => {
     expect(
       await screen.findByText('Purpose-led outdoor brand with premium durability positioning.')
     ).toBeInTheDocument();
+  });
+
+  it('saves Brand Navigator results to the BrandNavigator table with a custom_name', async () => {
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+
+    fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
+
+    await waitFor(() => {
+      expect(generateBrandResearchMatrix).toHaveBeenCalled();
+      expect(supabaseFrom).toHaveBeenCalledWith('BrandNavigator');
+      expect(supabaseInsert).toHaveBeenCalled();
+    });
+
+    const firstInsertPayload = supabaseInsert.mock.calls[0][0]?.[0];
+    expect(firstInsertPayload.custom_name).toMatch(/^BN\|/);
+    expect(firstInsertPayload.brand).toBe('Patagonia');
+    expect(firstInsertPayload.matrix).toEqual(emptyMatrix);
   });
 });
