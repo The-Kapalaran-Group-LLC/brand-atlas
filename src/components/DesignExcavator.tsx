@@ -1687,7 +1687,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-          <div className="relative md:col-span-2">
+          <div className="relative">
             <Crosshair className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
             <textarea
               value={analysisObjective}
