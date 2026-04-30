@@ -699,10 +699,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       return;
     }
 
-    if (!(analysisObjective || '').trim()) {
-      setError('Please provide a visual identity objective.');
-      return;
-    }
+    const resolvedAnalysisObjective =
+      (analysisObjective || '').trim() || 'Compare visual identity systems across selected brands.';
 
     setFakeProgress(5);
     setIsLoading(true);
@@ -715,7 +713,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     try {
       const result = await generateVisualDesign({
         brands: normalizedBrands,
-        analysisObjective,
+        analysisObjective: resolvedAnalysisObjective,
         targetAudience,
       });
 
@@ -785,6 +783,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
     const normalizedBrands = getNormalizedBrands();
     if (normalizedBrands.length === 0) return;
+    const resolvedAnalysisObjective =
+      (analysisObjective || '').trim() || 'Compare visual identity systems across selected brands.';
 
     setIsSubmittingPrompt(true);
     setError(null);
@@ -793,7 +793,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     try {
       const result = await submitVisualDesignPrompt({
         brands: normalizedBrands,
-        analysisObjective,
+        analysisObjective: resolvedAnalysisObjective,
         targetAudience,
         currentReport: report,
         prompt: reportQuestion,
@@ -1733,7 +1733,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                Generate Analysis
+                Generate Visual Analysis
               </>
             )}
             {/* Progress bar is now rendered inside ProgressiveLoader for alignment with % */}

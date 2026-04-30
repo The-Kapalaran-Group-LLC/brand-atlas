@@ -81,7 +81,7 @@ describe('BrandDeepDivePage', () => {
       target: { value: 'Aesop' },
     });
     fireEvent.change(
-      screen.getByPlaceholderText('Visual Identity Objective (Required) e.g. Compare distinctiveness and consistency across premium skincare brands'),
+      screen.getByPlaceholderText('Visual Identity Objective (Optional)'),
       {
         target: { value: 'Compare premium skincare brands' },
       }
@@ -122,7 +122,7 @@ describe('BrandDeepDivePage', () => {
       target: { value: 'Aesop' },
     });
     fireEvent.change(
-      screen.getByPlaceholderText('Visual Identity Objective (Required) e.g. Compare distinctiveness and consistency across premium skincare brands'),
+      screen.getByPlaceholderText('Visual Identity Objective (Optional)'),
       {
         target: { value: 'Compare premium skincare brands' },
       }
@@ -147,7 +147,7 @@ describe('BrandDeepDivePage', () => {
       target: { value: 'Aesop' },
     });
     fireEvent.change(
-      screen.getByPlaceholderText('Visual Identity Objective (Required) e.g. Compare distinctiveness and consistency across premium skincare brands'),
+      screen.getByPlaceholderText('Visual Identity Objective (Optional)'),
       {
         target: { value: 'Compare premium skincare brands' },
       }
