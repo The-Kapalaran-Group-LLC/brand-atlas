@@ -67,6 +67,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Info, Users, Trash2, Plus, Crosshair, Loader2, Presentation, FileText, ImageIcon, Type, Palette, Clock, ExternalLink, Share2, Globe, Tag, Sparkles, ArrowLeft, RefreshCw } from 'lucide-react';
 import { CompassRoseIcon } from './icons/CompassRoseIcon';
 import { navigateToHashRoute } from '../services/navigation';
+import { toSafeExternalHref } from '../services/external-links';
 import {
   BrandColorSpec,
   BrandDeepDiveReport as VisualDesignReport,
@@ -1915,7 +1916,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                             <h3 className="text-xl font-bold text-zinc-900">{profile.brandName}</h3>
                             {profile.website && (
                               <a
-                                href={profile.website}
+                                href={toSafeExternalHref(profile.website)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-indigo-600 transition-colors mt-0.5"
@@ -2100,7 +2101,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                               {(profile.sampleVisuals || []).map((source, idx) => (
                                 <a
                                   key={idx}
-                                  href={source.url}
+                                  href={toSafeExternalHref(source.url)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-flex items-center gap-1.5 text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-full transition-colors"
@@ -2121,7 +2122,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                               {(profile.sampleVisuals || []).map((source, idx) => (
                                 <a
                                   key={idx}
-                                  href={source.url}
+                                  href={toSafeExternalHref(source.url)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-flex items-center gap-1.5 text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-full transition-colors"

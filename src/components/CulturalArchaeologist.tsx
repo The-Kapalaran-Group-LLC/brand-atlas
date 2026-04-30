@@ -17,6 +17,7 @@ import { ProgressiveLoader } from './ProgressiveLoader';
 import { Accordion } from './Accordion';
 import { FeedbackChatWidget } from './FeedbackChatWidget';
 import { navigateToHashRoute, navigateToHomeDashboard } from '../services/navigation';
+import { toSafeExternalHref } from '../services/external-links';
 import pptxgen from 'pptxgenjs';
 import { supabase } from '../services/supabase-client';
 
@@ -1729,7 +1730,7 @@ export default function CulturalArchaeologist() {
                                       {deepDiveResult.sources.map((source, i) => (
                                         <a
                                           key={i}
-                                          href={source.url}
+                                          href={toSafeExternalHref(source.url)}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           className="inline-flex items-center gap-1.5 text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-full transition-colors"
@@ -1820,7 +1821,7 @@ export default function CulturalArchaeologist() {
                             {deepDiveResult.sources.map((source, i) => (
                               <a
                                 key={i}
-                                href={source.url}
+                                href={toSafeExternalHref(source.url)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1.5 text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-full transition-colors"
@@ -2741,7 +2742,7 @@ export default function CulturalArchaeologist() {
                     {matrix.sources.map((source, idx) => (
                       <li key={idx} className="text-sm">
                         <a 
-                          href={source.url} 
+                          href={toSafeExternalHref(source.url)} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="text-indigo-600 hover:text-indigo-800 hover:underline flex items-start gap-2"

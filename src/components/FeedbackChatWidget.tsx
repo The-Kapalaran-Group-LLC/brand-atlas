@@ -7,11 +7,6 @@ import { createPortal } from 'react-dom';
 import { Loader2, MessageSquareText, Send, X } from 'lucide-react';
 import { submitFeedbackToSupabase } from '../api/submitFeedbackToSupabase';
 
-
-const API_BASE_URL =
-  (import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL ||
-  '/api';
-
 const MAX_MESSAGE_LENGTH = 2000;
 
 type SubmitState = {

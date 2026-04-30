@@ -11,6 +11,7 @@ import { BrandResearchMatrix, UploadedFile } from '../services/azure-openai';
 import { generateBrandResearchMatrix, suggestBrands } from '../services/azure-openai';
 import { navigateToHashRoute, navigateToHomeDashboard } from '../services/navigation';
 import { isBrandNavigatorRoute } from '../services/navigation-routes';
+import { toSafeExternalHref } from '../services/external-links';
 import { SplashGrid } from './SplashGrid';
 import { BrandDeepDivePage } from './DesignExcavator';
 import { ProgressiveLoader } from './ProgressiveLoader';
@@ -1829,7 +1830,7 @@ export default function BrandNavigator() {
                     {matrix.sources.map((source, idx) => (
                       <li key={idx} className="text-sm">
                         <a 
-                          href={source.url} 
+                          href={toSafeExternalHref(source.url)} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="text-indigo-600 hover:text-indigo-800 hover:underline flex items-start gap-2"
@@ -2043,7 +2044,7 @@ function BrandResultCard({
             {(brandResult.socialMediaChannels || []).map((channel, channelIndex) => (
               <a
                 key={`${brandName}-social-${channelIndex}`}
-                href={channel.url || '#'}
+                href={toSafeExternalHref(channel.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-full transition-colors"

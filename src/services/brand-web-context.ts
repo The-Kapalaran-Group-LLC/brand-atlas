@@ -1,3 +1,5 @@
+import { sanitizeApiBaseUrl } from './external-links';
+
 export interface BrandWebsiteContextPage {
   url: string;
   title: string;
@@ -15,7 +17,9 @@ const getApiBaseUrl = (): string => {
     (((import.meta as any).env?.VITE_API_BASE_URL as string) || '').trim() ||
     (((import.meta as any).env?.VITE_IMAGE_PROXY_BASE_URL as string) || '').trim();
   if (configured) {
-    return configured.replace(/\/$/, '');
+    const sanitized = sanitizeApiBaseUrl(configured);
+    console.log('[brand-web-context] Resolved API base URL.', { configured, sanitized });
+    return sanitized;
   }
   return '';
 };

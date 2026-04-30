@@ -43,8 +43,8 @@ import type {
 } from "openai/resources/chat/completions";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
-import { createPrecisionIndex } from '../../lib/precision-index';
 import { buildBrandWebsiteContextPrompt, fetchBrandWebsiteContext } from './brand-web-context';
+import { sanitizeApiBaseUrl } from './external-links';
 
 export interface MatrixItem {
   text: string;
@@ -491,7 +491,9 @@ type ModelTier = 'default' | 'core';
 function getApiBaseUrl(): string {
   const configured = (((import.meta as any).env?.VITE_API_BASE_URL as string) || '').trim();
   if (configured) {
-    return configured.replace(/\/$/, '');
+    const sanitized = sanitizeApiBaseUrl(configured);
+    console.log('[azure-openai] Resolved API base URL.', { configured, sanitized });
+    return sanitized;
   }
 
   // In browsers, default to same-origin so deployments do not accidentally call localhost.
@@ -2021,14 +2023,9 @@ export async function generateBrandResearchMatrix(
   let firstPartyContext = '';
 
   if (urlsToScrape.length > 0) {
-    try {
-      const scrapedPages = await createPrecisionIndex(urlsToScrape);
-      firstPartyContext = scrapedPages
-        .map((page) => `First-Party Data for ${page.sourceUrl}:\n${page.cleanMarkdown.slice(0, 3000)}`)
-        .join('\n\n');
-    } catch (e) {
-      console.warn("Failed to scrape brand websites", e);
-    }
+    console.log('[brand-research] Skipping precision index in browser runtime to avoid Node-only dependencies.', {
+      urlsToScrapeCount: urlsToScrape.length,
+    });
   }
 
   const prompt = `Generate a brand intelligence report for the following brands: ${brandContext}.${audienceStr}${topicStr}${generationStr}${filesStr}${sourcesTypeStr}
