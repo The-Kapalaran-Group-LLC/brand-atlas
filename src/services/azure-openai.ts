@@ -561,6 +561,13 @@ const AUTHORITATIVE_DOMAIN_PATTERNS = [
   /ft\.com$/i,
   /reuters\.com$/i,
   /bloomberg\.com$/i,
+  /sec\.gov$/i,
+  /seekingalpha\.com$/i,
+  /thedrum\.com$/i,
+  /campaignlive\.com$/i,
+  /prweek\.com$/i,
+  /g2\.com$/i,
+  /capterra\.com$/i,
 ];
 
 type ValidatedNewsItem = {
@@ -734,13 +741,27 @@ function monthsOld(dateValue?: string | null): number | null {
   return yearDiff * 12 + monthDiff;
 }
 
-function scoreEvidenceDomain(url: string): { quality: 'authoritative' | 'mainstream' | 'behavioral' | 'community' | 'unknown'; weight: number } {
+export function scoreEvidenceDomain(url: string): { quality: 'authoritative' | 'mainstream' | 'behavioral' | 'community' | 'unknown'; weight: number } {
   const hostname = getHostname(url);
   if (!hostname) return { quality: 'unknown', weight: 0.5 };
-  if (/reddit\.com$/i.test(hostname)) return { quality: 'behavioral', weight: 0.85 };
+  if (/reddit\.com$|trustpilot\.com$|g2\.com$|capterra\.com$/i.test(hostname)) return { quality: 'behavioral', weight: 0.9 };
   if (AUTHORITATIVE_DOMAIN_PATTERNS.some((pattern) => pattern.test(hostname))) return { quality: 'authoritative', weight: 1.3 };
-  if (/quora\.com$|discord\.com$|facebook\.com$|x\.com$|twitter\.com$/i.test(hostname)) return { quality: 'community', weight: 0.7 };
+  if (/quora\.com$|discord\.com$|facebook\.com$|x\.com$|twitter\.com$|glassdoor\.com$/i.test(hostname)) return { quality: 'community', weight: 0.7 };
   return { quality: 'mainstream', weight: 1.0 };
+}
+
+export function buildBrandModeSubQueries(topic: string): string[] {
+  const brandMatch = topic.match(/Brands?:\s*([^;]+)/i);
+  const coreBrand = brandMatch ? brandMatch[1].split(',')[0].trim() : topic.split(' ')[0];
+  const safeBrand = coreBrand || topic.trim().split(' ')[0] || 'brand';
+
+  return [
+    `"${safeBrand}" (site:sec.gov OR site:seekingalpha.com OR "investor relations" OR "annual report")`,
+    `"${safeBrand}" campaign OR positioning (site:adweek.com OR site:thedrum.com OR site:campaignlive.com OR site:prweek.com)`,
+    `"${safeBrand}" ("CMO" OR "CEO" OR "Chief Marketing Officer") interview OR strategy`,
+    `"${safeBrand}" reviews weaknesses OR complaints (site:g2.com OR site:trustpilot.com OR site:reddit.com)`,
+    `"${safeBrand}" recent news OR acquisition OR launch`,
+  ];
 }
 
 function filterAndWeightEvidence(items: z.infer<typeof EvidenceItemSchema>[]): string {
@@ -816,6 +837,12 @@ async function runStructuredCall<T extends z.ZodTypeAny>(params: {
 }
 
 async function createTargetedSubQueries(topic: string, mode: SessionMode): Promise<string[]> {
+  if (mode === 'brand') {
+    const finalQueries = buildBrandModeSubQueries(topic);
+    console.log('[brand-research] Using hardcoded strategic sub-queries', { topic, queries: finalQueries });
+    return finalQueries;
+  }
+
   const plan = await runStructuredCall({
     schema: SubQueryPlanSchema,
     schemaName: 'sub_query_plan',
@@ -2215,6 +2242,8 @@ export async function generateBrandResearchMatrix(
 
 Requirements:
 - Use the same research rigor: recent evidence (2024-2026), explicit uncertainty handling, and source grounding.
+- For "strategicMoatsStrengths" and "potentialThreatsWeaknesses", heavily weigh financial filings, investor relations data, and aggregate review data. Look past marketing fluff to find actual business realities.
+- For "brandPositioning" and "targetAudiences", prioritize quotes and strategies mentioned by executives in interviews or trade press.
 - Return one complete result object per brand in "results".
 - Each brand result must include:
   1) highLevelSummary (2-4 sentence executive summary of strategy, positioning, and market posture)

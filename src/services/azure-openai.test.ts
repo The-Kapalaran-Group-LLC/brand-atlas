@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildBrandModeSubQueries,
   formatDevilsAdvocateLens,
   getDeploymentCandidatesFromEnv,
+  scoreEvidenceDomain,
   shouldRetryWithAlternateDeployment,
 } from './azure-openai';
 
@@ -66,5 +68,30 @@ describe('deployment fallback helpers', () => {
     });
 
     expect(shouldRetry).toBe(false);
+  });
+});
+
+describe('brand evidence query helpers', () => {
+  it('builds targeted brand-mode dork queries from brand context', () => {
+    const queries = buildBrandModeSubQueries('Brands: Nike, Adidas; Audience: runners; Topic: footwear');
+
+    expect(queries).toHaveLength(5);
+    expect(queries[0]).toContain('"Nike"');
+    expect(queries[0]).toContain('site:sec.gov');
+    expect(queries[1]).toContain('site:adweek.com');
+    expect(queries[3]).toContain('site:trustpilot.com');
+  });
+});
+
+describe('evidence domain scoring', () => {
+  it('classifies SEC and trade press domains as authoritative', () => {
+    expect(scoreEvidenceDomain('https://www.sec.gov/ixviewer/ix.html')).toEqual({ quality: 'authoritative', weight: 1.3 });
+    expect(scoreEvidenceDomain('https://www.thedrum.com/news')).toEqual({ quality: 'authoritative', weight: 1.3 });
+  });
+
+  it('classifies review and community domains with lower behavioral/community weights', () => {
+    expect(scoreEvidenceDomain('https://www.g2.com/products/acme/reviews')).toEqual({ quality: 'behavioral', weight: 0.9 });
+    expect(scoreEvidenceDomain('https://www.trustpilot.com/review/example.com')).toEqual({ quality: 'behavioral', weight: 0.9 });
+    expect(scoreEvidenceDomain('https://twitter.com/example')).toEqual({ quality: 'community', weight: 0.7 });
   });
 });
