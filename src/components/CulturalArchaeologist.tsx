@@ -128,10 +128,17 @@ const getErrorMessage = (error: unknown): string => {
 const stripDemographicEvidenceMarkers = (value: string | null | undefined): string => {
   if (!value) return '';
 
-  return value
+  const cleaned = value
     .replace(/\[(KNOWN|INFERRED|INFERED|SPECULATIVE)\]\s*/gi, '')
     .replace(/\b(KNOWN|INFERRED|INFERED|SPECULATIVE)\b\s*[:\-]?\s*/gi, '')
     .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  // Remove trailing delimiter artifacts that frequently appear in model outputs,
+  // e.g. "18-34 /" or "Female." after marker stripping.
+  return cleaned
+    .replace(/\s*[/|,;:]+\s*$/, '')
+    .replace(/\s*[.]+\s*$/, '')
     .trim();
 };
 
