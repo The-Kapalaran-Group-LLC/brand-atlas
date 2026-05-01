@@ -1579,7 +1579,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="mb-12 text-center flex flex-col items-center pt-28 sm:pt-0"
+        className="mb-12 text-center flex flex-col items-center pt-28 sm:pt-14"
       >
         <div className="inline-flex items-center justify-center p-2 bg-white rounded-2xl shadow-sm border border-indigo-200/80 mb-8">
           <Palette className="w-5 h-5 text-indigo-600" />

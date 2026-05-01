@@ -41,10 +41,19 @@ function RootRouter() {
   if (rootView === 'privacy-policy') {
     return <PrivacyPolicy />;
   }
-  if (rootView === 'brand-navigator') {
-    return <BrandNavigator />;
-  }
-  return <App />;
+
+  const showBrandNavigator = rootView === 'brand-navigator';
+
+  return (
+    <>
+      <div style={{ display: showBrandNavigator ? 'block' : 'none' }}>
+        <BrandNavigator />
+      </div>
+      <div style={{ display: showBrandNavigator ? 'none' : 'block' }}>
+        <App />
+      </div>
+    </>
+  );
 }
 
 createRoot(document.getElementById('root')!).render(

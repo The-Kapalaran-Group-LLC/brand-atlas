@@ -414,7 +414,7 @@ describe('BrandNavigator', () => {
       throw new Error('Expected recent news section container.');
     }
     expect(
-      within(recentNewsSection).getByText('No recent coverage found from the top mainstream outlets.')
+      within(recentNewsSection).getByText('No recent coverage found from the top mainstream outlets or brand press pages.')
     ).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /corporate source only/i })).not.toBeInTheDocument();
   });
@@ -443,5 +443,193 @@ describe('BrandNavigator', () => {
     expect(firstInsertPayload.custom_name).toMatch(/^BN\|/);
     expect(firstInsertPayload.brand).toBe('Patagonia');
     expect(firstInsertPayload.matrix).toEqual(emptyMatrix);
+  });
+
+  it('shows compare-across-brands option when clicking a result section and more than one brand is analyzed', async () => {
+    generateBrandResearchMatrix.mockResolvedValue({
+      analysisObjective: 'test objective',
+      ecosystemMethod: 'test method',
+      results: [
+        {
+          brandName: 'Patagonia',
+          highLevelSummary: 'Summary A',
+          brandMission: 'Mission A',
+          brandPositioning: {
+            taglines: [],
+            keyMessagesAndClaims: [],
+            valueProposition: 'Value A',
+            voiceAndTone: 'Tone A',
+          },
+          keyOfferingsProductsServices: [],
+          strategicMoatsStrengths: [],
+          potentialThreatsWeaknesses: [],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: [],
+          socialMediaChannels: [],
+          recentNews: [],
+          sources: [],
+        },
+        {
+          brandName: 'Nike',
+          highLevelSummary: 'Summary B',
+          brandMission: 'Mission B',
+          brandPositioning: {
+            taglines: [],
+            keyMessagesAndClaims: [],
+            valueProposition: 'Value B',
+            voiceAndTone: 'Tone B',
+          },
+          keyOfferingsProductsServices: [],
+          strategicMoatsStrengths: [],
+          potentialThreatsWeaknesses: [],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: [],
+          socialMediaChannels: [],
+          recentNews: [],
+          sources: [],
+        },
+      ],
+      sources: [],
+    });
+
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Patagonia, Nike' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+
+    fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
+
+    const missionSections = await screen.findAllByTestId('brand-result-section-brand-mission');
+    fireEvent.click(missionSections[0]);
+
+    expect(await screen.findByRole('button', { name: /compare across brands/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /compare across brands/i }));
+
+    expect(await screen.findByText(/Compare Across Brands:\s*Brand mission/i)).toBeInTheDocument();
+  });
+
+  it('scrolls to compare panel when compare across brands is selected', async () => {
+    const scrollIntoViewMock = vi.fn();
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoViewMock;
+
+    generateBrandResearchMatrix.mockResolvedValue({
+      analysisObjective: 'test objective',
+      ecosystemMethod: 'test method',
+      results: [
+        {
+          brandName: 'Patagonia',
+          highLevelSummary: 'Summary A',
+          brandMission: 'Mission A',
+          brandPositioning: {
+            taglines: [],
+            keyMessagesAndClaims: [],
+            valueProposition: 'Value A',
+            voiceAndTone: 'Tone A',
+          },
+          keyOfferingsProductsServices: [],
+          strategicMoatsStrengths: [],
+          potentialThreatsWeaknesses: [],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: [],
+          socialMediaChannels: [],
+          recentNews: [],
+          sources: [],
+        },
+        {
+          brandName: 'Nike',
+          highLevelSummary: 'Summary B',
+          brandMission: 'Mission B',
+          brandPositioning: {
+            taglines: [],
+            keyMessagesAndClaims: [],
+            valueProposition: 'Value B',
+            voiceAndTone: 'Tone B',
+          },
+          keyOfferingsProductsServices: [],
+          strategicMoatsStrengths: [],
+          potentialThreatsWeaknesses: [],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: [],
+          socialMediaChannels: [],
+          recentNews: [],
+          sources: [],
+        },
+      ],
+      sources: [],
+    });
+
+    try {
+      render(<BrandNavigator />);
+      fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+      const brandsInput = await screen.findByTestId('brands-input');
+      fireEvent.change(brandsInput, { target: { value: 'Patagonia, Nike' } });
+      fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+
+      fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
+
+      const missionSections = await screen.findAllByTestId('brand-result-section-brand-mission');
+      fireEvent.click(missionSections[0]);
+
+      fireEvent.click(await screen.findByRole('button', { name: /compare across brands/i }));
+
+      expect(await screen.findByTestId('compare-across-brands-panel')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(scrollIntoViewMock).toHaveBeenCalled();
+      });
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    }
+  });
+
+  it('does not show compare-across-brands option when only one brand is analyzed', async () => {
+    generateBrandResearchMatrix.mockResolvedValue({
+      analysisObjective: 'test objective',
+      ecosystemMethod: 'test method',
+      results: [
+        {
+          brandName: 'Patagonia',
+          highLevelSummary: 'Summary',
+          brandMission: 'Mission',
+          brandPositioning: {
+            taglines: [],
+            keyMessagesAndClaims: [],
+            valueProposition: 'Value',
+            voiceAndTone: 'Tone',
+          },
+          keyOfferingsProductsServices: [],
+          strategicMoatsStrengths: [],
+          potentialThreatsWeaknesses: [],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: [],
+          socialMediaChannels: [],
+          recentNews: [],
+          sources: [],
+        },
+      ],
+      sources: [],
+    });
+
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+
+    fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
+
+    const missionSection = await screen.findByTestId('brand-result-section-brand-mission');
+    fireEvent.click(missionSection);
+
+    expect(screen.queryByRole('button', { name: /compare across brands/i })).not.toBeInTheDocument();
   });
 });

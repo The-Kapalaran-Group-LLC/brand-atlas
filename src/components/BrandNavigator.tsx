@@ -26,6 +26,7 @@ import { FeedbackChatWidget } from './FeedbackChatWidget';
 import { CompassRoseIcon } from './icons/CompassRoseIcon';
 import pptxgen from 'pptxgenjs';
 import { supabase } from '../services/supabase-client';
+import { saveCulturalPrefill } from '../services/cultural-prefill';
 
 const BRAND_NAVIGATOR_TABLE = 'BrandNavigator';
 
@@ -258,6 +259,26 @@ export default function BrandNavigator() {
       setHasOpenedBrand(true);
     }
   }, [activeExperience]);
+
+  useEffect(() => {
+    const syncExperienceFromLocation = () => {
+      if (typeof window === 'undefined') return;
+      const isOnBrandNavigatorRoute = isBrandNavigatorRoute(window.location.pathname, window.location.hash);
+      if (!isOnBrandNavigatorRoute) return;
+
+      setShowSplash(false);
+      setActiveExperience((prev) => prev ?? 'research');
+    };
+
+    syncExperienceFromLocation();
+    window.addEventListener('hashchange', syncExperienceFromLocation);
+    window.addEventListener('popstate', syncExperienceFromLocation);
+
+    return () => {
+      window.removeEventListener('hashchange', syncExperienceFromLocation);
+      window.removeEventListener('popstate', syncExperienceFromLocation);
+    };
+  }, []);
 
   // Auto-hide splash screen after 3 seconds, with press-and-hold pause.
   useEffect(() => {
@@ -762,7 +783,12 @@ export default function BrandNavigator() {
           : ['N/A'];
       case 'recentNews':
         {
-          const recentHeadlineLines = buildRecentHeadlines(brand).map((item) =>
+          const recentHeadlines = buildRecentHeadlines(brand);
+          const pressReleaseFallback = recentHeadlines.length === 0
+            ? pickBrandPressReleaseFallback(brand, brand.brandName || '')
+            : null;
+          const displayItems = pressReleaseFallback ? [pressReleaseFallback] : recentHeadlines;
+          const recentHeadlineLines = displayItems.map((item) =>
             item.url
               ? `${item.headline}${item.outlet ? ` - ${item.outlet}` : ''}${item.publishedAt ? ` (${new Date(item.publishedAt).toLocaleDateString()})` : ''}: ${item.url}`
               : item.headline
@@ -1184,7 +1210,7 @@ export default function BrandNavigator() {
 
         {/* Google Slides export and modal removed for Supabase-only version */}
 
-        <div className="flex flex-col items-center text-center mb-16 no-print pt-28 sm:pt-0">
+        <div className="flex flex-col items-center text-center mb-16 no-print pt-28 sm:pt-14">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1237,14 +1263,14 @@ export default function BrandNavigator() {
           >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               <div className="relative flex flex-col w-full self-start" ref={brandDropdownRef}>
-                <div className={`relative flex items-center w-full bg-white border ${showValidation && normalizedBrands.length === 0 ? 'border-red-500 focus-within:ring-red-500/20 focus-within:border-red-500' : 'border-zinc-200 focus-within:ring-indigo-500/20 focus-within:border-indigo-500'} rounded-2xl text-zinc-900 focus-within:outline-none focus-within:ring-2 transition-all shadow-sm text-sm min-h-[56px]`}>
-                  <Tag className="absolute left-4 w-5 h-5 text-zinc-400" />
-                  <div className="w-full pl-12 pr-12 py-2 flex items-center gap-2 flex-wrap">
+                <div className={`relative flex items-center w-full h-14 bg-white border ${showValidation && normalizedBrands.length === 0 ? 'border-red-500 focus-within:ring-red-500/20 focus-within:border-red-500' : 'border-zinc-200 focus-within:ring-indigo-500/20 focus-within:border-indigo-500'} rounded-2xl text-zinc-900 focus-within:outline-none focus-within:ring-2 transition-all shadow-sm text-sm`}>
+                  <Tag className="absolute left-4 top-4 w-5 h-5 text-zinc-400" />
+                  <div className="w-full h-full pl-12 pr-12 py-0 flex items-center gap-2 flex-nowrap overflow-x-auto">
                     {normalizedBrands.map((brandChip, chipIndex) => (
                       <span
                         key={`${brandChip}-${chipIndex}`}
                         data-testid={`brand-chip-${chipIndex}`}
-                        className="inline-flex items-center gap-1 rounded-full bg-zinc-100 text-zinc-800 border border-zinc-200 px-3 py-1 text-xs font-medium"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-100 text-zinc-800 border border-zinc-200 px-3 py-1 text-xs font-medium"
                       >
                         {brandChip}
                         <button
@@ -1283,7 +1309,7 @@ export default function BrandNavigator() {
                         }
                       }}
                       placeholder={normalizedBrands.length > 0 ? 'Add more brands' : 'Brands (Required)'}
-                      className="flex-1 min-w-[180px] py-2 bg-transparent text-zinc-900 placeholder-zinc-400 focus:outline-none"
+                      className="flex-1 min-w-[140px] h-full py-0 bg-transparent text-zinc-900 placeholder-zinc-400 focus:outline-none"
                       disabled={isLoading}
                     />
                   </div>
@@ -1401,7 +1427,7 @@ export default function BrandNavigator() {
 
               <div className="relative flex flex-col w-full self-start">
                 <div className="relative flex items-center w-full">
-                  <Users className="absolute left-4 w-5 h-5 text-zinc-400" />
+                  <Users className="absolute left-4 top-4 w-5 h-5 text-zinc-400" />
                   <input
                     data-testid="audience-input"
                     type="text"
@@ -1415,7 +1441,7 @@ export default function BrandNavigator() {
                       }
                     }}
                     placeholder="Primary Audience (Optional)"
-                    className="w-full pl-12 pr-12 py-4 bg-white border border-zinc-200 rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
+                    className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
                     disabled={isLoading}
                   />
                   {isDetecting && !audience.trim() && (
@@ -1427,7 +1453,7 @@ export default function BrandNavigator() {
               </div>
 
               <div className="relative flex items-center w-full self-start">
-                <Target className="absolute left-4 w-5 h-5 text-zinc-400" />
+                <Target className="absolute left-4 top-4 w-5 h-5 text-zinc-400" />
                 <input
                   type="text"
                   value={topicFocus}
@@ -1438,7 +1464,7 @@ export default function BrandNavigator() {
                     }
                   }}
                   placeholder="Topic Focus (Optional)"
-                  className="w-full pl-12 pr-12 py-4 bg-white border border-zinc-200 rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
+                  className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
                   disabled={isLoading}
                 />
                 {isDetecting && !topicFocus.trim() && (
@@ -1630,6 +1656,8 @@ export default function BrandNavigator() {
               {isLoading ? (
                 <ProgressiveLoader
                   messages={[
+                  'Pulling brand intelligence...',
+                  'Building audience personas...',
                   'Mapping the competitive landscape...',
                       'Benchmarking brand positioning...',
                       'Identifying market white space...',
@@ -1771,10 +1799,33 @@ export default function BrandNavigator() {
               {isBrandResultsMode ? (
                 <BrandResultsGrid
                   results={brandResults}
+                  sectionTitleMap={sectionTitleMap}
+                  sectionLinesForBrand={sectionLinesForBrand}
                   onAudienceDeepDive={(audienceLabel, brandName) => {
-                    setAudience(audienceLabel || '');
-                    setTopicFocus(`Audience deep dive: ${brandName}`);
-                    setActiveExperience('research');
+                    const audienceFromCard = (audienceLabel || '').trim();
+                    const brandFromCard = (brandName || '').trim();
+                    const topicFromSearch = (topicFocus || '').trim();
+
+                    saveCulturalPrefill({
+                      audience: audienceFromCard,
+                      brand: brandFromCard,
+                      topicFocus: topicFromSearch,
+                    });
+
+                    const params = new URLSearchParams({
+                      home: '1',
+                    });
+                    if (audienceFromCard) {
+                      params.set('ca_audience', audienceFromCard);
+                    }
+                    if (brandFromCard) {
+                      params.set('ca_brand', brandFromCard);
+                    }
+                    if (topicFromSearch) {
+                      params.set('ca_topic', topicFromSearch);
+                    }
+                    const targetUrl = `${window.location.origin}/?${params.toString()}#cultural-archaeologist`;
+                    window.open(targetUrl, '_blank', 'noopener,noreferrer');
                   }}
                 />
               ) : (
@@ -1931,6 +1982,8 @@ type ParsedHeadline = {
   outlet?: string;
 };
 
+const PRESS_RELEASE_KEYWORDS = ['press', 'press-release', 'pressroom', 'newsroom', 'media', 'announcements', 'investor'];
+
 const SOCIAL_CHANNEL_HOSTNAMES: Record<string, string[]> = {
   instagram: ['instagram.com', 'www.instagram.com'],
   linkedin: ['linkedin.com', 'www.linkedin.com'],
@@ -2012,6 +2065,90 @@ const extractBrandTokens = (brandName: string): { compact: string; tokens: strin
     .filter((token) => token.length >= 3 && !BRAND_TOKEN_STOPWORDS.has(token));
   const compact = normalized.replace(/[^a-z0-9]/g, '');
   return { compact, tokens };
+};
+
+const inferIsoDateFromText = (value: string): string | undefined => {
+  const text = (value || '').trim();
+  if (!text) return undefined;
+
+  const numericDateMatch = text.match(/(20\d{2})[\/-](\d{1,2})[\/-](\d{1,2})/);
+  if (numericDateMatch) {
+    const [, y, m, d] = numericDateMatch;
+    const parsed = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T00:00:00Z`);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+
+  const monthDateMatch = text.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+20\d{2}\b/i);
+  if (monthDateMatch) {
+    const parsed = new Date(monthDateMatch[0]);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+
+  return undefined;
+};
+
+const getOutletFromUrl = (url?: string): string | undefined => {
+  const normalized = normalizeExternalHttpUrl(url);
+  if (!normalized) return undefined;
+  try {
+    return new URL(normalized).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return undefined;
+  }
+};
+
+const pickBrandPressReleaseFallback = (brandResult: BrandResultEntry, brandName: string): ParsedHeadline | null => {
+  const sources = brandResult.sources || [];
+  if (sources.length === 0) return null;
+
+  const { compact, tokens } = extractBrandTokens(brandName);
+  const candidates: Array<ParsedHeadline & { score: number; recency: number }> = [];
+
+  for (const source of sources) {
+    const safeUrl = normalizeExternalHttpUrl(source.url);
+    const title = (source.title || '').trim();
+    if (!safeUrl || !title) continue;
+
+    let urlObj: URL;
+    try {
+      urlObj = new URL(safeUrl);
+    } catch {
+      continue;
+    }
+
+    const hostPath = `${urlObj.hostname}${urlObj.pathname}`.toLowerCase();
+    const isPressLike = PRESS_RELEASE_KEYWORDS.some((keyword) => hostPath.includes(keyword) || title.toLowerCase().includes(keyword));
+    if (!isPressLike) continue;
+
+    const normalizedHostPath = hostPath.replace(/[^a-z0-9]/g, '');
+    const brandMatches =
+      (compact && normalizedHostPath.includes(compact)) ||
+      tokens.some((token) => token.length >= 4 && normalizedHostPath.includes(token));
+    if (!brandMatches) continue;
+
+    const publishedAt = inferIsoDateFromText(`${title} ${safeUrl}`);
+    const recency = publishedAt ? new Date(publishedAt).getTime() : 0;
+    const outlet = getOutletFromUrl(safeUrl);
+
+    candidates.push({
+      headline: title,
+      url: safeUrl,
+      ...(publishedAt ? { publishedAt } : {}),
+      ...(outlet ? { outlet } : {}),
+      score: 18 + (publishedAt ? 3 : 0),
+      recency,
+    });
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    if (b.recency !== a.recency) return b.recency - a.recency;
+    return b.score - a.score;
+  });
+
+  const { score: _score, recency: _recency, ...best } = candidates[0];
+  return best;
 };
 
 const socialUrlMatchesBrand = (url: string, brandName: string): boolean => {
@@ -2225,21 +2362,154 @@ const sanitizeBrandResearchMatrix = (rawMatrix: BrandResearchMatrix): BrandResea
 
 function BrandResultsGrid({
   results,
+  sectionTitleMap,
+  sectionLinesForBrand,
   onAudienceDeepDive,
 }: {
   results: BrandResultEntry[];
+  sectionTitleMap: Record<BrandResultSectionKey, string>;
+  sectionLinesForBrand: (brand: BrandResultEntry, key: BrandResultSectionKey) => string[];
   onAudienceDeepDive: (audienceLabel: string, brandName: string) => void;
 }) {
+  const isMultiBrandCompareEnabled = results.length > 1;
+  const [compareSection, setCompareSection] = useState<BrandResultSectionKey | null>(null);
+  const [comparePopup, setComparePopup] = useState<{ x: number; y: number; section: BrandResultSectionKey } | null>(null);
+  const comparePanelRef = useRef<HTMLElement | null>(null);
+
+  const openComparePopup = (event: React.MouseEvent<HTMLElement>, section: BrandResultSectionKey) => {
+    if (!isMultiBrandCompareEnabled) return;
+    const clickedInteractiveElement = (event.target as HTMLElement | null)?.closest('a,button,input,textarea,select,label');
+    if (clickedInteractiveElement) return;
+
+    const popupWidth = 220;
+    const popupHeight = 46;
+    const padding = 12;
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
+
+    const x = Math.min(
+      Math.max(event.clientX + 10, padding),
+      Math.max(padding, viewportWidth - popupWidth - padding)
+    );
+    const y = Math.min(
+      Math.max(event.clientY + 10, padding),
+      Math.max(padding, viewportHeight - popupHeight - padding)
+    );
+
+    setComparePopup({ x, y, section });
+  };
+
+  useEffect(() => {
+    if (!comparePopup) return;
+
+    const closePopup = () => setComparePopup(null);
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closePopup();
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    window.addEventListener('resize', closePopup);
+    window.addEventListener('scroll', closePopup, true);
+
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('resize', closePopup);
+      window.removeEventListener('scroll', closePopup, true);
+    };
+  }, [comparePopup]);
+
+  useEffect(() => {
+    if (!compareSection || !comparePanelRef.current) return;
+    if (typeof comparePanelRef.current.scrollIntoView === 'function') {
+      comparePanelRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [compareSection]);
+
   return (
     <div className="space-y-5">
+      {isMultiBrandCompareEnabled && compareSection && (
+        <section
+          ref={comparePanelRef}
+          data-testid="compare-across-brands-panel"
+          className="bg-white rounded-3xl border border-zinc-200 p-6 space-y-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold text-zinc-900">
+              Compare Across Brands: {sectionTitleMap[compareSection]}
+            </h3>
+            <button
+              type="button"
+              onClick={() => setCompareSection(null)}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-200 text-zinc-600 text-sm hover:bg-zinc-50"
+            >
+              <span>Close Compare</span>
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {BRAND_RESULT_SECTION_KEYS.map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setCompareSection(key)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  compareSection === key
+                    ? 'bg-zinc-900 text-white border-zinc-900'
+                    : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+                }`}
+              >
+                {sectionTitleMap[key]}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {results.map((brandResult, brandIndex) => {
+              const brandLabel = brandResult.brandName || `Brand ${brandIndex + 1}`;
+              const lines = sectionLinesForBrand(brandResult, compareSection);
+              return (
+                <div key={`${brandLabel}-compare-${compareSection}`} className="rounded-2xl border border-zinc-200 p-4 bg-zinc-50/40">
+                  <h4 className="text-sm font-semibold text-zinc-900 mb-2">{brandLabel}</h4>
+                  <ul className="list-disc pl-5 space-y-1 text-sm text-zinc-700">
+                    {lines.map((line, idx) => (
+                      <li key={`${brandLabel}-line-${idx}`}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
       {results.map((brandResult, brandIndex) => (
         <BrandResultCard
           key={`${brandResult.brandName || 'brand'}-${brandIndex}`}
           brandResult={brandResult}
           brandIndex={brandIndex}
+          canCompareAcrossBrands={isMultiBrandCompareEnabled}
+          onRequestCompareAcrossBrands={openComparePopup}
           onAudienceDeepDive={onAudienceDeepDive}
         />
       ))}
+      {comparePopup && isMultiBrandCompareEnabled && (
+        <>
+          <div className="fixed inset-0 z-[100]" onClick={() => setComparePopup(null)} />
+          <div
+            className="fixed z-[101] bg-white border border-zinc-200 rounded-xl shadow-lg px-3 py-2 min-w-[220px]"
+            style={{ left: comparePopup.x, top: comparePopup.y }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setCompareSection(comparePopup.section);
+                setComparePopup(null);
+              }}
+              className="w-full inline-flex items-center gap-2 px-2 py-2 text-sm text-zinc-700 hover:bg-zinc-50 rounded-lg"
+            >
+              <CompareAcrossBrandsIcon className="w-4 h-4" /> Compare Across Brands
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -2247,41 +2517,50 @@ function BrandResultsGrid({
 function BrandResultCard({
   brandResult,
   brandIndex,
+  canCompareAcrossBrands,
+  onRequestCompareAcrossBrands,
   onAudienceDeepDive,
 }: {
   brandResult: BrandResultEntry;
   brandIndex: number;
+  canCompareAcrossBrands: boolean;
+  onRequestCompareAcrossBrands: (event: React.MouseEvent<HTMLElement>, section: BrandResultSectionKey) => void;
   onAudienceDeepDive: (audienceLabel: string, brandName: string) => void;
 }) {
   const brandName = brandResult.brandName || `Brand ${brandIndex + 1}`;
   const positioning = brandResult.brandPositioning || {};
   const sanitizedSocialChannels = sanitizeSocialChannels(brandResult.socialMediaChannels, brandName);
   const recentNewsItems = buildRecentHeadlines(brandResult);
+  const fallbackPressRelease = recentNewsItems.length === 0
+    ? pickBrandPressReleaseFallback(brandResult, brandName)
+    : null;
+  const displayNewsItems = fallbackPressRelease ? [fallbackPressRelease] : recentNewsItems;
 
   console.log('[BrandNavigator] Rendering brand result card with validated links.', {
     brandName,
     socialMediaBefore: (brandResult.socialMediaChannels || []).length,
     socialMediaAfter: sanitizedSocialChannels.length,
     recentHeadlinesCount: recentNewsItems.length,
+    fallbackPressReleaseUsed: Boolean(fallbackPressRelease),
   });
 
   return (
-    <section className="bg-white p-5 rounded-3xl border border-zinc-200 shadow-sm">
+    <section className="bg-zinc-50/60 p-6 rounded-3xl border border-zinc-200 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-shadow duration-300 w-full">
       <h3 className="text-2xl font-bold text-zinc-900 mb-3">{brandName}</h3>
 
       <div
         data-testid="brand-result-sections-layout"
-        className="grid grid-cols-1 lg:grid-cols-2 gap-3 text-sm text-zinc-700 items-start"
+        className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-sm text-zinc-700 items-start"
       >
-        <BrandCriteriaSection title="High-level summary" className="lg:col-span-2">
+        <BrandCriteriaSection title="High-level summary" sectionKey="highLevelSummary" canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} className="lg:col-span-2">
           <p>{brandResult.highLevelSummary || 'N/A'}</p>
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Brand mission">
+        <BrandCriteriaSection title="Brand mission" sectionKey="brandMission" canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands}>
           <p>{brandResult.brandMission || 'N/A'}</p>
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Brand positioning" className="lg:col-span-2">
+        <BrandCriteriaSection title="Brand positioning" sectionKey="brandPositioning" canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} className="lg:col-span-2">
           <div className="space-y-2">
             <BrandResultLabeledBulletList label="Taglines" items={positioning.taglines || []} />
             <BrandResultLabeledBulletList label="Key messages and claims" items={positioning.keyMessagesAndClaims || []} />
@@ -2290,19 +2569,19 @@ function BrandResultCard({
           </div>
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Key offerings/products/services">
+        <BrandCriteriaSection title="Key offerings/products/services" sectionKey="keyOfferingsProductsServices" canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands}>
           <BrandResultBulletList items={brandResult.keyOfferingsProductsServices || []} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Strategic moats (strengths)">
+        <BrandCriteriaSection title="Strategic moats (strengths)" sectionKey="strategicMoatsStrengths" canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands}>
           <BrandResultBulletList items={brandResult.strategicMoatsStrengths || []} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Potential threats (weaknesses)">
+        <BrandCriteriaSection title="Potential threats (weaknesses)" sectionKey="potentialThreatsWeaknesses" canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands}>
           <BrandResultBulletList items={brandResult.potentialThreatsWeaknesses || []} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Target audiences" className="lg:col-span-2">
+        <BrandCriteriaSection title="Target audiences" sectionKey="targetAudiences" canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} className="lg:col-span-2">
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
             {(brandResult.targetAudiences || []).map((aud, audIndex) => (
               <TargetAudienceCard
@@ -2317,15 +2596,15 @@ function BrandResultCard({
           </div>
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Recent campaigns">
+        <BrandCriteriaSection title="Recent campaigns" sectionKey="recentCampaigns" canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands}>
           <BrandResultBulletList items={brandResult.recentCampaigns || []} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Key marketing channels">
+        <BrandCriteriaSection title="Key marketing channels" sectionKey="keyMarketingChannels" canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands}>
           <BrandResultBulletList items={brandResult.keyMarketingChannels || []} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Social media channels">
+        <BrandCriteriaSection title="Social media channels" sectionKey="socialMediaChannels" canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands}>
           <div className="flex flex-wrap gap-2">
             {sanitizedSocialChannels.map((channel, channelIndex) => (
               <a
@@ -2343,10 +2622,10 @@ function BrandResultCard({
           </div>
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Recent news" className="lg:col-span-2">
+        <BrandCriteriaSection title="Recent news" sectionKey="recentNews" canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} className="lg:col-span-2">
           <ul className="space-y-1">
-            {recentNewsItems.length > 0 ? (
-              recentNewsItems.map((item, idx) => (
+            {displayNewsItems.length > 0 ? (
+              displayNewsItems.map((item, idx) => (
                 <li key={`${brandName}-news-${idx}`} className="text-zinc-700">
                   {item.url ? (
                     <a
@@ -2377,7 +2656,7 @@ function BrandResultCard({
                 </li>
               ))
             ) : (
-              <li className="text-zinc-500">No recent coverage found from the top mainstream outlets.</li>
+              <li className="text-zinc-500">No recent coverage found from the top mainstream outlets or brand press pages.</li>
             )}
           </ul>
         </BrandCriteriaSection>
@@ -2401,7 +2680,7 @@ function TargetAudienceCard({
 }) {
   const audienceLabel = audience.audience || 'N/A';
   return (
-    <div className="rounded-2xl border border-zinc-200 p-4 bg-zinc-50/60 h-fit self-start">
+    <div className="rounded-2xl border border-zinc-200 bg-zinc-50/80 p-5 shadow-[0_1px_6px_-3px_rgba(0,0,0,0.08)] h-fit self-start">
       <BrandResultInlineField label="Audience" value={audienceLabel} />
       <BrandResultInlineField label="Priority of audience" value={audience.priority} />
       <BrandResultInlineField label="Role to consumers" value={audience.inferredRoleToConsumers} />
@@ -2411,9 +2690,9 @@ function TargetAudienceCard({
         type="button"
         data-testid={`deep-dive-audience-${brandIndex}-${audienceIndex}`}
         onClick={() => onAudienceDeepDive(audienceLabel, brandName)}
-        className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700"
+        className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-indigo-200 bg-indigo-100 text-zinc-700 text-xs font-medium hover:bg-indigo-400"
       >
-        Open In Cultural Archaeologist
+        Analyze Audience
       </button>
     </div>
   );
@@ -2421,22 +2700,48 @@ function TargetAudienceCard({
 
 function BrandCriteriaSection({
   title,
+  sectionKey,
+  canCompareAcrossBrands = false,
+  onRequestCompareAcrossBrands,
   className = '',
   children,
 }: {
   title: string;
+  sectionKey?: BrandResultSectionKey;
+  canCompareAcrossBrands?: boolean;
+  onRequestCompareAcrossBrands?: (event: React.MouseEvent<HTMLElement>, section: BrandResultSectionKey) => void;
   className?: string;
   children: React.ReactNode;
 }) {
   const sectionTestId = `brand-result-section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
+  const compareEnabled = canCompareAcrossBrands && Boolean(sectionKey) && Boolean(onRequestCompareAcrossBrands);
   return (
     <div
       data-testid={sectionTestId}
-      className={`rounded-2xl border border-zinc-200 bg-zinc-50/50 p-3 h-fit self-start ${className}`.trim()}
+      onClick={(event) => {
+        if (!compareEnabled || !sectionKey || !onRequestCompareAcrossBrands) return;
+        onRequestCompareAcrossBrands(event, sectionKey);
+      }}
+      className={`rounded-2xl border border-zinc-200 bg-zinc-50/80 p-5 shadow-[0_1px_6px_-3px_rgba(0,0,0,0.08)] h-fit self-start ${compareEnabled ? 'cursor-pointer hover:border-zinc-300' : ''} ${className}`.trim()}
     >
-      <h4 className="text-sm font-semibold text-zinc-900 mb-1">{title}</h4>
+      <h4 className="text-sm font-semibold text-zinc-900 mb-2 uppercase tracking-wider inline-flex items-center gap-2">
+        <span>{title}</span>
+        {compareEnabled ? <CompareAcrossBrandsIcon className="w-3.5 h-3.5 text-zinc-400" /> : null}
+      </h4>
       {children}
     </div>
+  );
+}
+
+function CompareAcrossBrandsIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex items-center justify-center rounded-[4px] border border-current font-bold leading-none tracking-tight ${className}`}
+      style={{ fontSize: '0.56rem' }}
+    >
+      VS
+    </span>
   );
 }
 

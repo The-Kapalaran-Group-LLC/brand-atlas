@@ -18,6 +18,7 @@ import { Accordion } from './Accordion';
 import { FeedbackChatWidget } from './FeedbackChatWidget';
 import { navigateToHashRoute, navigateToHomeDashboard } from '../services/navigation';
 import { toSafeExternalHref } from '../services/external-links';
+import { clearCulturalPrefill, readCulturalPrefill } from '../services/cultural-prefill';
 import {
   BRAND_SUGGESTION_DEBOUNCE_MS,
   getLocalBrandSuggestions,
@@ -523,6 +524,60 @@ export default function CulturalArchaeologist() {
       setHasOpenedBrand(true);
     }
   }, [activeExperience]);
+
+  useEffect(() => {
+    let prefillAudience = '';
+    let prefillBrand = '';
+    let prefillTopic = '';
+
+    if (typeof window !== 'undefined') {
+      const query = new URLSearchParams(window.location.search);
+      prefillAudience = (query.get('ca_audience') || '').trim();
+      prefillBrand = (query.get('ca_brand') || '').trim();
+      prefillTopic = (query.get('ca_topic') || '').trim();
+
+      if (prefillAudience || prefillBrand || prefillTopic) {
+        query.delete('ca_audience');
+        query.delete('ca_brand');
+        query.delete('ca_topic');
+        const nextSearch = query.toString();
+        const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
+        window.history.replaceState({}, '', nextUrl);
+      }
+    }
+
+    const prefill = readCulturalPrefill();
+    if (!prefillAudience && !prefillBrand && !prefillTopic && prefill) {
+      prefillAudience = (prefill.audience || '').trim();
+      prefillBrand = (prefill.brand || '').trim();
+      prefillTopic = (prefill.topicFocus || '').trim();
+    }
+
+    if (!prefillAudience && !prefillBrand && !prefillTopic) {
+      return;
+    }
+
+    if (prefillAudience) {
+      setAudience(prefillAudience);
+    }
+
+    if (prefillBrand) {
+      const parsedBrands = parseBrandsInput(prefillBrand);
+      if (parsedBrands.length > 0) {
+        setSelectedBrands(parsedBrands);
+        setBrandInput('');
+      } else {
+        setSelectedBrands([]);
+        setBrandInput(prefillBrand);
+      }
+    }
+
+    if (prefillTopic) {
+      setTopicFocus(prefillTopic);
+    }
+
+    clearCulturalPrefill();
+  }, []);
 
   // Auto-hide splash screen after 3 seconds, with press-and-hold pause.
   useEffect(() => {
@@ -1968,7 +2023,7 @@ export default function CulturalArchaeologist() {
           )}
         </AnimatePresence>
 
-        <div className="flex flex-col items-center text-center mb-16 no-print pt-28 sm:pt-0">
+        <div className="flex flex-col items-center text-center mb-16 no-print pt-28 sm:pt-14">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -2036,7 +2091,7 @@ export default function CulturalArchaeologist() {
                       }
                     }}
                     placeholder="Primary Audience (Required) *"
-                    className={`w-full pl-12 pr-12 py-4 bg-white border ${showValidation && !audience.trim() ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : 'border-zinc-200 focus:ring-indigo-500/20 focus:border-indigo-500'} rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 transition-all shadow-sm text-sm`}
+                    className={`w-full h-14 pl-12 pr-12 py-0 bg-white border ${showValidation && !audience.trim() ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : 'border-zinc-200 focus:ring-indigo-500/20 focus:border-indigo-500'} rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 transition-all shadow-sm text-sm`}
                     disabled={isLoading}
                     required
                   />
@@ -2052,14 +2107,14 @@ export default function CulturalArchaeologist() {
               </div>
               
               <div className="relative flex flex-col w-full self-start" ref={brandDropdownRef}>
-                <div className="relative flex items-center w-full bg-white border border-zinc-200 rounded-2xl text-zinc-900 focus-within:outline-none focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all shadow-sm text-sm min-h-[56px]">
+                <div className="relative flex items-center w-full h-14 bg-white border border-zinc-200 rounded-2xl text-zinc-900 focus-within:outline-none focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all shadow-sm text-sm">
                   <Tag className="absolute left-4 top-4 w-5 h-5 text-zinc-400" />
-                  <div className="w-full pl-12 pr-12 py-2 flex items-center gap-2 flex-wrap">
+                  <div className="w-full h-full pl-12 pr-12 py-0 flex items-center gap-2 flex-nowrap overflow-x-auto">
                     {normalizedBrands.map((brandChip, chipIndex) => (
                       <span
                         key={`${brandChip}-${chipIndex}`}
                         data-testid={`cultural-brand-chip-${chipIndex}`}
-                        className="inline-flex items-center gap-1 rounded-full bg-zinc-100 text-zinc-800 border border-zinc-200 px-3 py-1 text-xs font-medium"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-100 text-zinc-800 border border-zinc-200 px-3 py-1 text-xs font-medium"
                       >
                         {brandChip}
                         <button
@@ -2095,7 +2150,7 @@ export default function CulturalArchaeologist() {
                         }
                       }}
                       placeholder={normalizedBrands.length > 0 ? 'Add more brands or category' : 'Brands or Category (Optional)'}
-                      className="flex-1 min-w-[180px] py-2 bg-transparent text-zinc-900 placeholder-zinc-400 focus:outline-none"
+                      className="flex-1 min-w-[140px] h-full py-0 bg-transparent text-zinc-900 placeholder-zinc-400 focus:outline-none"
                       disabled={isLoading}
                     />
                   </div>
@@ -2214,7 +2269,7 @@ export default function CulturalArchaeologist() {
                     }
                   }}
                   placeholder="Topic Focus (Optional)"
-                  className="w-full pl-12 pr-12 py-4 bg-white border border-zinc-200 rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
+                  className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
                   disabled={isLoading}
                 />
                 {isDetecting && !topicFocus.trim() && (
