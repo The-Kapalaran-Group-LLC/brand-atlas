@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildBrandModeSubQueries,
+  deriveRecentNewsFromSources,
   formatDevilsAdvocateLens,
   getDeploymentCandidatesFromEnv,
   scoreEvidenceDomain,
@@ -93,5 +94,24 @@ describe('evidence domain scoring', () => {
     expect(scoreEvidenceDomain('https://www.g2.com/products/acme/reviews')).toEqual({ quality: 'behavioral', weight: 0.9 });
     expect(scoreEvidenceDomain('https://www.trustpilot.com/review/example.com')).toEqual({ quality: 'behavioral', weight: 0.9 });
     expect(scoreEvidenceDomain('https://twitter.com/example')).toEqual({ quality: 'community', weight: 0.7 });
+  });
+});
+
+describe('recent news fallback derivation', () => {
+  it('derives article headlines from sources when recentNews is empty', () => {
+    const fallback = deriveRecentNewsFromSources([
+      {
+        title: 'Patagonia expands retail footprint in key U.S. metros',
+        url: 'https://www.foxnews.com/lifestyle/patagonia-expands-retail-footprint',
+      },
+      {
+        title: 'Sources',
+        url: 'https://example.com/source-index',
+      },
+    ]);
+
+    expect(fallback).toHaveLength(1);
+    expect(fallback[0].headline).toContain('Patagonia expands retail footprint');
+    expect(fallback[0].url).toBe('https://www.foxnews.com/lifestyle/patagonia-expands-retail-footprint');
   });
 });

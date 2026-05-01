@@ -577,6 +577,26 @@ type ValidatedNewsItem = {
   outlet?: string | null;
 };
 
+const deriveHeadlineFromUrl = (url?: string | null): string => {
+  const safeUrl = normalizeExternalHttpUrl(url);
+  if (!safeUrl) return '';
+  try {
+    const parsed = new URL(safeUrl);
+    const segments = parsed.pathname.split('/').filter(Boolean);
+    const lastSegment = segments[segments.length - 1] || '';
+    if (!lastSegment) return '';
+    const withoutExtension = lastSegment.replace(/\.(html?|php|aspx?)$/i, '');
+    const cleaned = decodeURIComponent(withoutExtension)
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!cleaned) return '';
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  } catch {
+    return '';
+  }
+};
+
 const normalizeIsoDate = (value?: string | null): string | null => {
   const trimmed = (value || '').trim();
   if (!trimmed) return null;
@@ -647,13 +667,52 @@ const normalizeRawRecentNewsCandidate = (candidate: RawRecentNewsCandidate): {
     return { headline: trimmed };
   }
 
+  const normalizedUrl = normalizeExternalHttpUrl(candidate.url || undefined) || undefined;
+  const normalizedHeadline = ((candidate.headline || candidate.title || '') || '').trim();
+  const inferredHeadline = normalizedHeadline || deriveHeadlineFromUrl(normalizedUrl);
+
   return {
-    headline: ((candidate.headline || candidate.title || '') || '').trim() || undefined,
-    url: normalizeExternalHttpUrl(candidate.url || undefined) || undefined,
+    headline: inferredHeadline || undefined,
+    url: normalizedUrl,
     publishedAt: candidate.publishedAt || null,
     outlet: (candidate.outlet || '').trim() || null,
   };
 };
+
+const SOURCE_TITLE_BLOCKLIST = /^(source|sources|reference|references|citation|citations|link|links)\b/i;
+
+export function deriveRecentNewsFromSources(
+  sources: Array<{ title?: string | null; url?: string | null }> | undefined,
+  limit = 6
+): ValidatedNewsItem[] {
+  const items: ValidatedNewsItem[] = [];
+  const seen = new Set<string>();
+
+  for (const source of sources || []) {
+    const normalizedUrl = normalizeExternalHttpUrl(source.url || undefined);
+    if (!normalizedUrl || !isLikelyArticleUrl(normalizedUrl)) continue;
+
+    const rawTitle = (source.title || '').trim();
+    if (!rawTitle || SOURCE_TITLE_BLOCKLIST.test(rawTitle)) continue;
+
+    const normalizedPublishedAt = normalizeIsoDate(rawTitle);
+    const hostname = getHostname(normalizedUrl);
+    const outlet = hostname ? hostname.replace(/^www\./, '') : null;
+    const dedupeKey = normalizedUrl.toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    items.push({
+      headline: rawTitle,
+      url: normalizedUrl,
+      publishedAt: normalizedPublishedAt || null,
+      outlet,
+    });
+  }
+
+  items.sort(compareNewsByMostRecent);
+  return items.slice(0, Math.max(1, limit));
+}
 
 function outputTemperature(outputType: OutputType): number {
   if (outputType === 'json-metadata') return 0.2;
@@ -2330,6 +2389,20 @@ function filterRecentNewsToTopMainstream(report: BrandResearchMatrix): BrandRese
         url: normalizedUrl,
         publishedAt: publishedAt || null,
         outlet,
+      });
+    }
+
+    if (normalizedNews.length === 0) {
+      const sourceFallback = deriveRecentNewsFromSources(brandResult.sources);
+      sourceFallback.forEach((item) => {
+        const dedupeKey = item.url.toLowerCase();
+        if (seen.has(dedupeKey)) return;
+        seen.add(dedupeKey);
+        normalizedNews.push(item);
+      });
+      console.log('[brand-research] recentNews fallback from sources applied', {
+        brandName: brandResult.brandName,
+        fallbackCount: sourceFallback.length,
       });
     }
 
