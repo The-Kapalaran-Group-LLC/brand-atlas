@@ -27,6 +27,10 @@ import { CompassRoseIcon } from './icons/CompassRoseIcon';
 import pptxgen from 'pptxgenjs';
 import { supabase } from '../services/supabase-client';
 import { saveCulturalPrefill } from '../services/cultural-prefill';
+import { runUserAction } from '../services/user-actions';
+import { normalizeAppError } from '../services/api-errors';
+import { logger } from '../services/logger';
+import { SectionErrorBoundary } from './SectionErrorBoundary';
 
 const BRAND_NAVIGATOR_TABLE = 'BrandNavigator';
 
@@ -72,12 +76,9 @@ const BRAND_RESULT_SECTION_KEYS: BrandResultSectionKey[] = [
   'recentNews',
 ];
 
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
-};
+const MAX_BRAND_INPUT_LENGTH = 120;
+const MAX_AUDIENCE_INPUT_LENGTH = 180;
+const MAX_TOPIC_INPUT_LENGTH = 180;
 
 const GENERATIONS = [
   "Gen Alpha (2013–mid 2020s)",
@@ -137,7 +138,7 @@ export default function BrandNavigator() {
   const isDirectBrandNavigatorRoute =
     typeof window !== 'undefined' &&
     isBrandNavigatorRoute(window.location.pathname, window.location.hash);
-  console.log('[BrandNavigator] Route context:', {
+  logger.debug('[BrandNavigator] Route context', {
     pathname: typeof window !== 'undefined' ? window.location.pathname : '',
     hash: typeof window !== 'undefined' ? window.location.hash : '',
     isDirectBrandNavigatorRoute,
@@ -194,6 +195,11 @@ export default function BrandNavigator() {
   const [matrixMeta, setMatrixMeta] = useState<{audience: string, brand: string, generations: string[], topicFocus?: string, sourcesType?: string[], hasUploadedDocuments?: boolean} | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+  const [suggestionsRetryNonce, setSuggestionsRetryNonce] = useState(0);
+  const [fileReadErrors, setFileReadErrors] = useState<string[]>([]);
+  const [exportError, setExportError] = useState<{ type: 'pptx' | 'pdf'; message: string } | null>(null);
   const [brandQuestion, setBrandQuestion] = useState('');
   const [brandAnswer, setBrandAnswer] = useState('');
   const [isAskingBrandQuestion, setIsAskingBrandQuestion] = useState(false);
@@ -460,7 +466,7 @@ export default function BrandNavigator() {
         return prev;
       }
       const updated = [...prev, trimmed];
-      console.log('Committed brand chip', { trimmed, count: updated.length });
+      logger.debug('Committed brand chip', { trimmed, count: updated.length });
       return updated;
     });
     setBrandInput('');
@@ -473,7 +479,7 @@ export default function BrandNavigator() {
   const removeBrandChip = (brandToRemove: string) => {
     setSelectedBrands((prev) => {
       const updated = prev.filter((item) => item !== brandToRemove);
-      console.log('Removed brand chip', { brandToRemove, count: updated.length });
+      logger.debug('Removed brand chip', { brandToRemove, count: updated.length });
       return updated;
     });
   };
@@ -512,12 +518,18 @@ export default function BrandNavigator() {
       try {
         let suggestions: string[] = [];
         try {
-          suggestions = await suggestBrands(activeQuery);
-          console.log('Brand suggestions resolved', { activeQuery, suggestionsCount: suggestions.length });
-        } catch (err: unknown) {
-          // Log error for debugging, but do not crash
-          console.error('Brand suggestion error:', err);
-          setToast('Failed to get brand suggestions. Please try again.');
+          setSuggestionsError(null);
+          suggestions = await runUserAction({
+            actionName: 'brand-suggestions',
+            action: async () => suggestBrands(activeQuery),
+            onError: (normalized) => {
+              setSuggestionsError(normalized.message);
+              setToast('Failed to get brand suggestions. Please try again.');
+            },
+          });
+          logger.debug('Brand suggestions resolved', { activeQuery, suggestionsCount: suggestions.length });
+        } catch {
+          suggestions = [];
         }
 
         const apiSuggestions = Array.isArray(suggestions) ? suggestions : [];
@@ -528,8 +540,7 @@ export default function BrandNavigator() {
           return;
         }
       } catch (outerErr) {
-        // Defensive: catch any unexpected errors
-        console.error('Unexpected error in brand suggestion effect:', outerErr);
+        logger.error('Unexpected error in brand suggestion effect.', outerErr);
         setToast('An unexpected error occurred while suggesting brands.');
       } finally {
         if (!cancelled) {
@@ -542,7 +553,7 @@ export default function BrandNavigator() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [brandInput, visibleSavedMatrices]);
+  }, [brandInput, visibleSavedMatrices, suggestionsRetryNonce]);
 
   const handleReset = () => {
     setSelectedBrands([]);
@@ -555,6 +566,10 @@ export default function BrandNavigator() {
     setMatrix(null);
     setMatrixMeta(null);
     setError(null);
+    setSaveWarning(null);
+    setSuggestionsError(null);
+    setFileReadErrors([]);
+    setExportError(null);
     setBrandQuestion('');
     setBrandAnswer('');
     setIsAskingBrandQuestion(false);
@@ -569,16 +584,21 @@ export default function BrandNavigator() {
 
     setIsAskingBrandQuestion(true);
     try {
-      const response = await askBrandNavigatorQuestion(matrix, brandQuestion, {
-        audience: matrixMeta?.audience || audience,
-        brand: matrixMeta?.brand || selectedBrands.join(', '),
-        topicFocus: matrixMeta?.topicFocus || topicFocus,
+      const response = await runUserAction({
+        actionName: 'brand-followup-question',
+        action: async () => askBrandNavigatorQuestion(matrix, brandQuestion, {
+          audience: matrixMeta?.audience || audience,
+          brand: matrixMeta?.brand || selectedBrands.join(', '),
+          topicFocus: matrixMeta?.topicFocus || topicFocus,
+        }),
+        onError: (normalized) => {
+          setToast(normalized.message);
+        },
       });
       setBrandAnswer(response.answer || '');
       setHighlightedBrandSections((response.relevantSections || []).filter(Boolean) as BrandResultSectionKey[]);
       setWebHighlights((response.webHighlights || []).filter((item) => (item || '').trim().length > 0));
-    } catch (err) {
-      console.error('[BrandNavigator] Failed to ask follow-up question.', err);
+    } catch {
       setToast('Unable to complete that search right now. Please try again.');
     } finally {
       setIsAskingBrandQuestion(false);
@@ -593,7 +613,7 @@ export default function BrandNavigator() {
       : normalizedBrands;
 
     if (pendingBrand) {
-      console.log('Auto-committing pending brand on generate', { pendingBrand });
+      logger.debug('Auto-committing pending brand on generate', { pendingBrand });
       setSelectedBrands(brandNamesForGenerate);
       setBrandInput('');
     }
@@ -609,16 +629,23 @@ export default function BrandNavigator() {
     setShowValidation(true);
     if (brandsForGenerate.length === 0) return;
     const brandContext = brandsForGenerate.map((brand) => brand.name).join(', ');
-    console.log('Generating Brand Analysis', { audience, brands: brandsForGenerate, brandContext });
+    logger.info('Generating Brand Analysis', { audience, brands: brandsForGenerate, brandContext });
 
     setFakeProgress(5);
     setIsLoading(true);
     const searchStart = Date.now();
     setError(null);
+    setSaveWarning(null);
     setShowValidation(false);
     const hasUploadedDocuments = files.length > 0;
     try {
-      const result = await generateBrandResearchMatrix(audience, brandsForGenerate, selectedGenerations, topicFocus, files, sourcesType);
+      const result = await runUserAction({
+        actionName: 'brand-generate-report',
+        action: async () => generateBrandResearchMatrix(audience, brandsForGenerate, selectedGenerations, topicFocus, files, sourcesType),
+        onError: (normalized) => {
+          setError(normalized.message);
+        },
+      });
       const sanitizedResult = sanitizeBrandResearchMatrix(result);
       setMatrix(sanitizedResult);
       setMatrixMeta({ audience, brand: brandContext, generations: selectedGenerations, topicFocus, sourcesType, hasUploadedDocuments });
@@ -647,7 +674,8 @@ export default function BrandNavigator() {
         ]);
         // Optionally, refresh saved matrices here if you want instant UI update
       } catch (saveErr) {
-        console.warn('Failed to save search to Supabase:', saveErr);
+        logger.warn('Failed to save search to Supabase', saveErr);
+        setSaveWarning('Report generated, but we could not save this search history. You can still continue using the results.');
       }
 
       // Play chime sound using Web Audio API
@@ -677,17 +705,12 @@ export default function BrandNavigator() {
         osc1.stop(ctx.currentTime + 2);
         osc2.stop(ctx.currentTime + 2);
       } catch (e) {
-        console.error('Failed to play sound', e);
+        logger.warn('Failed to play sound', e);
       }
 
     } catch (err: unknown) {
-      console.error(err);
-      const errorMessage = getErrorMessage(err);
-      if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
-        setError('You exceeded your current API quota. Please check your plan and billing details.');
-      } else {
-        setError('Failed to generate Brand Navigator report. Please try again.');
-      }
+      const normalized = normalizeAppError(err);
+      setError(normalized.kind === 'unknown' ? 'Failed to generate Brand Navigator report. Please try again.' : normalized.message);
     } finally {
       const searchEnd = Date.now();
       const duration = searchEnd - searchStart;
@@ -722,7 +745,7 @@ export default function BrandNavigator() {
     if (!selectedFiles) return;
 
     const newFiles: UploadedFile[] = [];
-    let errored = false;
+    const failedFiles: string[] = [];
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
       const reader = new FileReader();
@@ -739,15 +762,18 @@ export default function BrandNavigator() {
             setFiles(prev => [...prev, ...newFiles]);
           }
         } catch (err) {
-          errored = true;
+          failedFiles.push(file.name);
           setToast('Failed to read one or more files.');
         }
       };
       reader.onerror = () => {
-        errored = true;
+        failedFiles.push(file.name);
         setToast('Failed to read one or more files.');
       };
       reader.readAsDataURL(file);
+    }
+    if (failedFiles.length > 0) {
+      setFileReadErrors((prev) => [...prev, ...failedFiles]);
     }
     // Reset file input
     if (fileInputRef.current) {
@@ -883,7 +909,10 @@ export default function BrandNavigator() {
       const pres = generatePPTX();
       if (!pres) throw new Error('No presentation generated');
       pres.writeFile({ fileName: `${matrixMeta?.audience.replace(/\s+/g, '_')}_Brand_Navigator.pptx` });
+      setExportError(null);
     } catch (err) {
+      logger.error('Failed to export PPTX', err);
+      setExportError({ type: 'pptx', message: 'Failed to export PPTX. Please retry.' });
       setToast('Failed to export PPTX.');
     }
   };
@@ -969,7 +998,8 @@ export default function BrandNavigator() {
         doc.save(`${matrixMeta?.audience.replace(/\s+/g, '_')}_Brand_Navigator.pdf`);
         setToast("PDF exported successfully!");
       } catch (err) {
-        console.error("Failed to generate PDF:", err);
+        logger.error('Failed to generate PDF', err);
+        setExportError({ type: 'pdf', message: 'Failed to generate PDF. Please retry.' });
         setToast("Failed to generate PDF.");
       } finally {
         setIsExporting(false);
@@ -1319,7 +1349,7 @@ export default function BrandNavigator() {
                       type="text"
                       value={brandInput}
                       onChange={(e) => {
-                        setBrandInput(e.target.value);
+                        setBrandInput(e.target.value.slice(0, MAX_BRAND_INPUT_LENGTH));
                         setIsBrandDropdownOpen(true);
                         if (showValidation) setShowValidation(false);
                       }}
@@ -1327,7 +1357,7 @@ export default function BrandNavigator() {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ',') {
                           e.preventDefault();
-                          console.log('Brand input commit key pressed', { key: e.key, brandInput });
+                          logger.debug('Brand input commit key pressed', { key: e.key, brandInput });
                           commitBrandInput(brandInput);
                           return;
                         }
@@ -1335,7 +1365,7 @@ export default function BrandNavigator() {
                         if (e.key === 'Backspace' && !brandInput.trim() && normalizedBrands.length > 0) {
                           e.preventDefault();
                           const lastBrand = normalizedBrands[normalizedBrands.length - 1];
-                          console.log('Brand input backspace remove last chip', { lastBrand });
+                          logger.debug('Brand input backspace remove last chip', { lastBrand });
                           removeBrandChip(lastBrand);
                         }
                       }}
@@ -1375,6 +1405,19 @@ export default function BrandNavigator() {
                         </div>
                       )}
 
+                      {suggestionsError && (
+                        <div className="px-4 pb-3 text-xs text-amber-700 flex items-center justify-between gap-2">
+                          <span>{suggestionsError}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSuggestionsRetryNonce((prev) => prev + 1)}
+                            className="inline-flex items-center gap-1 rounded-md border border-amber-300 px-2 py-1 text-[11px] font-semibold hover:bg-amber-50"
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      )}
+
                       {brandSuggestions.length > 0 && (
                         <>
                           <div className="p-3 text-xs font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-100 flex items-center gap-2">
@@ -1386,7 +1429,7 @@ export default function BrandNavigator() {
                                 key={`sug-${idx}`}
                                 type="button"
                                 onClick={() => {
-                                  console.log('Brand suggestion selected', { suggestion });
+                                  logger.debug('Brand suggestion selected', { suggestion });
                                   commitBrandInput(suggestion);
                                 }}
                                 className="w-full text-left px-4 py-3 hover:bg-zinc-50 focus:outline-none focus:bg-zinc-50 rounded-xl transition-colors font-medium text-zinc-900"
@@ -1464,7 +1507,7 @@ export default function BrandNavigator() {
                     type="text"
                     value={audience}
                     onChange={(e) => {
-                      setAudience(e.target.value);
+                      setAudience(e.target.value.slice(0, MAX_AUDIENCE_INPUT_LENGTH));
                     }}
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
@@ -1488,7 +1531,7 @@ export default function BrandNavigator() {
                 <input
                   type="text"
                   value={topicFocus}
-                  onChange={(e) => setTopicFocus(e.target.value)}
+                  onChange={(e) => setTopicFocus(e.target.value.slice(0, MAX_TOPIC_INPUT_LENGTH))}
                   onKeyDown={e => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -1676,6 +1719,11 @@ export default function BrandNavigator() {
                     ))}
                   </div>
                 )}
+                {fileReadErrors.length > 0 && (
+                  <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    Some files could not be read: {Array.from(new Set(fileReadErrors)).slice(0, 4).join(', ')}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1713,6 +1761,27 @@ export default function BrandNavigator() {
             
             {error && (
               <p className="text-red-500 text-sm mt-2">{error}</p>
+            )}
+            {saveWarning && (
+              <p className="text-amber-700 text-sm mt-2">{saveWarning}</p>
+            )}
+            {exportError && (
+              <div className="mt-2 flex items-center justify-center gap-2 text-xs text-amber-700">
+                <span>{exportError.message}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (exportError.type === 'pptx') {
+                      exportToPPTX();
+                    } else {
+                      exportToPDF();
+                    }
+                  }}
+                  className="inline-flex items-center rounded-md border border-amber-300 px-2 py-1 font-semibold hover:bg-amber-50"
+                >
+                  Retry
+                </button>
+              </div>
             )}
           </motion.form>
         </div>
@@ -1837,7 +1906,7 @@ export default function BrandNavigator() {
                       data-testid="brand-qa-input"
                       type="text"
                       value={brandQuestion}
-                      onChange={(e) => setBrandQuestion(e.target.value)}
+                      onChange={(e) => setBrandQuestion(e.target.value.slice(0, 320))}
                       placeholder="Ask a follow-up question and run a comprehensive web-backed search"
                       className="flex-1 px-5 py-4 rounded-2xl border border-indigo-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-zinc-900 shadow-sm text-sm"
                       onKeyDown={(e) => e.key === 'Enter' && handleAskBrandQuestion()}
@@ -1887,38 +1956,40 @@ export default function BrandNavigator() {
               )}
 
               {isBrandResultsMode ? (
-                <BrandResultsGrid
-                  results={brandResults}
-                  highlightedSections={highlightedBrandSections}
-                  sectionTitleMap={sectionTitleMap}
-                  sectionLinesForBrand={sectionLinesForBrand}
-                  onAudienceDeepDive={(audienceLabel, brandName) => {
-                    const audienceFromCard = (audienceLabel || '').trim();
-                    const brandFromCard = (brandName || '').trim();
-                    const topicFromSearch = (topicFocus || '').trim();
+                <SectionErrorBoundary title="Brand Results">
+                  <BrandResultsGrid
+                    results={brandResults}
+                    highlightedSections={highlightedBrandSections}
+                    sectionTitleMap={sectionTitleMap}
+                    sectionLinesForBrand={sectionLinesForBrand}
+                    onAudienceDeepDive={(audienceLabel, brandName) => {
+                      const audienceFromCard = (audienceLabel || '').trim();
+                      const brandFromCard = (brandName || '').trim();
+                      const topicFromSearch = (topicFocus || '').trim();
 
-                    saveCulturalPrefill({
-                      audience: audienceFromCard,
-                      brand: brandFromCard,
-                      topicFocus: topicFromSearch,
-                    });
+                      saveCulturalPrefill({
+                        audience: audienceFromCard,
+                        brand: brandFromCard,
+                        topicFocus: topicFromSearch,
+                      });
 
-                    const params = new URLSearchParams({
-                      home: '1',
-                    });
-                    if (audienceFromCard) {
-                      params.set('ca_audience', audienceFromCard);
-                    }
-                    if (brandFromCard) {
-                      params.set('ca_brand', brandFromCard);
-                    }
-                    if (topicFromSearch) {
-                      params.set('ca_topic', topicFromSearch);
-                    }
-                    const targetUrl = `${window.location.origin}/?${params.toString()}#cultural-archaeologist`;
-                    window.open(targetUrl, '_blank', 'noopener,noreferrer');
-                  }}
-                />
+                      const params = new URLSearchParams({
+                        home: '1',
+                      });
+                      if (audienceFromCard) {
+                        params.set('ca_audience', audienceFromCard);
+                      }
+                      if (brandFromCard) {
+                        params.set('ca_brand', brandFromCard);
+                      }
+                      if (topicFromSearch) {
+                        params.set('ca_topic', topicFromSearch);
+                      }
+                      const targetUrl = `${window.location.origin}/?${params.toString()}#cultural-archaeologist`;
+                      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+                    }}
+                  />
+                </SectionErrorBoundary>
               ) : (
                 <div className="mb-8 p-5 rounded-2xl border border-zinc-200 bg-white text-sm text-zinc-600 no-print">
                   No brand results were returned. Try updating your prompt and regenerate.
@@ -2284,7 +2355,7 @@ const sanitizeSocialChannels = (
     const safeUrl = normalizeExternalHttpUrl(channelEntry.url);
 
     if (!safeUrl) {
-      console.log('[BrandNavigator] Dropping social media link with invalid URL.', {
+      logger.debug('[BrandNavigator] Dropping social media link with invalid URL.', {
         brandName,
         channel: channelLabel,
         rawUrl: channelEntry.url,
@@ -2294,7 +2365,7 @@ const sanitizeSocialChannels = (
     }
 
     if (!urlMatchesChannel(channelLabel, safeUrl)) {
-      console.log('[BrandNavigator] Dropping social media link due to channel-domain mismatch.', {
+      logger.debug('[BrandNavigator] Dropping social media link due to channel-domain mismatch.', {
         brandName,
         channel: channelLabel,
         safeUrl,
@@ -2305,7 +2376,7 @@ const sanitizeSocialChannels = (
 
     const normalizedChannel = normalizeChannelKey(channelLabel);
     if (!isLikelySocialProfilePath(normalizedChannel, safeUrl)) {
-      console.log('[BrandNavigator] Dropping social media link that is not a profile/page URL.', {
+      logger.debug('[BrandNavigator] Dropping social media link that is not a profile/page URL.', {
         brandName,
         channel: channelLabel,
         safeUrl,
@@ -2315,7 +2386,7 @@ const sanitizeSocialChannels = (
     }
 
     if (!socialUrlMatchesBrand(safeUrl, brandName)) {
-      console.log('[BrandNavigator] Dropping social media link that does not appear to match the brand page.', {
+      logger.debug('[BrandNavigator] Dropping social media link that does not appear to match the brand page.', {
         brandName,
         channel: channelLabel,
         safeUrl,
@@ -2326,7 +2397,7 @@ const sanitizeSocialChannels = (
 
     const dedupeKey = `${channelLabel.toLowerCase()}|${safeUrl.toLowerCase()}`;
     if (seen.has(dedupeKey)) {
-      console.log('[BrandNavigator] Skipping duplicate social media link.', {
+      logger.debug('[BrandNavigator] Skipping duplicate social media link.', {
         brandName,
         channel: channelLabel,
         safeUrl,
@@ -2434,7 +2505,7 @@ const sanitizeBrandResearchMatrix = (rawMatrix: BrandResearchMatrix): BrandResea
     const brandName = result.brandName || `Brand ${index + 1}`;
     const sanitizedChannels = sanitizeSocialChannels(result.socialMediaChannels, brandName);
 
-    console.log('[BrandNavigator] Sanitized social channels while loading results.', {
+    logger.debug('[BrandNavigator] Sanitized social channels while loading results.', {
       brandName,
       beforeCount: (result.socialMediaChannels || []).length,
       afterCount: sanitizedChannels.length,
@@ -2633,7 +2704,7 @@ function BrandResultCard({
     : null;
   const displayNewsItems = fallbackPressRelease ? [fallbackPressRelease] : recentNewsItems;
 
-  console.log('[BrandNavigator] Rendering brand result card with validated links.', {
+  logger.debug('[BrandNavigator] Rendering brand result card with validated links.', {
     brandName,
     socialMediaBefore: (brandResult.socialMediaChannels || []).length,
     socialMediaAfter: sanitizedSocialChannels.length,

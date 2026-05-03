@@ -27,6 +27,10 @@ import {
 } from '../services/brand-input';
 import pptxgen from 'pptxgenjs';
 import { supabase } from '../services/supabase-client';
+import { runUserAction } from '../services/user-actions';
+import { normalizeAppError } from '../services/api-errors';
+import { logger } from '../services/logger';
+import { SectionErrorBoundary } from './SectionErrorBoundary';
 
 
 
@@ -116,13 +120,6 @@ const mapInsightSourceToSearchSource = (sourceType?: string): string | null => {
   if (normalized.includes('mainstream') || normalized.includes('authoritative') || normalized.includes('behavioral')) return 'Mainstream';
 
   return null;
-};
-
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
 };
 
 const stripDemographicEvidenceMarkers = (value: string | null | undefined): string => {
@@ -236,6 +233,10 @@ const SOURCES_TYPES = [
   "Alternative Media",
   "Niche/Fringe"
 ];
+
+const MAX_CULTURAL_AUDIENCE_INPUT_LENGTH = 180;
+const MAX_CULTURAL_BRAND_INPUT_LENGTH = 120;
+const MAX_CULTURAL_TOPIC_INPUT_LENGTH = 180;
 
 const SAVED_MATRICES_STORAGE_KEY = 'cultural_matrices';
 
@@ -363,6 +364,11 @@ export default function CulturalArchaeologist() {
   const [matrixMeta, setMatrixMeta] = useState<{audience: string, brand: string, generations: string[], topicFocus?: string, sourcesType?: string[], hasUploadedDocuments?: boolean} | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+  const [suggestionsRetryNonce, setSuggestionsRetryNonce] = useState(0);
+  const [fileReadErrors, setFileReadErrors] = useState<string[]>([]);
+  const [exportError, setExportError] = useState<{ type: 'pptx' | 'pdf'; message: string } | null>(null);
   const normalizedBrands = useMemo(() => normalizeBrandTokens(selectedBrands), [selectedBrands]);
   const brandInputQuery = brandInput.trim();
 
@@ -504,7 +510,7 @@ export default function CulturalArchaeologist() {
     const syncExperienceFromLocation = () => {
       const nextExperience = resolveExperienceFromLocation();
       const shouldSkipSplash = shouldSkipSplashForLocation();
-      console.log('[App] Syncing experience from location:', {
+      logger.debug('Syncing experience from location', {
         pathname: window.location.pathname,
         search: window.location.search,
         hash: window.location.hash,
@@ -755,7 +761,7 @@ export default function CulturalArchaeologist() {
         return prev;
       }
       const updated = [...prev, trimmed];
-      console.log('[cultural] Committed brand chip', { trimmed, count: updated.length });
+      logger.debug('Committed cultural brand chip', { trimmed, count: updated.length });
       return updated;
     });
     setBrandInput('');
@@ -765,7 +771,7 @@ export default function CulturalArchaeologist() {
   const removeBrandChip = (brandToRemove: string) => {
     setSelectedBrands((prev) => {
       const updated = prev.filter((item) => item !== brandToRemove);
-      console.log('[cultural] Removed brand chip', { brandToRemove, count: updated.length });
+      logger.debug('Removed cultural brand chip', { brandToRemove, count: updated.length });
       return updated;
     });
   };
@@ -800,14 +806,20 @@ export default function CulturalArchaeologist() {
       try {
         let suggestions: string[] = [];
         try {
-          suggestions = await suggestBrands(activeQuery);
-        } catch (err: unknown) {
-          console.error('Brand suggestion error:', err);
-          setToast('Failed to get brand suggestions. Please try again.');
-          const errorMessage = getErrorMessage(err);
-          if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
-            setHasQuotaError(true);
-          }
+          setSuggestionsError(null);
+          suggestions = await runUserAction({
+            actionName: 'cultural-brand-suggestions',
+            action: async () => suggestBrands(activeQuery),
+            onError: (normalized) => {
+              setSuggestionsError(normalized.message);
+              setToast('Failed to get brand suggestions. Please try again.');
+              if (normalized.kind === 'quota') {
+                setHasQuotaError(true);
+              }
+            },
+          });
+        } catch {
+          suggestions = [];
         }
 
         const apiSuggestions = Array.isArray(suggestions) ? suggestions : [];
@@ -815,7 +827,7 @@ export default function CulturalArchaeologist() {
           setBrandSuggestions(apiSuggestions);
         }
       } catch (outerErr) {
-        console.error('Unexpected error in brand suggestion effect:', outerErr);
+        logger.error('Unexpected error in brand suggestion effect:', outerErr);
         setToast('An unexpected error occurred while suggesting brands.');
       } finally {
         if (!cancelled) {
@@ -828,7 +840,7 @@ export default function CulturalArchaeologist() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [brandInput, visibleSavedMatrices, hasQuotaError]);
+  }, [brandInput, visibleSavedMatrices, hasQuotaError, suggestionsRetryNonce]);
 
   const handleReset = () => {
     setSelectedBrands([]);
@@ -845,6 +857,11 @@ export default function CulturalArchaeologist() {
     setMatrixAnswer('');
     setHighlightedInsights([]);
     setIsResearchControlsMinimized(false);
+    setSaveWarning(null);
+    setSuggestionsError(null);
+    setSuggestionsRetryNonce(0);
+    setFileReadErrors([]);
+    setExportError(null);
   };
 
   const handleGenerate = async (e: React.FormEvent) => {
@@ -867,13 +884,20 @@ export default function CulturalArchaeologist() {
     setIsLoading(true);
     const searchStart = Date.now();
     setError(null);
+    setSaveWarning(null);
+    setExportError(null);
+    setFileReadErrors([]);
     setShowValidation(false);
     setMatrixQuestion('');
     setMatrixAnswer('');
     setHighlightedInsights([]);
     const hasUploadedDocuments = files.length > 0;
     try {
-      const result = await generateCulturalMatrix(audience, brandContext, selectedGenerations, topicFocus, files, sourcesType);
+      const result = await runUserAction({
+        actionName: 'generate-cultural-matrix',
+        action: () => generateCulturalMatrix(audience, brandContext, selectedGenerations, topicFocus, files, sourcesType),
+        onError: (normalized) => setError(normalized.message),
+      });
       setMatrix(result);
       setMatrixMeta({ audience, brand: brandContext, generations: selectedGenerations, topicFocus, sourcesType, hasUploadedDocuments });
 
@@ -898,7 +922,8 @@ export default function CulturalArchaeologist() {
         ]);
         // Optionally, refresh saved matrices here if you want instant UI update
       } catch (saveErr) {
-        console.warn('Failed to save search to Supabase:', saveErr);
+        logger.warn('Failed to save cultural search to Supabase', saveErr);
+        setSaveWarning('Insights generated, but this report could not be saved right now.');
       }
 
       // Play chime sound using Web Audio API
@@ -928,20 +953,16 @@ export default function CulturalArchaeologist() {
         osc1.stop(ctx.currentTime + 2);
         osc2.stop(ctx.currentTime + 2);
       } catch (e) {
-        console.error('Failed to play sound', e);
+        logger.warn('Failed to play completion sound', e);
       }
 
       // Start background deep dives
       runBackgroundDeepDives(result, { audience, brand: brandContext, generations: selectedGenerations, topicFocus });
 
     } catch (err: unknown) {
-      console.error(err);
-      const errorMessage = getErrorMessage(err);
-      if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
-        setError('You exceeded your current API quota. Please check your plan and billing details.');
-      } else {
-        setError('Failed to generate cultural archaeologist report. Please try again.');
-      }
+      const normalized = normalizeAppError(err);
+      logger.error('Failed to generate cultural report', { err, normalized });
+      setError(normalized.message || 'Failed to generate cultural archaeologist report. Please try again.');
     } finally {
       const searchEnd = Date.now();
       const duration = searchEnd - searchStart;
@@ -1018,12 +1039,20 @@ export default function CulturalArchaeologist() {
     if (!matrix || !matrixQuestion.trim()) return;
     setIsAskingQuestion(true);
     try {
-      const result = await askMatrixQuestion(matrix, matrixQuestion);
+      const result = await runUserAction({
+        actionName: 'ask-cultural-question',
+        action: () => askMatrixQuestion(matrix, matrixQuestion),
+      });
       setMatrixAnswer(result.answer);
       setHighlightedInsights(result.relevantInsights || []);
     } catch (err) {
-      console.error("Failed to answer question", err);
-      setMatrixAnswer("Sorry, I couldn't answer that question right now.");
+      const normalized = normalizeAppError(err);
+      logger.error('Failed to answer cultural question', { err, normalized });
+      setMatrixAnswer(
+        normalized.kind === 'quota'
+          ? 'Quota limit reached. Please check billing and try again.'
+          : "Sorry, I couldn't answer that question right now."
+      );
     } finally {
       setIsAskingQuestion(false);
     }
@@ -1069,30 +1098,49 @@ export default function CulturalArchaeologist() {
     if (!selectedFiles) return;
 
     const newFiles: UploadedFile[] = [];
-    let errored = false;
+    const failedFiles: string[] = [];
+    let processed = 0;
+    const total = selectedFiles.length;
+
+    const finalize = () => {
+      if (processed < total) return;
+      if (newFiles.length > 0) {
+        setFiles((prev) => [...prev, ...newFiles]);
+      }
+      if (failedFiles.length > 0) {
+        setFileReadErrors((prev) => [...prev, ...failedFiles]);
+        setToast('Some files could not be read.');
+      }
+    };
+
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
       const reader = new FileReader();
       reader.onload = (event) => {
         try {
-          const base64String = (event.target?.result as string).split(',')[1];
+          const payload = event.target?.result;
+          if (typeof payload !== 'string' || !payload.includes(',')) {
+            throw new Error('Malformed file payload');
+          }
+          const base64String = payload.split(',')[1];
           if (!base64String) throw new Error('File read error');
           newFiles.push({
             name: file.name,
             mimeType: file.type || 'application/octet-stream',
             data: base64String
           });
-          if (newFiles.length === selectedFiles.length) {
-            setFiles(prev => [...prev, ...newFiles]);
-          }
         } catch (err) {
-          errored = true;
-          setToast('Failed to read one or more files.');
+          failedFiles.push(file.name);
+          logger.warn('Failed reading uploaded file', { fileName: file.name, err });
+        } finally {
+          processed += 1;
+          finalize();
         }
       };
       reader.onerror = () => {
-        errored = true;
-        setToast('Failed to read one or more files.');
+        failedFiles.push(file.name);
+        processed += 1;
+        finalize();
       };
       reader.readAsDataURL(file);
     }
@@ -1265,23 +1313,34 @@ export default function CulturalArchaeologist() {
     return pres;
   };
 
-  const exportToPPTX = () => {
+  const exportToPPTX = async () => {
+    setExportError(null);
     try {
-      const pres = generatePPTX();
-      if (!pres) throw new Error('No presentation generated');
-      pres.writeFile({ fileName: `${matrixMeta?.audience.replace(/\s+/g, '_')}_Cultural_Archaeologist.pptx` });
+      await runUserAction({
+        actionName: 'export-cultural-pptx',
+        action: async () => {
+          const pres = generatePPTX();
+          if (!pres) throw new Error('No presentation generated');
+          await pres.writeFile({ fileName: `${matrixMeta?.audience.replace(/\s+/g, '_')}_Cultural_Archaeologist.pptx` });
+          return true;
+        },
+      });
     } catch (err) {
+      const normalized = normalizeAppError(err);
+      logger.error('Failed to export cultural PPTX', { err, normalized });
+      setExportError({ type: 'pptx', message: normalized.message || 'Failed to export PPTX.' });
       setToast('Failed to export PPTX.');
     }
   };
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     if (!matrix || !matrixMeta) return;
     
+    setExportError(null);
     setIsExporting(true);
     setToast("Generating PDF...");
-    
-    import('jspdf').then(({ jsPDF }) => {
+    try {
+      const { jsPDF } = await import('jspdf');
       try {
         const cleanDemographics = sanitizeDemographics(matrix.demographics);
 
@@ -1406,12 +1465,20 @@ export default function CulturalArchaeologist() {
         doc.save(`${matrixMeta?.audience.replace(/\s+/g, '_')}_Cultural_Archaeologist.pdf`);
         setToast("PDF exported successfully!");
       } catch (err) {
-        console.error("Failed to generate PDF:", err);
+        const normalized = normalizeAppError(err);
+        logger.error('Failed to generate cultural PDF', { err, normalized });
+        setExportError({ type: 'pdf', message: normalized.message || 'Failed to generate PDF.' });
         setToast("Failed to generate PDF.");
       } finally {
         setIsExporting(false);
       }
-    });
+    } catch (err) {
+      const normalized = normalizeAppError(err);
+      logger.error('Failed to import jspdf for cultural export', { err, normalized });
+      setExportError({ type: 'pdf', message: normalized.message || 'Failed to generate PDF.' });
+      setToast("Failed to generate PDF.");
+      setIsExporting(false);
+    }
   };
 
 // Removed Google Slides export logic
@@ -2089,7 +2156,7 @@ export default function CulturalArchaeologist() {
                     type="text"
                     value={audience}
                     onChange={(e) => {
-                      setAudience(e.target.value);
+                      setAudience(e.target.value.slice(0, MAX_CULTURAL_AUDIENCE_INPUT_LENGTH));
                       if (showValidation) setShowValidation(false);
                     }}
                     onKeyDown={e => {
@@ -2139,7 +2206,7 @@ export default function CulturalArchaeologist() {
                       type="text"
                       value={brandInput}
                       onChange={(e) => {
-                        setBrandInput(e.target.value);
+                        setBrandInput(e.target.value.slice(0, MAX_CULTURAL_BRAND_INPUT_LENGTH));
                         setIsBrandDropdownOpen(true);
                       }}
                       onFocus={() => setIsBrandDropdownOpen(true)}
@@ -2187,6 +2254,23 @@ export default function CulturalArchaeologist() {
                         <div className="p-4 text-sm text-zinc-500 flex items-center gap-2 justify-center border-b border-zinc-100">
                           <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
                           Finding suggestions...
+                        </div>
+                      )}
+
+                      {suggestionsError && (
+                        <div className="px-4 py-3 text-xs text-amber-700 bg-amber-50 border-b border-amber-100 flex items-center justify-between gap-3">
+                          <span>{suggestionsError}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSuggestionsError(null);
+                              setHasQuotaError(false);
+                              setSuggestionsRetryNonce((prev) => prev + 1);
+                            }}
+                            className="text-amber-800 font-medium hover:underline"
+                          >
+                            Retry
+                          </button>
                         </div>
                       )}
                       
@@ -2269,7 +2353,7 @@ export default function CulturalArchaeologist() {
                 <input
                   type="text"
                   value={topicFocus}
-                  onChange={(e) => setTopicFocus(e.target.value)}
+                  onChange={(e) => setTopicFocus(e.target.value.slice(0, MAX_CULTURAL_TOPIC_INPUT_LENGTH))}
                   onKeyDown={e => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -2457,6 +2541,11 @@ export default function CulturalArchaeologist() {
                     ))}
                   </div>
                 )}
+                {fileReadErrors.length > 0 && (
+                  <p className="mt-2 text-xs text-amber-700">
+                    Some files could not be read: {Array.from(new Set(fileReadErrors)).slice(0, 4).join(', ')}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -2492,6 +2581,27 @@ export default function CulturalArchaeologist() {
             
             {error && (
               <p className="text-red-500 text-sm mt-2">{error}</p>
+            )}
+            {saveWarning && (
+              <p className="text-amber-700 text-sm mt-2">{saveWarning}</p>
+            )}
+            {exportError && (
+              <div className="text-amber-700 text-sm mt-2 flex items-center gap-2">
+                <span>{exportError.message}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (exportError.type === 'pptx') {
+                      void exportToPPTX();
+                      return;
+                    }
+                    void exportToPDF();
+                  }}
+                  className="text-amber-800 font-medium hover:underline"
+                >
+                  Retry Export
+                </button>
+              </div>
             )}
           </motion.form>
         </div>
@@ -2571,15 +2681,16 @@ export default function CulturalArchaeologist() {
 
         <AnimatePresence mode="wait">
           {matrix && matrixMeta && (
-            <motion.div
-              ref={reportRef}
-              key="matrix"
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -40 }}
-              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full"
-            >
+            <SectionErrorBoundary title="Cultural Results">
+              <motion.div
+                ref={reportRef}
+                key="matrix"
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -40 }}
+                transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full"
+              >
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-10 no-print gap-6">
                 <div>
                   <h2 className="text-3xl font-bold text-zinc-900 mb-2">
@@ -2616,6 +2727,29 @@ export default function CulturalArchaeologist() {
                   </button>
                 </div>
               </div>
+              {(saveWarning || exportError) && (
+                <div className="mb-6 space-y-2">
+                  {saveWarning && <p className="text-amber-700 text-sm">{saveWarning}</p>}
+                  {exportError && (
+                    <div className="text-amber-700 text-sm flex items-center gap-2">
+                      <span>{exportError.message}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (exportError.type === 'pptx') {
+                            void exportToPPTX();
+                            return;
+                          }
+                          void exportToPDF();
+                        }}
+                        className="text-amber-800 font-medium hover:underline"
+                      >
+                        Retry Export
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Print Title (Only visible when printing) */}
               <div className="hidden print:block mb-10">
@@ -2635,7 +2769,7 @@ export default function CulturalArchaeologist() {
                   <input
                     type="text"
                     value={matrixQuestion}
-                    onChange={(e) => setMatrixQuestion(e.target.value)}
+                    onChange={(e) => setMatrixQuestion(e.target.value.slice(0, 400))}
                     placeholder="Ask a question about this audience (e.g., what are their main anxieties?)"
                     className="flex-1 px-5 py-4 rounded-2xl border border-indigo-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-zinc-900 shadow-sm text-sm"
                     onKeyDown={(e) => e.key === 'Enter' && handleAskQuestion()}
@@ -2927,7 +3061,8 @@ export default function CulturalArchaeologist() {
                   </ul>
                 </motion.div>
               )}
-            </motion.div>
+              </motion.div>
+            </SectionErrorBoundary>
           )}
         </AnimatePresence>
 

@@ -77,6 +77,10 @@ import {
 } from '../services/azure-openai';
 import { supabase } from '../services/supabase-client';
 import { Accordion } from './Accordion';
+import { runUserAction } from '../services/user-actions';
+import { normalizeAppError } from '../services/api-errors';
+import { logger } from '../services/logger';
+import { SectionErrorBoundary } from './SectionErrorBoundary';
 
 interface VisualDesignPageProps {
   onBack: () => void;
@@ -109,6 +113,12 @@ interface SavedDeepDiveSearch {
 
 type ResultTab = 'profiles' | 'compare';
 type CompareElement = 'primaryColors' | 'accentColors' | 'neutrals' | 'typography' | 'imageryStyle';
+
+const MAX_EXCAVATOR_BRAND_NAME_LENGTH = 120;
+const MAX_EXCAVATOR_BRAND_WEBSITE_LENGTH = 200;
+const MAX_EXCAVATOR_OBJECTIVE_LENGTH = 240;
+const MAX_EXCAVATOR_AUDIENCE_LENGTH = 180;
+const MAX_EXCAVATOR_QUESTION_LENGTH = 400;
 
 interface ComparePopupState {
   x: number;
@@ -400,6 +410,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [fakeProgress, setFakeProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<{ type: 'pptx' | 'pdf'; message: string } | null>(null);
 
   const [report, setReport] = useState<VisualDesignReport | null>(null);
   const [reportQuestion, setReportQuestion] = useState('');
@@ -437,6 +449,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     setCompareElement('primaryColors');
     setShowValidation(false);
     setError(null);
+    setSaveWarning(null);
+    setExportError(null);
     setReport(null);
     setReportQuestion('');
     setReportAnswer('');
@@ -706,22 +720,24 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     setFakeProgress(5);
     setIsLoading(true);
     setError(null);
+    setSaveWarning(null);
+    setExportError(null);
     setResultTab('profiles');
     setReportQuestion('');
     setReportAnswer('');
     setBestVisualsByBrand({});
 
     try {
-      const result = await generateVisualDesign({
-        brands: normalizedBrands,
-        analysisObjective: resolvedAnalysisObjective,
-        targetAudience,
+      const result = await runUserAction({
+        actionName: 'generate-design-report',
+        action: () =>
+          generateVisualDesign({
+            brands: normalizedBrands,
+            analysisObjective: resolvedAnalysisObjective,
+            targetAudience,
+          }),
+        onError: (normalized) => setError(normalized.message),
       });
-
-      // Debug log
-      if (typeof window !== 'undefined' && window.console) {
-        console.log('[VisualDesign] API result:', result);
-      }
 
       if (!result) {
         setError('No results were returned from the visual design API. Please try again.');
@@ -757,12 +773,13 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         }
       } catch (saveErr) {
         // Do not block UI if Supabase fails
-        console.warn('Failed to save visual design report to Supabase:', saveErr);
+        logger.warn('Failed to save visual design report to Supabase', saveErr);
+        setSaveWarning('Analysis generated, but this report could not be saved right now.');
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      console.error('Failed to generate brand excavator:', message);
-      setError(`Failed to generate brand excavator: ${message}`);
+      const normalized = normalizeAppError(err);
+      logger.error('Failed to generate design excavator report', { err, normalized });
+      setError(normalized.message || 'Failed to generate design excavator report.');
     } finally {
       setFakeProgress(100);
       await new Promise((resolve) => setTimeout(resolve, 220));
@@ -792,12 +809,16 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     setReportAnswer('');
 
     try {
-      const result = await submitVisualDesignPrompt({
-        brands: normalizedBrands,
-        analysisObjective: resolvedAnalysisObjective,
-        targetAudience,
-        currentReport: report,
-        prompt: reportQuestion,
+      const result = await runUserAction({
+        actionName: 'ask-design-question',
+        action: () =>
+          submitVisualDesignPrompt({
+            brands: normalizedBrands,
+            analysisObjective: resolvedAnalysisObjective,
+            targetAudience,
+            currentReport: report,
+            prompt: reportQuestion,
+          }),
       });
 
       if (result.mode === 'rescan') {
@@ -823,22 +844,25 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
               report: result.report,
               created_at: nextSaved.date,
             },
-          ]).select();
+        ]).select();
           if (!error && data) {
             setSavedSearches((prev) => [nextSaved, ...prev.filter((item) => item.id !== nextSaved.id)].slice(0, 20));
           }
         } catch (saveErr) {
           // Do not block UI if Supabase fails
-          console.warn('Failed to save visual design report to Supabase:', saveErr);
+          logger.warn('Failed to save visual prompt rescan to Supabase', saveErr);
+          setSaveWarning('Updated analysis is visible, but saving this run failed.');
         }
       }
 
       setReportAnswer(result.answer);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      console.error('Failed to process excavator prompt:', message);
-      setReportAnswer("Sorry, I couldn't answer that question right now.");
-      setError(`Failed to process prompt: ${message}`);
+      const normalized = normalizeAppError(err);
+      logger.error('Failed to process design excavator prompt', { err, normalized });
+      setReportAnswer(normalized.kind === 'quota'
+        ? 'Quota limit reached. Please check billing and try again.'
+        : "Sorry, I couldn't answer that question right now.");
+      setError(normalized.message || 'Failed to process prompt.');
     } finally {
       setIsSubmittingPrompt(false);
     }
@@ -861,7 +885,11 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   };
 
   const updateBrandRow = (id: string, key: 'name' | 'website', value: string) => {
-    setBrands((prev) => prev.map((brand) => (brand.id === id ? { ...brand, [key]: value } : brand)));
+    const boundedValue =
+      key === 'name'
+        ? value.slice(0, MAX_EXCAVATOR_BRAND_NAME_LENGTH)
+        : value.slice(0, MAX_EXCAVATOR_BRAND_WEBSITE_LENGTH);
+    setBrands((prev) => prev.map((brand) => (brand.id === id ? { ...brand, [key]: boundedValue } : brand)));
   };
 
   const renderColorSwatch = (color: BrandColorSpec) => {
@@ -1325,6 +1353,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
   const exportToPPTX = async () => {
     if (!report) return;
+    setExportError(null);
     setIsExporting(true);
     setToast('Generating PowerPoint...');
     try {
@@ -1382,8 +1411,9 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       await pres.writeFile({ fileName: `Design_Excavator_${new Date().toISOString().split('T')[0]}.pptx` });
       setToast('PowerPoint exported successfully!');
     } catch (err) {
-      const pptxError = err instanceof Error ? err.message : 'Unknown error';
-      console.error('Failed to generate PPTX:', pptxError);
+      const normalized = normalizeAppError(err);
+      logger.error('Failed to generate design PPTX', { err, normalized });
+      setExportError({ type: 'pptx', message: normalized.message || 'Failed to generate PowerPoint.' });
       setToast('Failed to generate PowerPoint.');
     } finally {
       setIsExporting(false);
@@ -1392,6 +1422,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
   const exportToPDF = async () => {
     if (!report) return;
+    setExportError(null);
     setIsExporting(true);
     setToast('Generating PDF...');
     try {
@@ -1511,8 +1542,9 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       doc.save(`Design_Excavator_${new Date().toISOString().split('T')[0]}.pdf`);
       setToast('PDF exported successfully!');
     } catch (err) {
-      const pdfError = err instanceof Error ? err.message : 'Unknown error';
-      console.error('Failed to generate PDF:', pdfError);
+      const normalized = normalizeAppError(err);
+      logger.error('Failed to generate design PDF', { err, normalized });
+      setExportError({ type: 'pdf', message: normalized.message || 'Failed to generate PDF.' });
       setToast('Failed to generate PDF.');
     } finally {
       setIsExporting(false);
@@ -1691,7 +1723,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             <Crosshair className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
             <textarea
               value={analysisObjective}
-              onChange={(e) => setAnalysisObjective(e.target.value)}
+              onChange={(e) => setAnalysisObjective(e.target.value.slice(0, MAX_EXCAVATOR_OBJECTIVE_LENGTH))}
               placeholder="Visual Identity Objective (Optional)"
               rows={1}
               className="w-full h-[56px] pl-12 pr-4 py-4 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none text-left"
@@ -1704,7 +1736,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             <input
               type="text"
               value={targetAudience}
-              onChange={(e) => setTargetAudience(e.target.value)}
+              onChange={(e) => setTargetAudience(e.target.value.slice(0, MAX_EXCAVATOR_AUDIENCE_LENGTH))}
               placeholder="Target Audience (Optional)"
               className="w-full pl-12 pr-4 py-4 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-left"
               disabled={isLoading}
@@ -1742,6 +1774,25 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         </div>
 
         {error && <p className="text-sm text-red-500">{error}</p>}
+        {saveWarning && <p className="text-sm text-amber-700">{saveWarning}</p>}
+        {exportError && (
+          <div className="text-sm text-amber-700 flex items-center gap-2">
+            <span>{exportError.message}</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (exportError.type === 'pptx') {
+                  void exportToPPTX();
+                  return;
+                }
+                void exportToPDF();
+              }}
+              className="text-amber-800 font-medium hover:underline"
+            >
+              Retry Export
+            </button>
+          </div>
+        )}
       </motion.form>
 
       <p className={`text-xs text-zinc-400 text-center mt-4 sm:mt-3 select-none ${isSearchControlsMinimized ? 'hidden' : ''}`}>
@@ -1750,28 +1801,16 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
       </div>
 
-
-
-      {/* Debug logging for results rendering */}
-      {report && (
-        <>
-          {typeof window !== 'undefined' && window.console && (
-            <script dangerouslySetInnerHTML={{
-              __html: `console.log('[VDE Render] report:', ${JSON.stringify(report)});console.log('[VDE Render] bestVisualsByBrand:', ${JSON.stringify(bestVisualsByBrand)});console.log('[VDE Render] logoImages:', ${JSON.stringify(logoImages)});`
-            }} />
-          )}
-        </>
-      )}
-
       <AnimatePresence mode="wait">
         {report && (
-          <motion.div
-            key="visual-design-report"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="w-full max-w-4xl mx-auto mt-8 space-y-6"
-          >
+          <SectionErrorBoundary title="Design Results">
+            <motion.div
+              key="visual-design-report"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="w-full max-w-4xl mx-auto mt-8 space-y-6"
+            >
             {/* ── Tab Bar ── */}
             <div className="flex gap-2 border-b border-zinc-200 pb-0">
               <button
@@ -1815,6 +1854,29 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                 </button>
               </div>
             </div>
+            {(saveWarning || exportError) && (
+              <div className="mt-3 space-y-2">
+                {saveWarning && <p className="text-sm text-amber-700">{saveWarning}</p>}
+                {exportError && (
+                  <div className="text-sm text-amber-700 flex items-center gap-2">
+                    <span>{exportError.message}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (exportError.type === 'pptx') {
+                          void exportToPPTX();
+                          return;
+                        }
+                        void exportToPDF();
+                      }}
+                      className="text-amber-800 font-medium hover:underline"
+                    >
+                      Retry Export
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ── Profiles Tab ── */}
             {resultTab === 'profiles' && (
@@ -1828,7 +1890,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                     <input
                       type="text"
                       value={reportQuestion}
-                      onChange={(e) => setReportQuestion(e.target.value)}
+                      onChange={(e) => setReportQuestion(e.target.value.slice(0, MAX_EXCAVATOR_QUESTION_LENGTH))}
                       placeholder="e.g. Which brand has the most distinct color system?"
                       className="flex-1 px-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm"
                       onKeyDown={(e) => e.key === 'Enter' && handleAskQuestion()}
@@ -2204,7 +2266,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
               </div>
             )}
 
-          </motion.div>
+            </motion.div>
+          </SectionErrorBoundary>
         )}
       </AnimatePresence>
 
