@@ -1930,7 +1930,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-zinc-200 rounded-full text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50"
                 >
                   <Presentation className="w-3.5 h-3.5" /> PPTX
-                  <span className="px-1.5 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                  <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 border border-indigo-100">
                     Beta
                   </span>
                 </button>
@@ -1941,7 +1941,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-zinc-200 rounded-full text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50"
                 >
                   <FileText className="w-3.5 h-3.5" /> PDF
-                  <span className="px-1.5 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                  <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 border border-indigo-100">
                     Beta
                   </span>
                 </button>
