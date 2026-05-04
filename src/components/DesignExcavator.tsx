@@ -1810,32 +1810,40 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-end pt-2">
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="px-8 py-3 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 transition-colors disabled:opacity-60 inline-flex items-center gap-2 relative overflow-hidden"
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-center pt-2">
+          <div className="justify-self-end md:col-start-2 md:col-span-1">
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="px-8 py-3 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 transition-colors disabled:opacity-60 inline-flex items-center gap-2 relative overflow-hidden"
+            >
+              {isLoading ? (
+                <ProgressiveLoader
+                  messages={[
+                    'Collecting brand ecosystem snapshots...',
+                    'Auditing logos, type, and color systems...',
+                    'Comparing visual distinctiveness...',
+                    'Drafting strategic visual guidance...',
+                  ]}
+                  showProgress
+                  progress={fakeProgress}
+                  averageDurationMs={4000}
+                />
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Generate Visual Analysis
+                </>
+              )}
+              {/* Progress bar is now rendered inside ProgressiveLoader for alignment with % */}
+            </button>
+          </div>
+          <div
+            className="hidden md:flex items-center justify-center px-3 py-3 rounded-2xl border border-transparent"
+            aria-hidden="true"
           >
-            {isLoading ? (
-              <ProgressiveLoader
-                messages={[
-                  'Collecting brand ecosystem snapshots...',
-                  'Auditing logos, type, and color systems...',
-                  'Comparing visual distinctiveness...',
-                  'Drafting strategic visual guidance...',
-                ]}
-                showProgress
-                progress={fakeProgress}
-                averageDurationMs={4000}
-              />
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                Generate Visual Analysis
-              </>
-            )}
-            {/* Progress bar is now rendered inside ProgressiveLoader for alignment with % */}
-          </button>
+            <Trash2 className="w-4 h-4 opacity-0" />
+          </div>
         </div>
 
         {error && <p className="text-sm text-red-500">{error}</p>}
