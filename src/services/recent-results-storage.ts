@@ -1,4 +1,4 @@
-export const MAX_RECENT_RESULTS = 6;
+export const MAX_RECENT_RESULTS = 10;
 
 export const APP_RECENT_RESULTS_MODES = {
   BRAND_NAVIGATOR: 'brand_navigator_recent_results',

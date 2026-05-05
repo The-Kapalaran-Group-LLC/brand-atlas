@@ -73,7 +73,6 @@ export interface Demographics {
   age?: string | null;
   race?: string | null;
   gender?: string | null;
-  income?: string | null;
 }
 
 export interface CulturalMatrix {
@@ -1244,6 +1243,50 @@ function sanitizeBrandDeepDiveReport(report: BrandDeepDiveReport): BrandDeepDive
   };
 }
 
+const DEMOGRAPHIC_NUMERIC_SIGNAL = /(\d{1,3}(?:\.\d+)?\s?%|\b\d{2}\s*[-–]\s*\d{2}\b|\$\s?\d[\d,]*(?:\.\d+)?\b|\bmedian\b|\bmean\b)/i;
+const DEMOGRAPHIC_DIRECTIONAL_SIGNAL = /(skew|majority|plurality|mostly|predominantly|over-?index|under-?index|concentrat|dominant|leans?\s+(male|female|women|men|non-binary)|youth-leaning)/i;
+const DEMOGRAPHIC_TOPIC_SIGNAL = /(age|young|youth|teen|adult|older|senior|gen\s?[xyz]|millennial|boomer|male|female|women|men|non-binary|gender|race|ethnic|black|white|latino|latina|latinx|hispanic|asian)/i;
+const DEMOGRAPHIC_STAT_CONTEXT_SIGNAL = /(audience|sample|respondent|survey|population|cohort|users?|consumers?|households?)/i;
+
+export function sanitizeDemographicClaim(value?: string | null): string | null {
+  const raw = (value || '').trim();
+  if (!raw) return null;
+
+  const stripped = raw
+    .replace(/\[(KNOWN|INFERRED|INFERED|SPECULATIVE)\]\s*/gi, '')
+    .replace(/\b(KNOWN|INFERRED|INFERED|SPECULATIVE)\b\s*[:\-]?\s*/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (!stripped) return null;
+
+  const hasKnownMarker = /\[(KNOWN)\]|\bKNOWN\b/i.test(raw);
+  const hasInferredMarker = /\[(INFERRED|INFERED)\]|\b(INFERRED|INFERED)\b/i.test(raw);
+  const hasSpeculativeMarker = /\[(SPECULATIVE)\]|\bSPECULATIVE\b/i.test(raw);
+  const hasNumericSignal = DEMOGRAPHIC_NUMERIC_SIGNAL.test(stripped);
+  const hasDirectionalSignal = DEMOGRAPHIC_DIRECTIONAL_SIGNAL.test(stripped);
+  const hasDemographicTopicSignal = DEMOGRAPHIC_TOPIC_SIGNAL.test(stripped);
+  const hasDemographicStatContextSignal = DEMOGRAPHIC_STAT_CONTEXT_SIGNAL.test(stripped);
+  const hasUsefulDemographicSignal = hasNumericSignal || hasDirectionalSignal || hasDemographicStatContextSignal || hasDemographicTopicSignal;
+  const hasTopicOrNumericAnchor = hasDemographicTopicSignal || hasNumericSignal;
+
+  if (hasSpeculativeMarker) return null;
+  if (hasKnownMarker && hasUsefulDemographicSignal && hasTopicOrNumericAnchor) return stripped;
+  if (hasInferredMarker && hasUsefulDemographicSignal && hasTopicOrNumericAnchor) return stripped;
+  if (!hasKnownMarker && !hasInferredMarker && hasUsefulDemographicSignal && hasTopicOrNumericAnchor) return stripped;
+  if (!hasDemographicTopicSignal) return null;
+  return null;
+}
+
+function sanitizeDemographicWithInferenceFallback(value?: string | null): string | null {
+  const direct = sanitizeDemographicClaim(value);
+  if (direct) return direct;
+
+  const raw = (value || '').trim();
+  if (!raw) return null;
+  const inferredAttempt = sanitizeDemographicClaim(`[INFERRED] ${raw}`);
+  return inferredAttempt;
+}
+
 function sanitizeCulturalMatrix(
   matrix: CulturalMatrix,
   hasUploadedDocuments: boolean,
@@ -1256,8 +1299,7 @@ function sanitizeCulturalMatrix(
       .replace(/\s{2,}/g, ' ')
       .trim();
   const normalizeDemographic = (value?: string | null): string | null => {
-    const stripped = stripEvidenceMarkers(value);
-    return stripped || null;
+    return sanitizeDemographicWithInferenceFallback(value);
   };
 
   const fallbackLifecycle = (confidence?: MatrixItem['confidenceLevel']): 'emerging' | 'peaking' | 'declining' => {
@@ -1279,14 +1321,22 @@ function sanitizeCulturalMatrix(
         : fallbackLifecycle(item.confidenceLevel),
   });
 
+  const sanitizedDemographics = {
+    age: normalizeDemographic(matrix.demographics?.age),
+    gender: normalizeDemographic(matrix.demographics?.gender),
+    race: normalizeDemographic(matrix.demographics?.race),
+  };
+
+  console.log('[cultural-matrix] Demographics sanitization summary', {
+    hasUploadedDocuments,
+    evidenceUrlCount: allowedEvidenceUrls.length,
+    raw: matrix.demographics || null,
+    sanitized: sanitizedDemographics,
+  });
+
   return {
     ...matrix,
-    demographics: {
-      age: normalizeDemographic(matrix.demographics?.age),
-      gender: normalizeDemographic(matrix.demographics?.gender),
-      income: normalizeDemographic(matrix.demographics?.income),
-      race: normalizeDemographic(matrix.demographics?.race),
-    },
+    demographics: sanitizedDemographics,
     sociological_analysis: stripEvidenceMarkers(matrix.sociological_analysis || ''),
     moments: (matrix.moments || []).map(normalizeItemConfidence),
     beliefs: (matrix.beliefs || []).map(normalizeItemConfidence),
@@ -2126,9 +2176,9 @@ const SourceSchema = z.object({
 
 const CulturalMatrixSchema = z.object({
   demographics: z.object({
-    age: z.string().nullable().describe("Exact age ranges. MUST return null if no statistical evidence is provided in the context."),
-    gender: z.string().nullable().describe("Exact gender splits. MUST return null if no statistical evidence is provided."),
-    income: z.string().nullable().describe("Income brackets. MUST return null if no statistical evidence is provided.")
+    age: z.string().nullable().describe("Age range for this audience. Use exact figures when available; otherwise infer from credible cultural signals and label inferred values with [INFERRED]."),
+    race: z.string().nullable().describe("Race/ethnicity composition. Use exact figures when available; otherwise infer from credible cultural signals and label inferred values with [INFERRED]."),
+    gender: z.string().nullable().describe("Gender composition. Use exact figures when available; otherwise infer from credible cultural signals and label inferred values with [INFERRED].")
   }),
   sociological_analysis: z.string().describe("A concise two-paragraph sociological summary of the socio-economic, historical, and cultural forces shaping this audience."),
   moments: z.array(MatrixItemSchema),
@@ -2201,8 +2251,8 @@ const BrandResearchMatrixSchema = z.object({
 const CulturalRawSignalsSchema = z.object({
   demographics: z.object({
     age: z.string().nullable(),
+    race: z.string().nullable(),
     gender: z.string().nullable(),
-    income: z.string().nullable(),
   }),
   moments: z.array(z.string()),
   beliefs: z.array(z.string()),
@@ -2245,21 +2295,25 @@ export async function generateCulturalMatrix(
       .filter((item) => item === 'emerging' || item === 'peaking' || item === 'declining'),
     sourceTypes: Array.from(new Set((rerunFilters?.sourceTypes || []).map((item) => item.trim()).filter(Boolean))),
   };
+  const rerunConfidenceLevels = normalizedRerunFilters.confidenceLevels || [];
+  const rerunEvidenceTypes = normalizedRerunFilters.evidenceTypes || [];
+  const rerunTrendStages = normalizedRerunFilters.trendStages || [];
+  const rerunSourceTypes = normalizedRerunFilters.sourceTypes || [];
   const hasRerunFilters =
-    normalizedRerunFilters.confidenceLevels!.length > 0 ||
-    normalizedRerunFilters.evidenceTypes!.length > 0 ||
-    normalizedRerunFilters.trendStages!.length > 0 ||
-    normalizedRerunFilters.sourceTypes!.length > 0;
+    rerunConfidenceLevels.length > 0 ||
+    rerunEvidenceTypes.length > 0 ||
+    rerunTrendStages.length > 0 ||
+    rerunSourceTypes.length > 0;
   const rerunFiltersStr = hasRerunFilters
     ? `\n\nCRITICAL FILTERED RERUN MODE:
     This is a rerun targeted to the currently selected filters.
     Return as many matching insights as can be supported by credible evidence.
     If evidence is insufficient, return fewer insights. Never fabricate to fill quota.
     Enforce these filters on every matrix item:
-    - confidenceLevel must be one of: ${(normalizedRerunFilters.confidenceLevels || []).join(', ') || 'any'}
-    - evidence marker in text must include one of: ${(normalizedRerunFilters.evidenceTypes || []).join(', ') || 'any'}
-    - trendLifecycle must be one of: ${(normalizedRerunFilters.trendStages || []).join(', ') || 'any'}
-    - sourceType should map to one of: ${(normalizedRerunFilters.sourceTypes || []).join(', ') || 'any'}`
+    - confidenceLevel must be one of: ${rerunConfidenceLevels.join(', ') || 'any'}
+    - evidence marker in text must include one of: ${rerunEvidenceTypes.join(', ') || 'any'}
+    - trendLifecycle must be one of: ${rerunTrendStages.join(', ') || 'any'}
+    - sourceType should map to one of: ${rerunSourceTypes.join(', ') || 'any'}`
     : "";
   console.log('[cultural-matrix] Filtered rerun settings', {
     hasRerunFilters,
@@ -2324,12 +2378,13 @@ export async function generateCulturalMatrix(
     - wordsTheyUse: common words and terms this audience naturally uses.
     - wordsToAvoid: words that feel inauthentic, corporate, or off-tone for this audience.
     
-    Also provide a demographic breakdown (age, gender, income) only when exact statistical evidence exists.
+    Also provide a demographic breakdown (age, race/ethnicity, gender).
+    Prefer exact statistics when available, but you may infer demographics from credible cultural signals when exact splits are unavailable.
 
     SOURCE GROUNDING:
     Every claim in the demographics and behavior sections MUST be grounded in the provided Evidence Digest.
     Do NOT invent URLs or sources. If you quote a source, you must use the exact URL provided in the Evidence Digest.
-    If no data is available for a specific demographic field, return null. DO NOT guess.
+    If a demographic value is inferred rather than statistically proven, label it with [INFERRED].
 
     Evidence digest (quality and date weighted):
     ${evidenceDigest}
@@ -2379,7 +2434,8 @@ Rules:
 - SOURCE GROUNDING:
   - Every claim in demographics and behaviors MUST be supported by the Evidence Digest signals.
   - Use only the exact URLs listed below for sources; do not invent or rewrite URLs.
-  - If age, gender, or income lacks statistical evidence, return null for that field.
+  - If age, race/ethnicity, or gender lacks exact statistics, you may infer it from credible cultural signals.
+  - Any inferred demographic value MUST be labeled with [INFERRED].
 
 Allowed Evidence URLs:
 ${allowedEvidenceUrlList}`;
@@ -2395,6 +2451,32 @@ ${allowedEvidenceUrlList}`;
     ],
     qualityGate: (payload) => !isThinStructuredPayload(payload),
     maxRetries: 3,
+  });
+
+  const backfillDemographicField = (
+    interpretedValue?: string | null,
+    rawValue?: string | null
+  ): string | null => {
+    const interpretedSanitized = sanitizeDemographicWithInferenceFallback(interpretedValue);
+    if (interpretedSanitized) return interpretedValue || interpretedSanitized;
+
+    const rawSanitized = sanitizeDemographicWithInferenceFallback(rawValue);
+    if (rawSanitized) {
+      return /\[(KNOWN|INFERRED|INFERED|SPECULATIVE)\]/i.test(rawValue || '')
+        ? (rawValue || rawSanitized)
+        : `[INFERRED] ${rawSanitized}`;
+    }
+    return interpretedValue || null;
+  };
+
+  interpretedMatrix.demographics = {
+    age: backfillDemographicField(interpretedMatrix.demographics?.age, rawSignals.demographics?.age),
+    race: backfillDemographicField(interpretedMatrix.demographics?.race, rawSignals.demographics?.race),
+    gender: backfillDemographicField(interpretedMatrix.demographics?.gender, rawSignals.demographics?.gender),
+  };
+  console.log('[cultural-matrix] Demographic backfill check', {
+    interpretedDemographics: interpretedMatrix.demographics,
+    rawSignalDemographics: rawSignals.demographics || null,
   });
 
   const devil = await runDevilsAdvocatePass(`Cultural matrix for ${audience}`, interpretedMatrix, 'cultural');

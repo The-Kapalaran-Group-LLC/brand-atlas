@@ -6,6 +6,7 @@ import {
   formatDevilsAdvocateLens,
   getDeploymentCandidatesFromEnv,
   scoreEvidenceDomain,
+  sanitizeDemographicClaim,
   shouldRetryWithAlternateDeployment,
 } from './azure-openai';
 
@@ -145,5 +146,26 @@ describe('evidence digest URL extraction', () => {
       'https://www.census.gov/library/stories/example',
       'http://www.reuters.com/world/example-story',
     ]);
+  });
+});
+
+describe('demographic claim sanitization', () => {
+  it('keeps known demographic claims when they include concrete or directional demographic signals', () => {
+    expect(sanitizeDemographicClaim('[KNOWN] 18-24 makes up 42% of the audience')).toBe('18-24 makes up 42% of the audience');
+    expect(sanitizeDemographicClaim('[KNOWN] 18-34')).toBe('18-34');
+    expect(sanitizeDemographicClaim('[KNOWN] Mostly young audience')).toBe('Mostly young audience');
+  });
+
+  it('keeps inferred directional demographics when explicitly labeled', () => {
+    expect(sanitizeDemographicClaim('[INFERRED] Women skew in creator-led niches')).toBe('Women skew in creator-led niches');
+    expect(sanitizeDemographicClaim('[INFERRED] 18-34')).toBe('18-34');
+    expect(sanitizeDemographicClaim('[INFERRED] Women and non-binary consumers')).toBe('Women and non-binary consumers');
+    expect(sanitizeDemographicClaim('[INFERRED] Young adults')).toBe('Young adults');
+  });
+
+  it('drops speculative or unlabeled demographic claims to reduce hallucination risk', () => {
+    expect(sanitizeDemographicClaim('[SPECULATIVE] Predominantly Gen Alpha households')).toBeNull();
+    expect(sanitizeDemographicClaim('Likely mostly women')).toBe('Likely mostly women');
+    expect(sanitizeDemographicClaim('18-34')).toBe('18-34');
   });
 });

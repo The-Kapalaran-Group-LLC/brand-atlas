@@ -145,7 +145,7 @@ const normalizeMatrixItemText = (value?: string): string => {
   return (value || '').trim().toLowerCase();
 };
 
-const itemMatchesRerunFilters = (item: MatrixItem, filters?: CulturalRerunFilters): boolean => {
+const matchesMatrixItemFilters = (item: MatrixItem, filters?: CulturalRerunFilters): boolean => {
   if (!filters) return true;
 
   if (filters.confidenceLevels && filters.confidenceLevels.length > 0) {
@@ -185,9 +185,34 @@ const mergeRerunMatrixIntoExisting = (
   rerunMatrix: CulturalMatrix,
   rerunFilters?: CulturalRerunFilters
 ): CulturalMatrix => {
+  const hasActiveRerunFilters = Boolean(
+    rerunFilters &&
+      (
+        (rerunFilters.confidenceLevels || []).length > 0 ||
+        (rerunFilters.evidenceTypes || []).length > 0 ||
+        (rerunFilters.trendStages || []).length > 0 ||
+        (rerunFilters.sourceTypes || []).length > 0
+      )
+  );
+  const pickDemographicValue = (rerunValue?: string | null, existingValue?: string | null): string | null => {
+    const cleanedExistingValue = stripDemographicEvidenceMarkers(existingValue);
+    const cleanedRerunValue = stripDemographicEvidenceMarkers(rerunValue);
+    if (hasActiveRerunFilters && cleanedExistingValue) {
+      return existingValue ?? null;
+    }
+    if (cleanedRerunValue) {
+      return rerunValue ?? null;
+    }
+    return existingValue ?? null;
+  };
+
   const merged: CulturalMatrix = {
     ...existingMatrix,
-    demographics: rerunMatrix.demographics || existingMatrix.demographics,
+    demographics: {
+      age: pickDemographicValue(rerunMatrix.demographics?.age, existingMatrix.demographics?.age),
+      race: pickDemographicValue(rerunMatrix.demographics?.race, existingMatrix.demographics?.race),
+      gender: pickDemographicValue(rerunMatrix.demographics?.gender, existingMatrix.demographics?.gender),
+    },
     sociological_analysis: rerunMatrix.sociological_analysis || existingMatrix.sociological_analysis,
     vocabulary: rerunMatrix.vocabulary || existingMatrix.vocabulary,
     sources: Array.from(
@@ -201,7 +226,7 @@ const mergeRerunMatrixIntoExisting = (
 
   MATRIX_INSIGHT_KEYS.forEach((key) => {
     const existingItems = existingMatrix[key] || [];
-    const matchingRerunItems = (rerunMatrix[key] || []).filter((item) => itemMatchesRerunFilters(item, rerunFilters));
+    const matchingRerunItems = (rerunMatrix[key] || []).filter((item) => matchesMatrixItemFilters(item, rerunFilters));
     const mergedItems: MatrixItem[] = [...existingItems];
     const seen = new Set(existingItems.map((item) => normalizeMatrixItemText(item.text)));
 
@@ -235,6 +260,13 @@ const stripDemographicEvidenceMarkers = (value: string | null | undefined): stri
     .replace(/\s*[/|,;:]+\s*$/, '')
     .replace(/\s*[.]+\s*$/, '')
     .trim();
+};
+
+const DEMOGRAPHIC_FALLBACK_TEXT = 'Data unavailable';
+
+const formatDemographicDisplayValue = (value: string | null | undefined): string => {
+  const cleaned = stripDemographicEvidenceMarkers(value);
+  return cleaned || DEMOGRAPHIC_FALLBACK_TEXT;
 };
 
 const extractEvidenceTags = (value: string): { cleanText: string; labels: EvidenceTagLabel[] } => {
@@ -312,9 +344,9 @@ const evidenceLabelChipClass = (label: EvidenceTagLabel): string => {
 };
 
 const sanitizeDemographics = (demographics: { age?: string | null; race?: string | null; gender?: string | null }) => ({
-  age: stripDemographicEvidenceMarkers(demographics.age),
-  race: stripDemographicEvidenceMarkers(demographics.race),
-  gender: stripDemographicEvidenceMarkers(demographics.gender),
+  age: formatDemographicDisplayValue(demographics.age),
+  race: formatDemographicDisplayValue(demographics.race),
+  gender: formatDemographicDisplayValue(demographics.gender),
 });
 
 const GENERATIONS = [
@@ -501,53 +533,25 @@ export default function CulturalArchaeologist() {
     );
   }, [brandInput, visibleSavedMatrices]);
 
+  const activeRerunFilters = useMemo<CulturalRerunFilters>(() => ({
+    confidenceLevels: [...selectedConfidenceFilters],
+    evidenceTypes: [...selectedEvidenceFilters],
+    trendStages: [...selectedTrendStageFilters],
+    sourceTypes: [...selectedSourceFilters],
+  }), [selectedConfidenceFilters, selectedEvidenceFilters, selectedTrendStageFilters, selectedSourceFilters]);
+
   const filteredMatrix = useMemo(() => {
     if (!matrix) {
       return null;
     }
 
-    const itemMatchesFilters = (item: MatrixItem): boolean => {
-      if (selectedConfidenceFilters.length > 0) {
-        const confidence = (item.confidenceLevel || 'medium') as ConfidenceLevelFilter;
-        if (!selectedConfidenceFilters.includes(confidence)) {
-          return false;
-        }
-      }
-
-      if (selectedEvidenceFilters.length > 0) {
-        const labels = extractEvidenceLabelsFromText(item.text);
-        const hasMatch = labels.some((label) => selectedEvidenceFilters.includes(label));
-        if (!hasMatch) {
-          return false;
-        }
-      }
-
-      if (selectedTrendStageFilters.length > 0) {
-        const stage = normalizeTrendStage(item.trendLifecycle);
-        if (!selectedTrendStageFilters.includes(stage)) {
-          return false;
-        }
-      }
-
-      if (selectedSourceFilters.length > 0) {
-        const mappedSource = mapInsightSourceToSearchSource(item.sourceType);
-        const hasSourceMatch = mappedSource !== null && selectedSourceFilters.includes(mappedSource);
-
-        if (!hasSourceMatch) {
-          return false;
-        }
-      }
-
-      return true;
-    };
-
     const nextMatrix: CulturalMatrix = { ...matrix };
     MATRIX_INSIGHT_KEYS.forEach((key) => {
-      nextMatrix[key] = (matrix[key] || []).filter(itemMatchesFilters);
+      nextMatrix[key] = (matrix[key] || []).filter((item) => matchesMatrixItemFilters(item, activeRerunFilters));
     });
 
     return nextMatrix;
-  }, [matrix, selectedConfidenceFilters, selectedEvidenceFilters, selectedTrendStageFilters, selectedSourceFilters]);
+  }, [matrix, activeRerunFilters]);
 
   const sourceFilterOptions = useMemo(() => {
     const configuredSources = (matrixMeta?.sourcesType || [])
@@ -567,12 +571,6 @@ export default function CulturalArchaeologist() {
     selectedTrendStageFilters.length +
     selectedSourceFilters.length;
   const hasActiveResultFilters = activeFilterCount > 0;
-  const activeRerunFilters = useMemo<CulturalRerunFilters>(() => ({
-    confidenceLevels: [...selectedConfidenceFilters],
-    evidenceTypes: [...selectedEvidenceFilters],
-    trendStages: [...selectedTrendStageFilters],
-    sourceTypes: [...selectedSourceFilters],
-  }), [selectedConfidenceFilters, selectedEvidenceFilters, selectedTrendStageFilters, selectedSourceFilters]);
   const displayMatrix = filteredMatrix || matrix;
   const hasVisibleInsights =
     !!displayMatrix && MATRIX_INSIGHT_KEYS.some((key) => (displayMatrix[key] || []).length > 0);
@@ -1424,17 +1422,17 @@ export default function CulturalArchaeologist() {
     slide.addText([
       { text: "AVERAGE AGE\n", options: { fontSize: 10, color: "A1A1AA", bold: true } },
       { text: cleanDemographics.age, options: { fontSize: 14, color: "18181B", bold: true } }
-    ], { shape: pres.ShapeType.roundRect, x: 1, y: boxY, w: 2.5, h: 0.8, fill: { color: "FFFFFF" }, line: { color: "E4E4E7", width: 1 }, align: "center", valign: "middle" });
+    ], { shape: pres.ShapeType.roundRect, x: 1, y: boxY, w: 2, h: 0.8, fill: { color: "FFFFFF" }, line: { color: "E4E4E7", width: 1 }, align: "center", valign: "middle" });
     
     slide.addText([
       { text: "RACE / ETHNICITY\n", options: { fontSize: 10, color: "A1A1AA", bold: true } },
       { text: cleanDemographics.race, options: { fontSize: 14, color: "18181B", bold: true } }
-    ], { shape: pres.ShapeType.roundRect, x: 3.75, y: boxY, w: 2.5, h: 0.8, fill: { color: "FFFFFF" }, line: { color: "E4E4E7", width: 1 }, align: "center", valign: "middle" });
+    ], { shape: pres.ShapeType.roundRect, x: 3.15, y: boxY, w: 2, h: 0.8, fill: { color: "FFFFFF" }, line: { color: "E4E4E7", width: 1 }, align: "center", valign: "middle" });
     
     slide.addText([
       { text: "GENDER\n", options: { fontSize: 10, color: "A1A1AA", bold: true } },
       { text: cleanDemographics.gender, options: { fontSize: 14, color: "18181B", bold: true } }
-    ], { shape: pres.ShapeType.roundRect, x: 6.5, y: boxY, w: 2.5, h: 0.8, fill: { color: "FFFFFF" }, line: { color: "E4E4E7", width: 1 }, align: "center", valign: "middle" });
+    ], { shape: pres.ShapeType.roundRect, x: 5.3, y: boxY, w: 2, h: 0.8, fill: { color: "FFFFFF" }, line: { color: "E4E4E7", width: 1 }, align: "center", valign: "middle" });
     
     const categories = [
       { title: 'Moments', data: matrix.moments },
@@ -3063,15 +3061,15 @@ export default function CulturalArchaeologist() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 no-print">
                 <div className="bg-white p-4 rounded-2xl border border-zinc-200 shadow-sm text-center">
                   <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Average Age</div>
-                  <div className="text-sm font-semibold text-zinc-900">{stripDemographicEvidenceMarkers(matrix.demographics.age)}</div>
+                  <div className="text-sm font-semibold text-zinc-900">{formatDemographicDisplayValue(matrix.demographics.age)}</div>
                 </div>
                 <div className="bg-white p-4 rounded-2xl border border-zinc-200 shadow-sm text-center">
                   <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Race / Ethnicity</div>
-                  <div className="text-sm font-semibold text-zinc-900">{stripDemographicEvidenceMarkers(matrix.demographics.race)}</div>
+                  <div className="text-sm font-semibold text-zinc-900">{formatDemographicDisplayValue(matrix.demographics.race)}</div>
                 </div>
                 <div className="bg-white p-4 rounded-2xl border border-zinc-200 shadow-sm text-center">
                   <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Gender</div>
-                  <div className="text-sm font-semibold text-zinc-900">{stripDemographicEvidenceMarkers(matrix.demographics.gender)}</div>
+                  <div className="text-sm font-semibold text-zinc-900">{formatDemographicDisplayValue(matrix.demographics.gender)}</div>
                 </div>
               </div>
 
