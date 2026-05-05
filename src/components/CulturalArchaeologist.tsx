@@ -141,6 +141,85 @@ const mapInsightSourceToSearchSource = (sourceType?: string): string | null => {
   return null;
 };
 
+const normalizeMatrixItemText = (value?: string): string => {
+  return (value || '').trim().toLowerCase();
+};
+
+const itemMatchesRerunFilters = (item: MatrixItem, filters?: CulturalRerunFilters): boolean => {
+  if (!filters) return true;
+
+  if (filters.confidenceLevels && filters.confidenceLevels.length > 0) {
+    const confidence = (item.confidenceLevel || 'medium') as ConfidenceLevelFilter;
+    if (!filters.confidenceLevels.includes(confidence)) {
+      return false;
+    }
+  }
+
+  if (filters.evidenceTypes && filters.evidenceTypes.length > 0) {
+    const labels = extractEvidenceLabelsFromText(item.text);
+    const hasEvidenceMatch = labels.some((label) => filters.evidenceTypes!.includes(label));
+    if (!hasEvidenceMatch) {
+      return false;
+    }
+  }
+
+  if (filters.trendStages && filters.trendStages.length > 0) {
+    const stage = normalizeTrendStage(item.trendLifecycle);
+    if (!filters.trendStages.includes(stage)) {
+      return false;
+    }
+  }
+
+  if (filters.sourceTypes && filters.sourceTypes.length > 0) {
+    const mappedSource = mapInsightSourceToSearchSource(item.sourceType);
+    if (!mappedSource || !filters.sourceTypes.includes(mappedSource)) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+const mergeRerunMatrixIntoExisting = (
+  existingMatrix: CulturalMatrix,
+  rerunMatrix: CulturalMatrix,
+  rerunFilters?: CulturalRerunFilters
+): CulturalMatrix => {
+  const merged: CulturalMatrix = {
+    ...existingMatrix,
+    demographics: rerunMatrix.demographics || existingMatrix.demographics,
+    sociological_analysis: rerunMatrix.sociological_analysis || existingMatrix.sociological_analysis,
+    vocabulary: rerunMatrix.vocabulary || existingMatrix.vocabulary,
+    sources: Array.from(
+      new Map(
+        [...(existingMatrix.sources || []), ...(rerunMatrix.sources || [])]
+          .filter((source) => (source?.url || '').trim().length > 0)
+          .map((source) => [source.url.trim().toLowerCase(), source] as const)
+      ).values()
+    ),
+  };
+
+  MATRIX_INSIGHT_KEYS.forEach((key) => {
+    const existingItems = existingMatrix[key] || [];
+    const matchingRerunItems = (rerunMatrix[key] || []).filter((item) => itemMatchesRerunFilters(item, rerunFilters));
+    const mergedItems: MatrixItem[] = [...existingItems];
+    const seen = new Set(existingItems.map((item) => normalizeMatrixItemText(item.text)));
+
+    matchingRerunItems.forEach((item) => {
+      const normalizedText = normalizeMatrixItemText(item.text);
+      if (!normalizedText || seen.has(normalizedText)) {
+        return;
+      }
+      seen.add(normalizedText);
+      mergedItems.push(item);
+    });
+
+    merged[key] = mergedItems;
+  });
+
+  return merged;
+};
+
 const stripDemographicEvidenceMarkers = (value: string | null | undefined): string => {
   if (!value) return '';
 
@@ -960,7 +1039,11 @@ export default function CulturalArchaeologist() {
         ),
         onError: (normalized) => setError(normalized.message),
       });
-      setMatrix(result);
+      const nextMatrix =
+        actionName === 'rerun-cultural-matrix' && matrix
+          ? mergeRerunMatrixIntoExisting(matrix, result, rerunFilters)
+          : result;
+      setMatrix(nextMatrix);
       setMatrixMeta({
         audience: audienceValue,
         brand: brandContextValue,
@@ -974,7 +1057,7 @@ export default function CulturalArchaeologist() {
         id: generatedRecentId,
         title: (brandContextValue || 'Generated Cultural Analysis').trim(),
         description: `Audience: ${(audienceValue || 'Not specified').trim()}`,
-        matrix: result,
+        matrix: nextMatrix,
         matrixMeta: {
           audience: audienceValue,
           brand: brandContextValue,
@@ -1000,7 +1083,7 @@ export default function CulturalArchaeologist() {
             topicFocus: topicFocusValue || null,
             generations: generationsValue,
             sourcesType: sourcesTypeValue,
-            results: result,
+            results: nextMatrix,
             device,
             location,
             ip_address,
@@ -1043,7 +1126,7 @@ export default function CulturalArchaeologist() {
         logger.warn('Failed to play completion sound', e);
       }
 
-      runBackgroundDeepDives(result, {
+      runBackgroundDeepDives(nextMatrix, {
         audience: audienceValue,
         brand: brandContextValue,
         generations: generationsValue,

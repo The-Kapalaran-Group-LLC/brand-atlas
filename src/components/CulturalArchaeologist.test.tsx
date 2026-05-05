@@ -118,6 +118,21 @@ describe('CulturalArchaeologist', () => {
   });
 
   it('reruns analysis with active filter constraints while keeping current filter behavior', async () => {
+    generateCulturalMatrix
+      .mockResolvedValueOnce(mockMatrix)
+      .mockResolvedValueOnce({
+        ...mockMatrix,
+        moments: [
+          {
+            text: '[KNOWN] New signal from rerun',
+            isHighlyUnique: false,
+            sourceType: 'Mainstream',
+            confidenceLevel: 'high' as const,
+            trendLifecycle: 'peaking' as const,
+          },
+        ],
+      });
+
     render(<CulturalArchaeologist />);
 
     const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
@@ -139,6 +154,9 @@ describe('CulturalArchaeologist', () => {
     await waitFor(() => {
       expect(generateCulturalMatrix).toHaveBeenCalledTimes(2);
     });
+
+    expect(await screen.findByText('First signal')).toBeInTheDocument();
+    expect(await screen.findByText('New signal from rerun')).toBeInTheDocument();
 
     expect(generateCulturalMatrix).toHaveBeenNthCalledWith(
       2,
