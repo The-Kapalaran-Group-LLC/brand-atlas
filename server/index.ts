@@ -8,7 +8,13 @@ import { fileURLToPath } from 'node:url';
 import { fetchAudienceContext } from '../lib/grounding.js';
 import { fetchSubredditQuotes } from '../lib/fetchSubredditQuotes.js';
 import { processImageForUI, type ProcessedImageResult } from './image-processing';
-import { extractBrandImages, type BrandImagesResult } from './brand-images';
+import {
+  analyzeBrandDesignFromScreenshot,
+  extractLegacyBrandAssets,
+  extractBrandImages,
+  type BrandImagesResult,
+  type BrandVisionAnalysis,
+} from './brand-images';
 import { extractBrandWebContext, type BrandWebContextResult } from './brand-web-context';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -21,9 +27,17 @@ dotenv.config({ quiet: true });
 const app = express();
 const parsedPort = Number(process.env.PORT || 3001);
 const PORT = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 3001;
+const publicDir = path.resolve(__dirname, '../public');
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+app.get('/design-excavator-comparison', (_req, res) => {
+  res.sendFile(path.join(publicDir, 'design-excavator-comparison.html'));
+});
+app.get('/design-excavator-comparison.html', (_req, res) => {
+  res.sendFile(path.join(publicDir, 'design-excavator-comparison.html'));
+});
+app.use(express.static(publicDir));
 
 const IMAGE_CACHE_TTL_MS = 15 * 60 * 1000;
 const IMAGE_CACHE_MAX_ITEMS = 300;
@@ -213,6 +227,10 @@ app.get('/api/process-image', async (req, res) => {
 // ── Brand images (logo + hero) ───────────────────────────────────────────
 const BRAND_IMAGES_CACHE_TTL_MS = 30 * 60 * 1_000; // 30 min
 const brandImagesCache = new Map<string, { result: BrandImagesResult; expiresAt: number }>();
+const BRAND_IMAGES_LEGACY_CACHE_TTL_MS = 30 * 60 * 1_000; // 30 min
+const brandImagesLegacyCache = new Map<string, { result: BrandImagesResult; expiresAt: number }>();
+const DESIGN_EXCAVATOR_VISION_CACHE_TTL_MS = 15 * 60 * 1_000; // 15 min
+const designExcavatorVisionCache = new Map<string, { result: BrandVisionAnalysis; expiresAt: number }>();
 const BRAND_WEB_CONTEXT_CACHE_TTL_MS = 15 * 60 * 1_000; // 15 min
 const brandWebContextCache = new Map<string, { result: BrandWebContextResult; expiresAt: number }>();
 
@@ -254,6 +272,115 @@ app.get('/api/brand-images', async (req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(502).json({ error: `Failed to extract brand images: ${message}` });
+  }
+});
+
+app.get('/api/brand-images-legacy', async (req, res) => {
+  const rawDomain = Array.isArray(req.query.domain) ? req.query.domain[0] : req.query.domain;
+
+  if (!rawDomain || typeof rawDomain !== 'string') {
+    return res.status(400).json({ error: 'Missing domain query parameter.' });
+  }
+
+  let parsedUrl: URL;
+  try {
+    const withProtocol = /^https?:\/\//i.test(rawDomain.trim())
+      ? rawDomain.trim()
+      : `https://${rawDomain.trim()}`;
+    parsedUrl = new URL(withProtocol);
+  } catch {
+    return res.status(400).json({ error: 'Invalid domain parameter.' });
+  }
+
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return res.status(400).json({ error: 'Only http/https domains are allowed.' });
+  }
+
+  if (isDisallowedHost(parsedUrl.hostname)) {
+    return res.status(403).json({ error: 'Host is not allowed.' });
+  }
+
+  const cacheKey = parsedUrl.hostname;
+  const cached = brandImagesLegacyCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.result);
+  }
+
+  console.log('[design-excavator-legacy] Request received.', {
+    domain: parsedUrl.hostname,
+    originalInput: rawDomain,
+  });
+
+  try {
+    const result = await extractLegacyBrandAssets(parsedUrl.hostname);
+    brandImagesLegacyCache.set(cacheKey, { result, expiresAt: Date.now() + BRAND_IMAGES_LEGACY_CACHE_TTL_MS });
+    return res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(502).json({ error: `Failed to extract legacy brand images: ${message}` });
+  }
+});
+
+app.post('/api/design-excavator-vision', async (req, res) => {
+  const websiteUrl = typeof req.body?.websiteUrl === 'string' ? req.body.websiteUrl : '';
+  if (!websiteUrl.trim()) {
+    return res.status(400).json({ error: 'Missing websiteUrl in request body.' });
+  }
+
+  let parsedUrl: URL;
+  try {
+    const withProtocol = /^https?:\/\//i.test(websiteUrl.trim())
+      ? websiteUrl.trim()
+      : `https://${websiteUrl.trim()}`;
+    parsedUrl = new URL(withProtocol);
+  } catch {
+    return res.status(400).json({ error: 'Invalid websiteUrl.' });
+  }
+
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return res.status(400).json({ error: 'Only http/https website URLs are allowed.' });
+  }
+
+  if (isDisallowedHost(parsedUrl.hostname)) {
+    return res.status(403).json({ error: 'Host is not allowed.' });
+  }
+
+  const cacheKey = parsedUrl.toString().toLowerCase();
+  const cached = designExcavatorVisionCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.result);
+  }
+
+  console.log('[design-excavator-vision] Request received.', {
+    websiteUrl: parsedUrl.toString(),
+    hostname: parsedUrl.hostname,
+  });
+
+  try {
+    const analysis = await analyzeBrandDesignFromScreenshot(parsedUrl.toString());
+    if (!analysis) {
+      return res.status(502).json({ error: 'Vision analysis is unavailable. Check Azure OpenAI configuration.' });
+    }
+
+    designExcavatorVisionCache.set(cacheKey, {
+      result: analysis,
+      expiresAt: Date.now() + DESIGN_EXCAVATOR_VISION_CACHE_TTL_MS,
+    });
+
+    console.log('[design-excavator-vision] Vision analysis completed.', {
+      websiteUrl: parsedUrl.toString(),
+      colorCount: analysis.primaryColors.length,
+      fontCount: analysis.fontFamilies.length,
+    });
+
+    return res.json(analysis);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown vision analysis error';
+    console.log('[design-excavator-vision] Request failed.', {
+      websiteUrl: parsedUrl.toString(),
+      error: message,
+    });
+    return res.status(502).json({ error: `Failed to analyze screenshot with vision model: ${message}` });
   }
 });
 

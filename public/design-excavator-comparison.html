@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Design Excavator Comparison</title>
+    <style>
+      :root {
+        --bg: #f5f7fa;
+        --surface: #ffffff;
+        --text: #1f2937;
+        --muted: #64748b;
+        --border: #e2e8f0;
+        --accent: #0f766e;
+        --danger: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top left, #d1fae5 0%, var(--bg) 45%);
+        color: var(--text);
+      }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 8px 30px rgba(15, 23, 42, 0.05);
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+      .row input {
+        flex: 1;
+        min-width: 260px;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        font-size: 14px;
+      }
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 18px;
+        font-weight: 600;
+        color: white;
+        background: var(--accent);
+        cursor: pointer;
+      }
+      .grid {
+        margin-top: 20px;
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      }
+      h1 { margin: 0 0 8px 0; font-size: 24px; }
+      h2 { margin: 0 0 10px 0; font-size: 18px; }
+      p { margin: 4px 0; color: var(--muted); }
+      .chips {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        padding: 6px 10px;
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 12px;
+        color: #0f172a;
+      }
+      .swatch {
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        border: 1px solid #cbd5e1;
+        display: inline-block;
+        margin-right: 6px;
+        vertical-align: middle;
+      }
+      .meta {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .error {
+        color: var(--danger);
+        font-weight: 600;
+      }
+      pre {
+        max-height: 300px;
+        overflow: auto;
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="panel">
+        <h1>Design Excavator Side-by-Side Comparison</h1>
+        <p>Compare legacy scraping-only results vs the updated vision-enhanced pipeline.</p>
+        <div class="row">
+          <input id="websiteUrl" data-testid="comparison-website-input" placeholder="Enter website (example: stripe.com)" value="stripe.com" />
+          <button id="runComparison" data-testid="comparison-run-button">Run Comparison</button>
+        </div>
+        <div class="row">
+          <input id="apiBaseUrl" data-testid="comparison-api-base-input" placeholder="API base URL (auto-detects if blank)" value="http://127.0.0.1:3001" />
+        </div>
+        <p id="status" class="meta" data-testid="comparison-status">Idle</p>
+      </div>
+
+      <div class="grid">
+        <section class="panel" data-testid="legacy-panel">
+          <h2>Before Update (Legacy Scraping)</h2>
+          <p class="meta">Endpoint: <code>/api/brand-images-legacy</code></p>
+          <div id="legacySummary"></div>
+          <pre id="legacyRaw">No result yet.</pre>
+        </section>
+
+        <section class="panel" data-testid="updated-panel">
+          <h2>After Update (Vision + Scraping)</h2>
+          <p class="meta">Endpoint: <code>/api/brand-images</code> and <code>/api/design-excavator-vision</code></p>
+          <div id="updatedSummary"></div>
+          <pre id="updatedRaw">No result yet.</pre>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const websiteInput = document.getElementById('websiteUrl');
+      const apiBaseInput = document.getElementById('apiBaseUrl');
+      const runButton = document.getElementById('runComparison');
+      const status = document.getElementById('status');
+      const legacySummary = document.getElementById('legacySummary');
+      const updatedSummary = document.getElementById('updatedSummary');
+      const legacyRaw = document.getElementById('legacyRaw');
+      const updatedRaw = document.getElementById('updatedRaw');
+
+      function renderChipList(title, values, isColorList) {
+        const list = Array.isArray(values) ? values : [];
+        const chips = list.length
+          ? list.map((value) => {
+              const safe = String(value || '');
+              if (isColorList && /^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$/.test(safe)) {
+                return `<span class="chip"><span class="swatch" style="background:${safe}"></span>${safe}</span>`;
+              }
+              return `<span class="chip">${safe}</span>`;
+            }).join('')
+          : '<span class="chip">None</span>';
+        return `<p><strong>${title}</strong></p><div class="chips">${chips}</div>`;
+      }
+
+      function summarizeResult(target, payload) {
+        const tokens = payload && payload.designTokens ? payload.designTokens : { colors: [], fonts: [] };
+        target.innerHTML = [
+          renderChipList('Colors', tokens.colors, true),
+          renderChipList('Fonts', tokens.fonts, false),
+          `<p class="meta"><strong>Logo:</strong> ${payload.logoUrl || 'None'}</p>`,
+          `<p class="meta"><strong>Hero:</strong> ${payload.heroImageUrl || 'None'}</p>`,
+        ].join('');
+      }
+
+      function normalizeApiBaseUrl() {
+        const raw = String(apiBaseInput.value || '').trim();
+        if (!raw) return '';
+        return raw.replace(/\/+$/, '');
+      }
+
+      function candidateApiBases() {
+        const manualBase = normalizeApiBaseUrl();
+        const candidates = [
+          manualBase,
+          window.location.origin,
+          'http://localhost:3011',
+          'http://[::1]:3011',
+          'http://127.0.0.1:3011',
+          'http://localhost:3001',
+          'http://[::1]:3001',
+          'http://127.0.0.1:3001',
+        ].filter(Boolean);
+        return Array.from(new Set(candidates.map((value) => value.replace(/\/+$/, ''))));
+      }
+
+      function endpoint(path) {
+        const base = normalizeApiBaseUrl();
+        if (!base) return path;
+        return `${base}${path}`;
+      }
+
+      async function fetchJson(url, options) {
+        const response = await fetch(url, options);
+        const json = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(json.error || `Request failed: ${response.status} (${url})`);
+        }
+        return json;
+      }
+
+      async function detectWorkingApiBase(website) {
+        const candidates = candidateApiBases();
+        const checks = [];
+        let fallbackBase = '';
+
+        for (const base of candidates) {
+          const legacyUrl = `${base}/api/brand-images-legacy?domain=${encodeURIComponent(website)}`;
+          const defaultUrl = `${base}/api/brand-images?domain=${encodeURIComponent(website)}`;
+          try {
+            const legacyResponse = await fetch(legacyUrl);
+            checks.push({ base, legacyStatus: legacyResponse.status });
+            if (legacyResponse.ok) {
+              return { base, checks, mode: 'full' };
+            }
+
+            if (!fallbackBase && legacyResponse.status === 404) {
+              const defaultResponse = await fetch(defaultUrl);
+              checks.push({ base, defaultStatus: defaultResponse.status });
+              if (defaultResponse.ok) {
+                fallbackBase = base;
+              }
+            }
+          } catch (error) {
+            checks.push({ base, legacyStatus: 'network_error' });
+          }
+        }
+
+        if (fallbackBase) {
+          return { base: fallbackBase, checks, mode: 'compat' };
+        }
+
+        const details = checks.map((item) => {
+          const parts = [];
+          if (item.legacyStatus !== undefined) parts.push(`legacy:${item.legacyStatus}`);
+          if (item.defaultStatus !== undefined) parts.push(`default:${item.defaultStatus}`);
+          return `${item.base} -> ${parts.join(' ') || 'unknown'}`;
+        }).join(', ');
+        throw new Error(`No working API backend found for legacy endpoint. Tried: ${details}`);
+      }
+
+      async function runComparison() {
+        const website = (websiteInput.value || '').trim();
+        if (!website) {
+          status.textContent = 'Please enter a website URL or domain.';
+          status.className = 'error';
+          return;
+        }
+
+        const apiBase = normalizeApiBaseUrl();
+        status.textContent = `Detecting backend for ${website}...`;
+        status.className = 'meta';
+        console.log('[design-excavator-comparison] Starting backend detection for website:', website, 'manualApiBase:', apiBase || '(none)');
+
+        legacySummary.innerHTML = '';
+        updatedSummary.innerHTML = '';
+        legacyRaw.textContent = 'Loading...';
+        updatedRaw.textContent = 'Loading...';
+
+        try {
+          const detection = await detectWorkingApiBase(website);
+          apiBaseInput.value = detection.base;
+          status.textContent = detection.mode === 'compat'
+            ? `Running compatibility comparison for ${website} using ${detection.base}...`
+            : `Running comparison for ${website} using ${detection.base}...`;
+          console.log('[design-excavator-comparison] Selected API base:', detection.base, 'checks:', detection.checks);
+
+          const legacyEndpoint = detection.mode === 'compat'
+            ? endpoint(`/api/brand-images?domain=${encodeURIComponent(website)}`)
+            : endpoint(`/api/brand-images-legacy?domain=${encodeURIComponent(website)}`);
+
+          const [legacy, updated, vision] = await Promise.all([
+            fetchJson(legacyEndpoint),
+            fetchJson(endpoint(`/api/brand-images?domain=${encodeURIComponent(website)}`)),
+            fetchJson(endpoint('/api/design-excavator-vision'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ websiteUrl: website }),
+            }).catch((error) => ({ error: error.message })),
+          ]);
+
+          summarizeResult(legacySummary, legacy);
+          summarizeResult(updatedSummary, updated);
+          legacyRaw.textContent = JSON.stringify(legacy, null, 2);
+          updatedRaw.textContent = JSON.stringify({ updated, vision }, null, 2);
+
+          status.textContent = detection.mode === 'compat'
+            ? `Compatibility comparison complete for ${website}.`
+            : `Comparison complete for ${website}.`;
+          status.className = 'meta';
+          console.log('[design-excavator-comparison] Comparison complete.', { website, legacy, updated, vision });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          status.textContent = `Comparison failed: ${message}`;
+          status.className = 'error';
+          legacyRaw.textContent = message;
+          updatedRaw.textContent = message;
+          console.error('[design-excavator-comparison] Comparison failed.', { website, error: message });
+        }
+      }
+
+      runButton.addEventListener('click', runComparison);
+      websiteInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') runComparison();
+      });
+    </script>
+  </body>
+</html>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildBrandEvidenceRulesBlock,
+  buildHardDesignTokenRulesBlock,
   buildBrandModeSubQueries,
   deriveRecentNewsFromSources,
   evaluateQualityGateDecision,
@@ -229,5 +230,21 @@ describe('brand evidence rules prompt mapping', () => {
   it('allows explicit inference with [INFERRED] labels in strict mode', () => {
     const block = buildBrandEvidenceRulesBlock('strict');
     expect(block).toContain('MUST label it with [INFERRED]');
+  });
+});
+
+describe('hard design token rules prompt mapping', () => {
+  it('prefers hard tokens but allows inferred fallback when hard tokens exist', () => {
+    const block = buildHardDesignTokenRulesBlock(true);
+    expect(block).toContain('Prioritize "HARD DESIGN TOKENS"');
+    expect(block).toContain('best-estimate value');
+    expect(block).toContain('[INFERRED]');
+  });
+
+  it('allows estimated values when no hard tokens are available', () => {
+    const block = buildHardDesignTokenRulesBlock(false);
+    expect(block).toContain('No hard design tokens were successfully scraped');
+    expect(block).toContain('best-estimate HEX');
+    expect(block).toContain('estimated/unverified');
   });
 });

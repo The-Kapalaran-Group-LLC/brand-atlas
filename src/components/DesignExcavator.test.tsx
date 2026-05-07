@@ -141,10 +141,31 @@ describe('BrandDeepDivePage', () => {
   });
 
   it('shows Compare Across Brands popup when clicking a result box', async () => {
+    generateBrandDeepDive.mockResolvedValueOnce({
+      ...sampleReport,
+      brandProfiles: [
+        ...sampleReport.brandProfiles,
+        {
+          ...sampleReport.brandProfiles[0],
+          brandName: 'Byredo',
+          website: 'https://www.byredo.com',
+          sources: [{ title: 'Byredo', url: 'https://www.byredo.com' }],
+        },
+      ],
+      sources: [
+        ...sampleReport.sources,
+        { title: 'Byredo', url: 'https://www.byredo.com' },
+      ],
+    });
+
     render(<BrandDeepDivePage onBack={() => {}} />);
 
     fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
       target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /add brand/i }));
+    fireEvent.change(screen.getByPlaceholderText('Brand 2 Name'), {
+      target: { value: 'Byredo' },
     });
     fireEvent.change(
       screen.getByPlaceholderText('Visual Identity Objective (Optional)'),
@@ -168,5 +189,118 @@ describe('BrandDeepDivePage', () => {
     fireEvent.click(compareButton);
 
     expect(await screen.findByText('Typography Comparison')).toBeInTheDocument();
+  });
+
+  it('hides the Compare tab when only one brand is entered', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    await screen.findByText(/Ask About This Analysis/i);
+    expect(screen.queryByRole('button', { name: /^compare$/i })).not.toBeInTheDocument();
+  });
+
+  it('renders explicit fallback copy when color and typography token arrays are empty', async () => {
+    generateBrandDeepDive.mockResolvedValueOnce({
+      ...sampleReport,
+      brandProfiles: [
+        {
+          ...sampleReport.brandProfiles[0],
+          typography: {
+            ...sampleReport.brandProfiles[0].typography,
+            fontFamilies: [],
+            hierarchy: { h1: '', h2: '', body: '' },
+            usageRules: [],
+          },
+        },
+      ],
+    });
+
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    await screen.findByText(/Ask About This Analysis/i);
+
+    expect(screen.getByText('No primary colors documented.')).toBeInTheDocument();
+    expect(screen.getByText('No accent colors documented.')).toBeInTheDocument();
+    expect(screen.getByText('No neutral colors documented.')).toBeInTheDocument();
+    expect(screen.getByText('No typography families documented.')).toBeInTheDocument();
+  });
+
+  it('shows the Compare tab when multiple brands are entered', async () => {
+    generateBrandDeepDive.mockResolvedValueOnce({
+      ...sampleReport,
+      brandProfiles: [
+        ...sampleReport.brandProfiles,
+        {
+          ...sampleReport.brandProfiles[0],
+          brandName: 'Byredo',
+          website: 'https://www.byredo.com',
+          sources: [{ title: 'Byredo', url: 'https://www.byredo.com' }],
+        },
+      ],
+      sources: [
+        ...sampleReport.sources,
+        { title: 'Byredo', url: 'https://www.byredo.com' },
+      ],
+    });
+
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /add brand/i }));
+    fireEvent.change(screen.getByPlaceholderText('Brand 2 Name'), {
+      target: { value: 'Byredo' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    await screen.findByText(/Ask About This Analysis/i);
+    expect(screen.getByRole('button', { name: /^compare$/i })).toBeInTheDocument();
+  });
+
+  it('renders inferred color metadata as tag chips instead of raw [INFERRED] text', async () => {
+    generateBrandDeepDive.mockResolvedValueOnce({
+      ...sampleReport,
+      brandProfiles: [
+        {
+          ...sampleReport.brandProfiles[0],
+          colorPalette: {
+            primaryColors: [
+              {
+                name: 'Turkish red',
+                hex: '#C8102E',
+                rgb: '[INFERRED] 200,16,46',
+                cmyk: '[INFERRED] 0,92,77,22',
+                pantone: '[INFERRED] Close to Pantone 186 C or a similar deep airline red; unverified.',
+                usage: '[INFERRED] Primary brand accent and logo color; likely dominant in headers, CTA emphasis, and promotional framing.',
+              },
+            ],
+            secondaryAccentColors: [],
+            neutrals: [],
+          },
+        },
+      ],
+    });
+
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    await screen.findByText(/Ask About This Analysis/i);
+
+    expect(screen.getAllByText('Inferred').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/\[INFERRED\]/i)).not.toBeInTheDocument();
   });
 });

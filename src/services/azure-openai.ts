@@ -1195,10 +1195,16 @@ function isOfficialSourceForWebsite(sourceUrl?: string | null, websiteUrl?: stri
 function sanitizeBrandDeepDiveReport(report: BrandDeepDiveReport): BrandDeepDiveReport {
   const stripLabels = (text: string): string =>
     text
-      .replace(/\[(KNOWN|INFERRED|INFERED|SPECULATIVE)\]\s*/gi, '')
-      .replace(/\b(KNOWN|INFERRED|INFERED|SPECULATIVE)\b\s*[:\-]?\s*/gi, '')
+      .replace(/\[(KNOWN)\]\s*/gi, '')
+      .replace(/\b(KNOWN)\b\s*[:\-]?\s*/gi, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
+  const ensureInferredLabel = (text: string): string => {
+    const trimmed = stripLabels(text);
+    if (!trimmed) return trimmed;
+    if (/\[(INFERRED|INFERED)\]/i.test(trimmed)) return trimmed;
+    return `[INFERRED] ${trimmed}`;
+  };
   const stripListLabels = (items: string[]): string[] => items.map(stripLabels);
 
   return {
@@ -1233,9 +1239,10 @@ function sanitizeBrandDeepDiveReport(report: BrandDeepDiveReport): BrandDeepDive
       const verifiedNeutrals = sanitizeColors(profile.colorPalette?.neutrals || []);
 
       const consistencyAssessment = (profile.consistencyAssessment || 'Not provided').trim();
-      const verificationSuffix = 'Color values were not fully verifiable from official same-domain sources and should be treated as directional.';
+      const verificationSuffix = '[INFERRED] Color values were not fully verifiable from official same-domain sources and should be treated as directional/estimated.';
       const hasAnyColorData =
         verifiedPrimaryColors.length > 0 || verifiedAccentColors.length > 0 || verifiedNeutrals.length > 0;
+      const shouldMarkInferred = !hasOfficialBrandSource;
 
       return {
         ...profile,
@@ -1253,38 +1260,58 @@ function sanitizeBrandDeepDiveReport(report: BrandDeepDiveReport): BrandDeepDive
           })
           .filter((visual): visual is { title: string; url: string } => Boolean(visual)),
         logo: {
-          mainLogo: stripLabels(profile.logo?.mainLogo || ''),
-          wordmarkLogotype: stripLabels(profile.logo?.wordmarkLogotype || ''),
-          logoVariations: stripListLabels(profile.logo?.logoVariations || []),
-          symbolsIcons: stripListLabels(profile.logo?.symbolsIcons || []),
+          mainLogo: shouldMarkInferred ? ensureInferredLabel(profile.logo?.mainLogo || '') : stripLabels(profile.logo?.mainLogo || ''),
+          wordmarkLogotype: shouldMarkInferred ? ensureInferredLabel(profile.logo?.wordmarkLogotype || '') : stripLabels(profile.logo?.wordmarkLogotype || ''),
+          logoVariations: shouldMarkInferred
+            ? (profile.logo?.logoVariations || []).map((item) => ensureInferredLabel(item))
+            : stripListLabels(profile.logo?.logoVariations || []),
+          symbolsIcons: shouldMarkInferred
+            ? (profile.logo?.symbolsIcons || []).map((item) => ensureInferredLabel(item))
+            : stripListLabels(profile.logo?.symbolsIcons || []),
         },
         typography: {
-          fontFamilies: stripListLabels(profile.typography?.fontFamilies || []),
+          fontFamilies: shouldMarkInferred
+            ? (profile.typography?.fontFamilies || []).map((item) => ensureInferredLabel(item))
+            : stripListLabels(profile.typography?.fontFamilies || []),
           hierarchy: {
-            h1: stripLabels(profile.typography?.hierarchy?.h1 || ''),
-            h2: stripLabels(profile.typography?.hierarchy?.h2 || ''),
-            body: stripLabels(profile.typography?.hierarchy?.body || ''),
+            h1: shouldMarkInferred ? ensureInferredLabel(profile.typography?.hierarchy?.h1 || '') : stripLabels(profile.typography?.hierarchy?.h1 || ''),
+            h2: shouldMarkInferred ? ensureInferredLabel(profile.typography?.hierarchy?.h2 || '') : stripLabels(profile.typography?.hierarchy?.h2 || ''),
+            body: shouldMarkInferred ? ensureInferredLabel(profile.typography?.hierarchy?.body || '') : stripLabels(profile.typography?.hierarchy?.body || ''),
           },
-          usageRules: stripListLabels(profile.typography?.usageRules || []),
+          usageRules: shouldMarkInferred
+            ? (profile.typography?.usageRules || []).map((item) => ensureInferredLabel(item))
+            : stripListLabels(profile.typography?.usageRules || []),
         },
         supportingVisualElements: {
-          imageryStyle: stripListLabels(profile.supportingVisualElements?.imageryStyle || []),
-          icons: stripListLabels(profile.supportingVisualElements?.icons || []),
-          patternsTextures: stripListLabels(profile.supportingVisualElements?.patternsTextures || []),
-          shapes: stripListLabels(profile.supportingVisualElements?.shapes || []),
-          dataVisualization: stripListLabels(profile.supportingVisualElements?.dataVisualization || []),
+          imageryStyle: shouldMarkInferred
+            ? (profile.supportingVisualElements?.imageryStyle || []).map((item) => ensureInferredLabel(item))
+            : stripListLabels(profile.supportingVisualElements?.imageryStyle || []),
+          icons: shouldMarkInferred
+            ? (profile.supportingVisualElements?.icons || []).map((item) => ensureInferredLabel(item))
+            : stripListLabels(profile.supportingVisualElements?.icons || []),
+          patternsTextures: shouldMarkInferred
+            ? (profile.supportingVisualElements?.patternsTextures || []).map((item) => ensureInferredLabel(item))
+            : stripListLabels(profile.supportingVisualElements?.patternsTextures || []),
+          shapes: shouldMarkInferred
+            ? (profile.supportingVisualElements?.shapes || []).map((item) => ensureInferredLabel(item))
+            : stripListLabels(profile.supportingVisualElements?.shapes || []),
+          dataVisualization: shouldMarkInferred
+            ? (profile.supportingVisualElements?.dataVisualization || []).map((item) => ensureInferredLabel(item))
+            : stripListLabels(profile.supportingVisualElements?.dataVisualization || []),
         },
         colorPalette: {
           primaryColors: verifiedPrimaryColors,
           secondaryAccentColors: verifiedAccentColors,
           neutrals: verifiedNeutrals,
         },
-        consistencyAssessment: stripLabels(
+        consistencyAssessment: (shouldMarkInferred ? ensureInferredLabel : stripLabels)(
           hasOfficialBrandSource || !hasAnyColorData
             ? consistencyAssessment
             : `${consistencyAssessment} ${verificationSuffix}`
         ),
-        distinctivenessAssessment: stripLabels(profile.distinctivenessAssessment || ''),
+        distinctivenessAssessment: shouldMarkInferred
+          ? ensureInferredLabel(profile.distinctivenessAssessment || '')
+          : stripLabels(profile.distinctivenessAssessment || ''),
         sources: profileSources,
       };
     }),
@@ -1528,19 +1555,30 @@ async function fetchDesignTokensForBrand(brandName: string, website?: string): P
 
   try {
     const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/api/brand-images?domain=${encodeURIComponent(trimmedWebsite)}`);
-    if (!response.ok) return null;
-
-    const payload = await response.json() as {
-      designTokens?: {
-        colors?: string[];
-        fonts?: string[];
-      } | null;
+    const fetchTokens = async (path: string) => {
+      const response = await fetch(`${baseUrl}${path}?domain=${encodeURIComponent(trimmedWebsite)}`);
+      if (!response.ok) return null;
+      return await response.json() as {
+        designTokens?: {
+          colors?: string[];
+          fonts?: string[];
+        } | null;
+      };
     };
+
+    const payload = await fetchTokens('/api/brand-images');
+    const fallbackPayload = payload && (
+      (payload.designTokens?.colors?.length || 0) > 0 ||
+      (payload.designTokens?.fonts?.length || 0) > 0
+    )
+      ? null
+      : await fetchTokens('/api/brand-images-legacy');
+    const activePayload = fallbackPayload || payload;
+    if (!activePayload) return null;
 
     const colors = Array.from(
       new Set(
-        (payload.designTokens?.colors || [])
+        (activePayload.designTokens?.colors || [])
           .map((value) => normalizeHexColor(value))
           .filter((value): value is string => Boolean(value))
       )
@@ -1548,7 +1586,7 @@ async function fetchDesignTokensForBrand(brandName: string, website?: string): P
 
     const fonts = Array.from(
       new Set(
-        (payload.designTokens?.fonts || [])
+        (activePayload.designTokens?.fonts || [])
           .map((value) => (value || '').trim())
           .filter(Boolean)
       )
@@ -1582,6 +1620,22 @@ function buildHardDesignTokensBlock(tokens: ScrapedBrandDesignTokens[]): string 
   ].join('\n');
 }
 
+export function buildHardDesignTokenRulesBlock(hasHardTokens: boolean): string {
+  if (hasHardTokens) {
+    return `CRITICAL RULE:
+- Prioritize "HARD DESIGN TOKENS" for hex codes and typography whenever a direct token match exists.
+- If a specific field has no matching hard token, you may provide a best-estimate value from direct first-party visual evidence.
+- Any non-token value must be explicitly labeled [INFERRED] and described as estimated/unverified.
+- Do not fabricate precision when confidence is low.`;
+  }
+
+  return `CRITICAL RULE:
+- No hard design tokens were successfully scraped in this run.
+- You may still provide best-estimate HEX values and font families based on direct visible evidence from first-party brand surfaces.
+- Any inferred token must be clearly described as estimated/unverified in adjacent narrative fields.
+- Do not fabricate precision when confidence is low.`;
+}
+
 export async function generateBrandDeepDive(input: {
   brands: { name: string; website?: string }[];
   analysisObjective: string;
@@ -1604,15 +1658,13 @@ export async function generateBrandDeepDive(input: {
     tokens: scrapedDesignTokenList,
   });
   const hardDesignTokensBlock = buildHardDesignTokensBlock(scrapedDesignTokenList);
+  const hardDesignTokenRulesBlock = buildHardDesignTokenRulesBlock(scrapedDesignTokenList.length > 0);
 
   const prompt = `You are a senior brand design strategist and visual identity analyst.
 
 ${hardDesignTokensBlock}
 
-CRITICAL RULE:
-- When filling out hex codes and typography in the schema, you MUST ONLY select from the "HARD DESIGN TOKENS" listed above.
-- DO NOT hallucinate hex codes or fonts from memory.
-- If no matching token exists, return "Not available".
+${hardDesignTokenRulesBlock}
 
 Analyze up to 6 brands by assessing their visual identity systems using this framework:
 1) Logo (primary mark, variations, wordmark/logotype, symbols/icons)
@@ -1726,15 +1778,13 @@ export async function regenerateBrandDeepDiveWithFeedback(input: {
     tokens: scrapedDesignTokenList,
   });
   const hardDesignTokensBlock = buildHardDesignTokensBlock(scrapedDesignTokenList);
+  const hardDesignTokenRulesBlock = buildHardDesignTokenRulesBlock(scrapedDesignTokenList.length > 0);
 
   const prompt = `You are a senior brand design strategist and visual identity analyst.
 
 ${hardDesignTokensBlock}
 
-CRITICAL RULE:
-- When filling out hex codes and typography in the schema, you MUST ONLY select from the "HARD DESIGN TOKENS" listed above.
-- DO NOT hallucinate hex codes or fonts from memory.
-- If no matching token exists, return "Not available".
+${hardDesignTokenRulesBlock}
 
 Re-audit and correct the brand deep dive below. Treat the feedback as a request to rescan the listed brand websites and fix inaccuracies.
 

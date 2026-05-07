@@ -127,6 +127,7 @@ type DesignExcavatorRecentResult = RecentResultRecord & {
 
 type ResultTab = 'profiles' | 'compare';
 type CompareElement = 'primaryColors' | 'accentColors' | 'neutrals' | 'typography' | 'imageryStyle';
+type EvidenceTagLabel = 'known' | 'inferred' | 'speculative' | 'analogy';
 
 const MAX_EXCAVATOR_BRAND_NAME_LENGTH = 120;
 const MAX_EXCAVATOR_BRAND_WEBSITE_LENGTH = 200;
@@ -139,6 +140,45 @@ interface ComparePopupState {
   y: number;
   target: CompareElement;
 }
+
+const extractEvidenceTags = (value: string): { cleanText: string; labels: EvidenceTagLabel[] } => {
+  if (!value) {
+    return { cleanText: '', labels: [] };
+  }
+
+  const labels: EvidenceTagLabel[] = [];
+  const markerPattern = /\[(KNOWN|INFERRED|INFERED|SPECULATIVE|ANALOGY)(?:[^\]]*)\]|\[(KNOWN|INFERRED|INFERED|SPECULATIVE|ANALOGY)(?=[^\]]*$)|\b(KNOWN|INFERRED|INFERED|SPECULATIVE|ANALOGY)\b(?=\s*[:;\-]|\s*$|[.)\]])/gi;
+  let match: RegExpExecArray | null = markerPattern.exec(value);
+
+  while (match) {
+    const rawLabel = (match[1] || match[2] || match[3] || '').toLowerCase();
+    const normalizedLabel: EvidenceTagLabel = rawLabel === 'infered' ? 'inferred' : (rawLabel as EvidenceTagLabel);
+    if (!labels.includes(normalizedLabel)) {
+      labels.push(normalizedLabel);
+    }
+    match = markerPattern.exec(value);
+  }
+
+  const cleanText = value
+    .replace(/\[(KNOWN|INFERRED|INFERED|SPECULATIVE|ANALOGY)(?:[^\]]*)\]\s*/gi, '')
+    .replace(/\[(KNOWN|INFERRED|INFERED|SPECULATIVE|ANALOGY)\s*[:;\-]?\s*/gi, '')
+    .replace(/\b(KNOWN|INFERRED|INFERED|SPECULATIVE|ANALOGY)\b\s*[:;\-]\s*/gi, '')
+    .replace(/\.(KNOWN|INFERRED|INFERED|SPECULATIVE|ANALOGY)\s*$/i, '.')
+    .replace(/\s+(KNOWN|INFERRED|INFERED|SPECULATIVE|ANALOGY)\s*$/i, '')
+    .replace(/\[\s*\]/g, '')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  return { cleanText, labels };
+};
+
+const evidenceLabelChipClass = (label: EvidenceTagLabel): string => {
+  if (label === 'analogy') {
+    return 'bg-zinc-100 text-zinc-600 border border-zinc-200';
+  }
+  return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+};
 
 const VISUAL_METHOD_LABEL: Record<VisualMethod, string> = {
   deterministic: 'Derived Domain Logo',
@@ -504,6 +544,10 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   };
 
   const compareAcrossBrands = (target: CompareElement) => {
+    if (!showCompareTab) {
+      setComparePopup(null);
+      return;
+    }
     setCompareElement(target);
     setResultTab('compare');
     setComparePopup(null);
@@ -727,8 +771,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
 
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setShowValidation(true);
 
     const normalizedBrands = brands
@@ -936,6 +979,13 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
   const canAddBrand = brands.length < 6;
   const brandCount = brands.filter((brand) => (brand.name || '').trim()).length;
+  const showCompareTab = brandCount > 1;
+
+  useEffect(() => {
+    if (!showCompareTab && resultTab === 'compare') {
+      setResultTab('profiles');
+    }
+  }, [showCompareTab, resultTab]);
 
   const addBrandRow = () => {
     if (!canAddBrand) return;
@@ -960,6 +1010,23 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
   const renderColorSwatch = (color: BrandColorSpec) => {
     const normalizedHex = color.hex.startsWith('#') ? color.hex : `#${color.hex}`;
+    const renderColorMetaRow = (label: string, value: string) => {
+      const parsed = extractEvidenceTags(value || '');
+      return (
+        <p>
+          <span>{label}: {parsed.cleanText || value}</span>
+          {parsed.labels.map((evidenceLabel) => (
+            <span
+              key={`${label}-${color.name}-${evidenceLabel}`}
+              className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(evidenceLabel)}`}
+            >
+              {evidenceLabel.charAt(0).toUpperCase() + evidenceLabel.slice(1)}
+            </span>
+          ))}
+        </p>
+      );
+    };
+
     return (
       <li key={`${color.name}-${color.hex}`} className="rounded-xl border border-zinc-200 p-3 bg-white">
         <div className="flex items-center gap-3">
@@ -975,10 +1042,10 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         </div>
         {(color.rgb || color.cmyk || color.pantone || color.usage) && (
           <div className="mt-2 text-xs text-zinc-500 space-y-1">
-            {color.rgb && <p>RGB: {color.rgb}</p>}
-            {color.cmyk && <p>CMYK: {color.cmyk}</p>}
-            {color.pantone && <p>Pantone: {color.pantone}</p>}
-            {color.usage && <p>Usage: {color.usage}</p>}
+            {color.rgb && renderColorMetaRow('RGB', color.rgb)}
+            {color.cmyk && renderColorMetaRow('CMYK', color.cmyk)}
+            {color.pantone && renderColorMetaRow('Pantone', color.pantone)}
+            {color.usage && renderColorMetaRow('Usage', color.usage)}
           </div>
         )}
       </li>
@@ -992,9 +1059,22 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
     return (
       <ul className="space-y-1">
-        {items.map((item, idx) => (
-          <li key={idx} className="text-sm text-zinc-700">• {item}</li>
-        ))}
+        {items.map((item, idx) => {
+          const parsed = extractEvidenceTags(item || '');
+          return (
+            <li key={idx} className="text-sm text-zinc-700">
+              • {parsed.cleanText || item}
+              {parsed.labels.map((label) => (
+                <span
+                  key={`${idx}-${label}`}
+                  className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}
+                >
+                  {label}
+                </span>
+              ))}
+            </li>
+          );
+        })}
       </ul>
     );
   };
@@ -1514,6 +1594,16 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         }
         return y + 2;
       };
+      const addBulletedLines = (items: string[], fallbackText: string, x: number, y: number): number => {
+        if (!items.length) {
+          return addWrappedText(fallbackText, x, y, 9, false, [113, 113, 122]);
+        }
+        let nextY = y;
+        items.forEach((item) => {
+          nextY = addWrappedText(`• ${item}`, x + 3, nextY, 9, false, [82, 82, 91]);
+        });
+        return nextY;
+      };
       let y = margin;
       y = addWrappedText('Design Excavator Report', margin, y, 22, true, [24, 24, 27]);
       y += 5;
@@ -1559,36 +1649,42 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         y = addWrappedText(`Wordmark: ${profile.logo.wordmarkLogotype}`, margin, y, 10, false, [63, 63, 70]);
         y += 2;
         y = addWrappedText('Variations', margin, y, 10, true, [63, 63, 70]);
-        profile.logo.logoVariations.forEach((variation) => {
-          y = addWrappedText(`• ${variation}`, margin + 3, y, 9, false, [82, 82, 91]);
-        });
+        y = addBulletedLines(profile.logo.logoVariations, 'No variations documented.', margin, y);
+        y = addWrappedText('Symbols & Icons', margin, y, 10, true, [63, 63, 70]);
+        y = addBulletedLines(profile.logo.symbolsIcons, 'No symbol data documented.', margin, y);
         y += 2;
         y = addWrappedText('Typography', margin, y, 11, true, [24, 24, 27]);
-        y = addWrappedText(`Families: ${profile.typography.fontFamilies.join(', ')}`, margin, y, 10, false, [63, 63, 70]);
-        y = addWrappedText(`H1: ${profile.typography.hierarchy.h1}`, margin, y, 9, false, [82, 82, 91]);
-        y = addWrappedText(`H2: ${profile.typography.hierarchy.h2}`, margin, y, 9, false, [82, 82, 91]);
-        y = addWrappedText(`Body: ${profile.typography.hierarchy.body}`, margin, y, 9, false, [82, 82, 91]);
+        y = addWrappedText(`Families: ${profile.typography.fontFamilies.join(', ') || 'Not available'}`, margin, y, 10, false, [63, 63, 70]);
+        y = addWrappedText(`H1: ${profile.typography.hierarchy.h1 || 'Not available'}`, margin, y, 9, false, [82, 82, 91]);
+        y = addWrappedText(`H2: ${profile.typography.hierarchy.h2 || 'Not available'}`, margin, y, 9, false, [82, 82, 91]);
+        y = addWrappedText(`Body: ${profile.typography.hierarchy.body || 'Not available'}`, margin, y, 9, false, [82, 82, 91]);
+        y = addWrappedText('Usage Rules', margin, y, 10, true, [63, 63, 70]);
+        y = addBulletedLines(profile.typography.usageRules, 'No usage rules documented.', margin, y);
         y += 2;
         y = addWrappedText('Primary Colors', margin, y, 11, true, [24, 24, 27]);
-        profile.colorPalette.primaryColors.forEach((color) => {
-          y = addWrappedText(`• ${color.name} (${color.hex})`, margin + 3, y, 9, false, [82, 82, 91]);
-        });
+        y = addBulletedLines(profile.colorPalette.primaryColors.map((color) => `${color.name} (${color.hex})`), 'Not available', margin, y);
         y += 2;
         y = addWrappedText('Accent Colors', margin, y, 11, true, [24, 24, 27]);
-        profile.colorPalette.secondaryAccentColors.forEach((color) => {
-          y = addWrappedText(`• ${color.name} (${color.hex})`, margin + 3, y, 9, false, [82, 82, 91]);
-        });
+        y = addBulletedLines(profile.colorPalette.secondaryAccentColors.map((color) => `${color.name} (${color.hex})`), 'Not available', margin, y);
+        y += 2;
+        y = addWrappedText('Neutral Colors', margin, y, 11, true, [24, 24, 27]);
+        y = addBulletedLines(profile.colorPalette.neutrals.map((color) => `${color.name} (${color.hex})`), 'Not available', margin, y);
         y += 2;
         y = addWrappedText('Supporting Visual Elements', margin, y, 11, true, [24, 24, 27]);
         y = addWrappedText('Imagery Style', margin, y, 10, true, [63, 63, 70]);
-        profile.supportingVisualElements.imageryStyle.forEach((item) => {
-          y = addWrappedText(`• ${item}`, margin + 3, y, 9, false, [82, 82, 91]);
-        });
+        y = addBulletedLines(profile.supportingVisualElements.imageryStyle, 'Not available', margin, y);
         y += 1;
         y = addWrappedText('Icons', margin, y, 10, true, [63, 63, 70]);
-        profile.supportingVisualElements.icons.forEach((item) => {
-          y = addWrappedText(`• ${item}`, margin + 3, y, 9, false, [82, 82, 91]);
-        });
+        y = addBulletedLines(profile.supportingVisualElements.icons, 'Not available', margin, y);
+        y += 1;
+        y = addWrappedText('Patterns & Textures', margin, y, 10, true, [63, 63, 70]);
+        y = addBulletedLines(profile.supportingVisualElements.patternsTextures, 'Not available', margin, y);
+        y += 1;
+        y = addWrappedText('Shapes', margin, y, 10, true, [63, 63, 70]);
+        y = addBulletedLines(profile.supportingVisualElements.shapes, 'Not available', margin, y);
+        y += 1;
+        y = addWrappedText('Data Visualization', margin, y, 10, true, [63, 63, 70]);
+        y = addBulletedLines(profile.supportingVisualElements.dataVisualization, 'Not available', margin, y);
         y += 4;
         if (profileIdx < report.brandProfiles.length - 1) {
           doc.addPage();
@@ -1734,7 +1830,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        onSubmit={handleSubmit}
+        onSubmit={(e) => e.preventDefault()}
         noValidate
         className={`w-full relative flex flex-col gap-4 space-y-4 ${isSearchControlsMinimized ? 'hidden' : ''}`}
       >
@@ -1833,7 +1929,10 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-center pt-2">
           <div className="justify-self-end md:col-start-2 md:col-span-1">
             <button
-              type="submit"
+              type="button"
+              onClick={() => {
+                void handleSubmit();
+              }}
               disabled={isLoading}
               className="px-8 py-3 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 transition-colors disabled:opacity-60 inline-flex items-center gap-2 relative overflow-hidden"
             >
@@ -1944,17 +2043,19 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
               >
                 <span className="flex items-center gap-2"><ImageIcon className="w-4 h-4" /> Brand Profiles</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setResultTab('compare')}
-                className={`px-5 py-2.5 text-sm font-semibold rounded-t-xl border-b-2 transition-colors focus:outline-none ${
-                  resultTab === 'compare'
-                    ? 'border-indigo-600 text-indigo-700 bg-indigo-50'
-                    : 'border-transparent text-zinc-500 hover:text-zinc-800 hover:bg-zinc-50'
-                }`}
-              >
-                <span className="flex items-center gap-2"><Palette className="w-4 h-4" /> Compare</span>
-              </button>
+              {showCompareTab && (
+                <button
+                  type="button"
+                  onClick={() => setResultTab('compare')}
+                  className={`px-5 py-2.5 text-sm font-semibold rounded-t-xl border-b-2 transition-colors focus:outline-none ${
+                    resultTab === 'compare'
+                      ? 'border-indigo-600 text-indigo-700 bg-indigo-50'
+                      : 'border-transparent text-zinc-500 hover:text-zinc-800 hover:bg-zinc-50'
+                  }`}
+                >
+                  <span className="flex items-center gap-2"><Palette className="w-4 h-4" /> Compare</span>
+                </button>
+              )}
               <div className="ml-auto flex items-center gap-2 pb-2">
                 <button
                   type="button"
@@ -2187,7 +2288,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                           <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
                             <Palette className="w-3.5 h-3.5" /> Color Palette
                           </p>
-                          {profile.colorPalette.primaryColors.length > 0 && (
+                          {profile.colorPalette.primaryColors.length > 0 ? (
                             <div
                               className="cursor-pointer hover:bg-zinc-50 rounded-xl p-2 -mx-2 transition-colors"
                               onClick={(e) => openComparePopup(e, 'primaryColors')}
@@ -2195,8 +2296,10 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                               <p className="text-xs font-semibold text-zinc-600 mb-2">Primary</p>
                               <ul className="space-y-2">{profile.colorPalette.primaryColors.map(c => renderColorSwatch(c))}</ul>
                             </div>
+                          ) : (
+                            <p className="text-sm text-zinc-500">No primary colors documented.</p>
                           )}
-                          {profile.colorPalette.secondaryAccentColors.length > 0 && (
+                          {profile.colorPalette.secondaryAccentColors.length > 0 ? (
                             <div
                               className="cursor-pointer hover:bg-zinc-50 rounded-xl p-2 -mx-2 transition-colors"
                               onClick={(e) => openComparePopup(e, 'accentColors')}
@@ -2204,8 +2307,10 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                               <p className="text-xs font-semibold text-zinc-600 mb-2">Accent</p>
                               <ul className="space-y-2">{profile.colorPalette.secondaryAccentColors.map(c => renderColorSwatch(c))}</ul>
                             </div>
+                          ) : (
+                            <p className="text-sm text-zinc-500 mt-2">No accent colors documented.</p>
                           )}
-                          {profile.colorPalette.neutrals.length > 0 && (
+                          {profile.colorPalette.neutrals.length > 0 ? (
                             <div
                               className="cursor-pointer hover:bg-zinc-50 rounded-xl p-2 -mx-2 transition-colors"
                               onClick={(e) => openComparePopup(e, 'neutrals')}
@@ -2213,6 +2318,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                               <p className="text-xs font-semibold text-zinc-600 mb-2">Neutrals</p>
                               <ul className="space-y-2">{profile.colorPalette.neutrals.map(c => renderColorSwatch(c))}</ul>
                             </div>
+                          ) : (
+                            <p className="text-sm text-zinc-500 mt-2">No neutral colors documented.</p>
                           )}
                         </div>
 
@@ -2223,11 +2330,13 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                           <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
                             <Type className="w-3.5 h-3.5" /> Typography
                           </p>
-                          {profile.typography.fontFamilies.length > 0 && (
+                          {profile.typography.fontFamilies.length > 0 ? (
                             <p className="text-sm text-zinc-700">
                               <span className="font-medium text-zinc-900">Families:</span>{' '}
                               {profile.typography.fontFamilies.join(', ')}
                             </p>
+                          ) : (
+                            <p className="text-sm text-zinc-500">No typography families documented.</p>
                           )}
                           <div className="grid grid-cols-3 gap-2 mt-2">
                             {[
@@ -2241,11 +2350,17 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                               </div>
                             ))}
                           </div>
+                          {!profile.typography.hierarchy.h1 && !profile.typography.hierarchy.h2 && !profile.typography.hierarchy.body && (
+                            <p className="text-sm text-zinc-500 mt-2">No typography hierarchy documented.</p>
+                          )}
                           {profile.typography.usageRules.length > 0 && (
                             <div>
                               <p className="text-xs font-medium text-zinc-500 mt-2 mb-1">Usage Rules</p>
                               {renderListOrFallback(profile.typography.usageRules, '')}
                             </div>
+                          )}
+                          {profile.typography.usageRules.length === 0 && (
+                            <p className="text-sm text-zinc-500 mt-2">No typography usage rules documented.</p>
                           )}
                         </div>
 
@@ -2267,17 +2382,35 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                               {renderListOrFallback(profile.supportingVisualElements.icons, '')}
                             </div>
                           )}
+                          {profile.supportingVisualElements.icons.length === 0 && (
+                            <p className="text-sm text-zinc-500 mb-1">No icon system details documented.</p>
+                          )}
                           {profile.supportingVisualElements.patternsTextures.length > 0 && (
                             <div>
                               <p className="text-xs font-semibold text-zinc-600 mb-1">Patterns & Textures</p>
                               {renderListOrFallback(profile.supportingVisualElements.patternsTextures, '')}
                             </div>
                           )}
+                          {profile.supportingVisualElements.patternsTextures.length === 0 && (
+                            <p className="text-sm text-zinc-500 mb-1">No pattern or texture details documented.</p>
+                          )}
                           {profile.supportingVisualElements.shapes.length > 0 && (
                             <div>
                               <p className="text-xs font-semibold text-zinc-600 mb-1">Shapes</p>
                               {renderListOrFallback(profile.supportingVisualElements.shapes, '')}
                             </div>
+                          )}
+                          {profile.supportingVisualElements.shapes.length === 0 && (
+                            <p className="text-sm text-zinc-500 mb-1">No shape language details documented.</p>
+                          )}
+                          {profile.supportingVisualElements.dataVisualization.length > 0 && (
+                            <div>
+                              <p className="text-xs font-semibold text-zinc-600 mb-1">Data Visualization</p>
+                              {renderListOrFallback(profile.supportingVisualElements.dataVisualization, '')}
+                            </div>
+                          )}
+                          {profile.supportingVisualElements.dataVisualization.length === 0 && (
+                            <p className="text-sm text-zinc-500">No data visualization style documented.</p>
                           )}
                         </div>
 
@@ -2367,12 +2500,24 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                       <Palette className="w-4 h-4" /> Opportunity Spaces
                     </h4>
                     <ul className="space-y-3">
-                      {report.crossBrandReadout.map((item, idx) => (
+                      {report.crossBrandReadout.map((item, idx) => {
+                        const parsed = extractEvidenceTags(item || '');
+                        return (
                         <li key={idx} className="text-sm text-indigo-800 flex items-start gap-2 leading-relaxed">
                           <span className="text-indigo-400 mt-0.5 shrink-0">•</span>
-                          {item}
+                          <span>
+                            {parsed.cleanText || item}
+                            {parsed.labels.map((label) => (
+                              <span
+                                key={`${idx}-${label}`}
+                                className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}
+                              >
+                                {label}
+                              </span>
+                            ))}
+                          </span>
                         </li>
-                      ))}
+                      );})}
                     </ul>
                   </section>
                 )}
@@ -2380,12 +2525,24 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                   <section className="bg-white rounded-3xl border border-zinc-200 p-6">
                     <h4 className="text-sm font-bold text-zinc-900 uppercase tracking-wider mb-4">Strategic Recommendations</h4>
                     <ul className="space-y-3">
-                      {report.strategicRecommendations.map((item, idx) => (
+                      {report.strategicRecommendations.map((item, idx) => {
+                        const parsed = extractEvidenceTags(item || '');
+                        return (
                         <li key={idx} className="text-sm text-zinc-700 flex items-start gap-2 leading-relaxed">
                           <span className="text-indigo-500 font-bold shrink-0">{idx + 1}.</span>
-                          {item}
+                          <span>
+                            {parsed.cleanText || item}
+                            {parsed.labels.map((label) => (
+                              <span
+                                key={`${idx}-${label}`}
+                                className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}
+                              >
+                                {label}
+                              </span>
+                            ))}
+                          </span>
                         </li>
-                      ))}
+                      );})}
                     </ul>
                   </section>
                 )}

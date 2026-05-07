@@ -1,4 +1,7 @@
 import { load as cheerioLoad } from 'cheerio';
+import { AzureOpenAI } from 'openai';
+import { zodResponseFormat } from 'openai/helpers/zod';
+import { z } from 'zod';
 
 export interface BrandImagesResult {
   logoUrl: string | null;
@@ -9,14 +12,62 @@ export interface BrandImagesResult {
   };
 }
 
+export interface BrandVisionAnalysis {
+  sourceWebsite: string;
+  screenshotUrl: string;
+  fontFamilies: string[];
+  primaryColors: string[];
+  typographyHierarchy: string[];
+  visualHierarchy: string[];
+  colorBalance: string;
+  imageryStyle: string[];
+}
+
 const FETCH_TIMEOUT_MS = 10000;
 const LOGO_HINT = /logo/i;
+const DESIGN_VISION_MODEL = process.env.AZURE_OPENAI_DEPLOYMENT_NAME || 'gpt-4o';
+const HEX_COLOR_REGEX = /#([a-fA-F0-9]{6}|[a-fA-F0-9]{3})\b/g;
+const RGB_COLOR_REGEX = /rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)/gi;
 
 type LogoSource = 'jsonld' | 'og-logo' | 'header-nav-logo' | 'page-logo' | 'link-logo' | 'icon';
 
 interface LogoCandidate {
   url: string;
   source: LogoSource;
+}
+
+const BrandVisionAnalysisSchema = z.object({
+  fontFamilies: z.array(z.string()).default([]),
+  primaryColors: z.array(z.string()).default([]),
+  typographyHierarchy: z.array(z.string()).default([]),
+  visualHierarchy: z.array(z.string()).default([]),
+  colorBalance: z.string().default('Not available'),
+  imageryStyle: z.array(z.string()).default([]),
+});
+
+type ChatCompletionClient = {
+  chat: {
+    completions: {
+      create: (params: any) => Promise<any>;
+    };
+  };
+};
+
+function getAzureVisionClient(): ChatCompletionClient | null {
+  const apiKey = process.env.AZURE_OPENAI_API_KEY;
+  const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+  const apiVersion = process.env.AZURE_OPENAI_API_VERSION || '2024-02-15-preview';
+
+  if (!apiKey || !endpoint) {
+    console.log('[design-excavator-vision] Azure OpenAI credentials missing. Falling back to HTML/CSS scraping.');
+    return null;
+  }
+
+  return new AzureOpenAI({
+    apiKey,
+    endpoint,
+    apiVersion,
+  }) as unknown as ChatCompletionClient;
 }
 
 function isFaviconLikeUrl(url?: string | null): boolean {
@@ -32,6 +83,21 @@ function normalizeDomainToUrl(domain: string): URL {
     throw new Error('Only http/https domains are supported.');
   }
   return url;
+}
+
+export function buildWebsiteScreenshotUrl(websiteUrl: string): string {
+  const parsedUrl = normalizeDomainToUrl(websiteUrl);
+  return `https://image.thum.io/get/width/1920/noanimate/${parsedUrl.toString()}`;
+}
+
+export function buildDesignExcavatorVisionSystemPrompt(): string {
+  return [
+    'You are a senior visual identity analyst for Design Excavator.',
+    'Analyze the provided screenshot directly; do not infer from source code, brand memory, or prior knowledge.',
+    'Extract typography hierarchy, visual hierarchy, and color balance using only what is visibly present.',
+    'Return concise, implementation-friendly observations for typography scale/contrast, layout priority, and palette usage.',
+    'If uncertain, state uncertainty rather than fabricating details.',
+  ].join(' ');
 }
 
 function resolveSecureAbsoluteUrl(rawUrl: string | null | undefined, baseUrl: URL): string | null {
@@ -56,15 +122,56 @@ function resolveSecureAbsoluteUrl(rawUrl: string | null | undefined, baseUrl: UR
 }
 
 export function extractDesignTokensFromHtml(html: string): { colors: string[]; fonts: string[] } {
-  const hexRegex = /#([a-fA-F0-9]{6}|[a-fA-F0-9]{3})\b/g;
   const fontRegex = /font-family:\s*([^;}{]+)/gi;
+  const fontVariableRegex = /--[\w-]*font[\w-]*\s*:\s*([^;}{]+)/gi;
+  const anyVariableRegex = /(--[\w-]+)\s*:\s*([^;}{]+)/gi;
 
-  const colors = Array.from(new Set((html.match(hexRegex) || []).map((value) => value.toUpperCase()))).slice(0, 15);
+  const hexColors = Array.from(new Set((html.match(HEX_COLOR_REGEX) || []).map((value) => value.toUpperCase())));
+
+  RGB_COLOR_REGEX.lastIndex = 0;
+  const rgbColors: string[] = [];
+  let rgbMatch: RegExpExecArray | null = null;
+  while ((rgbMatch = RGB_COLOR_REGEX.exec(html)) !== null) {
+    const r = Math.max(0, Math.min(255, Number.parseInt(rgbMatch[1], 10)));
+    const g = Math.max(0, Math.min(255, Number.parseInt(rgbMatch[2], 10)));
+    const b = Math.max(0, Math.min(255, Number.parseInt(rgbMatch[3], 10)));
+    if ([r, g, b].some((value) => Number.isNaN(value))) continue;
+    rgbColors.push(
+      `#${[r, g, b]
+        .map((value) => value.toString(16).toUpperCase().padStart(2, '0'))
+        .join('')}`
+    );
+  }
+
+  const colors = Array.from(new Set([...hexColors, ...rgbColors])).slice(0, 15);
+
+  const cssVariables = new Map<string, string>();
+  let cssVariableMatch: RegExpExecArray | null = null;
+  while ((cssVariableMatch = anyVariableRegex.exec(html)) !== null) {
+    const name = (cssVariableMatch[1] || '').trim();
+    const value = (cssVariableMatch[2] || '').trim();
+    if (!name || !value) continue;
+    cssVariables.set(name, value);
+  }
+
+  const normalizeFontValue = (fontValue: string): string => {
+    const resolved = fontValue.trim().replace(/var\((--[\w-]+)\)/gi, (_full, varName: string) => {
+      const replacement = cssVariables.get(varName.trim());
+      return replacement ? replacement : `var(${varName})`;
+    });
+    return resolved.replace(/['"]/g, '').replace(/\s{2,}/g, ' ').trim();
+  };
 
   const rawFonts: string[] = [];
   let fontMatch: RegExpExecArray | null = null;
   while ((fontMatch = fontRegex.exec(html)) !== null) {
-    const cleaned = (fontMatch[1] || '').replace(/['"]/g, '').trim();
+    const cleaned = normalizeFontValue(fontMatch[1] || '');
+    if (cleaned) rawFonts.push(cleaned);
+  }
+
+  let fontVariableMatch: RegExpExecArray | null = null;
+  while ((fontVariableMatch = fontVariableRegex.exec(html)) !== null) {
+    const cleaned = normalizeFontValue(fontVariableMatch[1] || '');
     if (cleaned) rawFonts.push(cleaned);
   }
 
@@ -77,6 +184,92 @@ export function extractDesignTokensFromHtml(html: string): { colors: string[]; f
   }).slice(0, 5);
 
   return { colors, fonts };
+}
+
+function normalizeVisionHexColors(colorCandidates: string[]): string[] {
+  const normalized: string[] = [];
+  for (const candidate of colorCandidates) {
+    const matches = candidate.match(HEX_COLOR_REGEX) || [];
+    for (const match of matches) {
+      normalized.push(match.toUpperCase());
+    }
+  }
+  return Array.from(new Set(normalized)).slice(0, 15);
+}
+
+export function combineDesignTokensForUpdatedPath(
+  preferred: { colors: string[]; fonts: string[] },
+  fallback: { colors: string[]; fonts: string[] }
+) {
+  return {
+    colors: Array.from(new Set([...preferred.colors, ...fallback.colors])).slice(0, 15),
+    fonts: Array.from(new Set([...preferred.fonts, ...fallback.fonts])).slice(0, 5),
+  };
+}
+
+export async function analyzeBrandDesignFromScreenshot(
+  domain: string,
+  options?: { client?: ChatCompletionClient }
+): Promise<BrandVisionAnalysis | null> {
+  const baseUrl = normalizeDomainToUrl(domain);
+  const screenshotUrl = buildWebsiteScreenshotUrl(baseUrl.toString());
+  const client = options?.client || getAzureVisionClient();
+
+  if (!client) {
+    return null;
+  }
+
+  console.log('[design-excavator-vision] Sending screenshot to GPT-4o for direct visual analysis.', {
+    sourceWebsite: baseUrl.toString(),
+    screenshotUrl,
+    model: DESIGN_VISION_MODEL,
+  });
+
+  try {
+    const response = await client.chat.completions.create({
+      model: DESIGN_VISION_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: buildDesignExcavatorVisionSystemPrompt(),
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: "Analyze this brand's website design from the screenshot. Extract the typography hierarchy, primary colors, describe visual hierarchy, and summarize color balance and imagery style.",
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: screenshotUrl,
+              },
+            },
+          ],
+        },
+      ],
+      response_format: zodResponseFormat(BrandVisionAnalysisSchema, 'design_report'),
+    });
+
+    const content = response.choices?.[0]?.message?.content;
+    if (!content) {
+      throw new Error('Vision response content was empty.');
+    }
+
+    const parsed = BrandVisionAnalysisSchema.parse(JSON.parse(content));
+    return {
+      sourceWebsite: baseUrl.toString(),
+      screenshotUrl,
+      ...parsed,
+    };
+  } catch (error) {
+    console.log('[design-excavator-vision] Vision analysis failed. Falling back to HTML/CSS scraping.', {
+      domain: baseUrl.toString(),
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
 }
 
 async function fetchHtml(url: URL): Promise<string> {
@@ -332,14 +525,67 @@ export async function extractPreciseBrandAssets(domain: string): Promise<BrandIm
     const baseUrl = normalizeDomainToUrl(domain);
     const html = await fetchHtml(baseUrl);
     const $ = cheerioLoad(html);
+    const scrapedDesignTokens = extractDesignTokensFromHtml(html);
+    const visionAnalysis = await analyzeBrandDesignFromScreenshot(baseUrl.toString());
+    const visionDesignTokens = visionAnalysis
+      ? {
+          colors: normalizeVisionHexColors(visionAnalysis.primaryColors),
+          fonts: Array.from(new Set((visionAnalysis.fontFamilies || []).map((font) => (font || '').trim()).filter(Boolean))).slice(0, 5),
+        }
+      : { colors: [], fonts: [] };
+
+    const designTokens = combineDesignTokensForUpdatedPath(visionDesignTokens, scrapedDesignTokens);
+    console.log('[design-excavator-vision] Final design tokens assembled.', {
+      domain: baseUrl.toString(),
+      scrapedColorCount: scrapedDesignTokens.colors.length,
+      scrapedFontCount: scrapedDesignTokens.fonts.length,
+      visionColorCount: visionDesignTokens.colors.length,
+      visionFontCount: visionDesignTokens.fonts.length,
+      finalColorCount: designTokens.colors.length,
+      finalFontCount: designTokens.fonts.length,
+    });
 
     return {
       logoUrl: extractLogoUrl($, baseUrl),
       heroImageUrl: extractHeroImageUrl($, baseUrl),
-      designTokens: extractDesignTokensFromHtml(html),
+      designTokens,
     };
   } catch {
     // Fail-safe return so callers can proceed gracefully.
+    return {
+      logoUrl: null,
+      heroImageUrl: null,
+      designTokens: {
+        colors: [],
+        fonts: [],
+      },
+    };
+  }
+}
+
+export async function extractLegacyBrandAssets(domain: string): Promise<BrandImagesResult> {
+  try {
+    const baseUrl = normalizeDomainToUrl(domain);
+    const html = await fetchHtml(baseUrl);
+    const $ = cheerioLoad(html);
+    const designTokens = extractDesignTokensFromHtml(html);
+
+    console.log('[design-excavator-legacy] Returning scraping-only brand assets.', {
+      domain: baseUrl.toString(),
+      colorCount: designTokens.colors.length,
+      fontCount: designTokens.fonts.length,
+    });
+
+    return {
+      logoUrl: extractLogoUrl($, baseUrl),
+      heroImageUrl: extractHeroImageUrl($, baseUrl),
+      designTokens,
+    };
+  } catch (error) {
+    console.log('[design-excavator-legacy] Scraping-only extraction failed.', {
+      domain,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return {
       logoUrl: null,
       heroImageUrl: null,
