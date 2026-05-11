@@ -2322,11 +2322,11 @@ type BrandResultAudience = {
 type BrandResultEntry = {
   brandName?: string;
   highLevelSummary?: string;
-  brandMission?: string;
+  brandMission?: string | null;
   brandPositioning?: {
     taglines?: string[];
     keyMessagesAndClaims?: string[];
-    valueProposition?: string;
+    valueProposition?: string | null;
     voiceAndTone?: string;
   };
   keyOfferingsProductsServices?: string[];
@@ -3144,7 +3144,7 @@ function BrandCriteriaSection({
   );
 }
 
-function BrandResultInlineField({ label, value, inferredEvidenceUrl }: { label: string; value?: string; inferredEvidenceUrl?: string }) {
+function BrandResultInlineField({ label, value, inferredEvidenceUrl }: { label: string; value?: string | null; inferredEvidenceUrl?: string }) {
   const parsed = extractEvidenceTags(value || '');
   const displayValue = parsed.cleanText || 'N/A';
   return (
@@ -3155,7 +3155,7 @@ function BrandResultInlineField({ label, value, inferredEvidenceUrl }: { label: 
   );
 }
 
-function BrandResultRichText({ value, inferredEvidenceUrl }: { value?: string; inferredEvidenceUrl?: string }) {
+function BrandResultRichText({ value, inferredEvidenceUrl }: { value?: string | null; inferredEvidenceUrl?: string }) {
   const parsed = extractEvidenceTags(value || '');
   const displayValue = parsed.cleanText || 'N/A';
   return (
