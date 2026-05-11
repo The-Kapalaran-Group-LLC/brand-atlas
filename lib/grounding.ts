@@ -1,8 +1,10 @@
 const BING_SEARCH_ENDPOINT = 'https://api.bing.microsoft.com/v7.0/search';
 const GOOGLE_SEARCH_ENDPOINT = 'https://www.googleapis.com/customsearch/v1';
+const ITUNES_SEARCH_ENDPOINT = 'https://itunes.apple.com/search';
 const DEFAULT_RESULT_COUNT = 5;
 const BING_TIMEOUT_MS = 8000;
 const MACRO_STRUCTURAL_SUFFIX = 'annual report OR macro trend';
+const PODCAST_TRANSCRIPT_SUFFIX = 'podcast transcript OR episode transcript OR show notes';
 
 type BingWebPageResult = {
   name?: string;
@@ -27,6 +29,19 @@ type GoogleSearchResult = {
 
 type GoogleSearchResponse = {
   items?: GoogleSearchResult[];
+};
+
+type ItunesPodcastResult = {
+  trackName?: string;
+  collectionName?: string;
+  artistName?: string;
+  releaseDate?: string;
+  description?: string;
+  trackViewUrl?: string;
+};
+
+type ItunesSearchResponse = {
+  results?: ItunesPodcastResult[];
 };
 
 function normalizeWhitespace(value: string): string {
@@ -238,6 +253,78 @@ async function fetchGoogle(
   }
 }
 
+function cleanHtmlToText(value: string): string {
+  return normalizeWhitespace(value.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' '));
+}
+
+async function fetchItunesPodcasts(query: string): Promise<string[]> {
+  const normalizedQuery = normalizeWhitespace(query);
+  if (!normalizedQuery) return [];
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), BING_TIMEOUT_MS);
+  const searchUrl = new URL(ITUNES_SEARCH_ENDPOINT);
+  searchUrl.searchParams.set('term', normalizedQuery);
+  searchUrl.searchParams.set('media', 'podcast');
+  searchUrl.searchParams.set('entity', 'podcastEpisode');
+  searchUrl.searchParams.set('limit', String(DEFAULT_RESULT_COUNT));
+  searchUrl.searchParams.set('country', 'US');
+  searchUrl.searchParams.set('lang', 'en_us');
+
+  try {
+    console.log('[grounding] iTunes podcast query start', { query: normalizedQuery });
+    const response = await fetch(searchUrl, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      const message = await parseErrorBody(response);
+      throw new Error(`iTunes podcast API error: ${message}`);
+    }
+
+    const data = (await response.json()) as ItunesSearchResponse;
+    const snippets = (data.results || [])
+      .slice(0, DEFAULT_RESULT_COUNT)
+      .map((item) => {
+        const trackName = normalizeWhitespace(item.trackName || '');
+        const collection = normalizeWhitespace(item.collectionName || '');
+        const artist = normalizeWhitespace(item.artistName || '');
+        const description = cleanHtmlToText(item.description || '');
+        const trackUrl = normalizeWhitespace(item.trackViewUrl || '');
+        const date = normalizeWhitespace(item.releaseDate || '');
+        const dateLabel = date ? `date=${date.slice(0, 10)}` : '';
+        const title = [trackName, collection ? `(${collection})` : '', artist ? `by ${artist}` : '']
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+        const summary = [description, dateLabel, trackUrl].filter(Boolean).join(' | ');
+        if (title && summary) return `${title}: ${summary}`;
+        if (summary) return summary;
+        return title;
+      })
+      .filter(Boolean);
+
+    console.log('[grounding] iTunes podcast query success', {
+      query: normalizedQuery,
+      snippetCount: snippets.length,
+    });
+    return snippets;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('iTunes podcast API request timed out.');
+    }
+    const message = error instanceof Error ? error.message : 'Unknown iTunes podcast API error.';
+    throw new Error(message);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function fetchAudienceContext(audience: string): Promise<string> {
   const normalizedAudience = normalizeWhitespace(audience || '');
   if (!normalizedAudience) {
@@ -246,35 +333,55 @@ export async function fetchAudienceContext(audience: string): Promise<string> {
 
   const breakingQuery = normalizedAudience;
   const structuralMacroQuery = `${normalizedAudience} ${MACRO_STRUCTURAL_SUFFIX}`;
+  const transcriptQuery = `${normalizedAudience} ${PODCAST_TRANSCRIPT_SUFFIX}`;
 
   const provider = resolveSearchProvider();
   const fetcher = provider === 'google' ? fetchGoogle : fetchBing;
   console.log('[grounding] Audience context provider selected', { provider });
 
-  let [breakingResult, structuralResult] = await Promise.allSettled([
-    fetcher(breakingQuery, { freshness: 'Day' }),
-    fetcher(structuralMacroQuery, { freshness: 'Year' }),
-  ]);
+  const webLanes: Array<{ key: 'breaking' | 'structural' | 'transcript'; query: string; freshness?: BingSearchFreshness }> = [
+    { key: 'breaking', query: breakingQuery, freshness: 'Day' },
+    { key: 'structural', query: structuralMacroQuery, freshness: 'Year' },
+    { key: 'transcript', query: transcriptQuery, freshness: 'Year' },
+  ];
 
-  const bothFailed = breakingResult.status === 'rejected' && structuralResult.status === 'rejected';
-  if (provider === 'google' && bothFailed) {
+  let webResults = await Promise.allSettled(webLanes.map((lane) => fetcher(lane.query, { freshness: lane.freshness })));
+  const podcastResult = await Promise.allSettled([fetchItunesPodcasts(normalizedAudience)]);
+  let [breakingResult, structuralResult, transcriptResult] = webResults;
+  const [itunesResult] = podcastResult;
+
+  const allWebFailed = webResults.every((result) => result.status === 'rejected');
+  if (provider === 'google' && allWebFailed) {
     const firstErrorMessage =
       (breakingResult.status === 'rejected' ? String(breakingResult.reason?.message || '') : '') ||
-      (structuralResult.status === 'rejected' ? String(structuralResult.reason?.message || '') : '');
+      (structuralResult.status === 'rejected' ? String(structuralResult.reason?.message || '') : '') ||
+      (transcriptResult.status === 'rejected' ? String(transcriptResult.reason?.message || '') : '');
 
     if (isGoogleCustomSearchAccessError(firstErrorMessage) && hasBingSearchKey()) {
       console.warn('[grounding] Google search unavailable; retrying with Bing fallback.', {
         reason: firstErrorMessage,
       });
-      [breakingResult, structuralResult] = await Promise.allSettled([
+      webResults = await Promise.allSettled([
         fetchBing(breakingQuery, { freshness: 'Day' }),
         fetchBing(structuralMacroQuery, { freshness: 'Year' }),
+        fetchBing(transcriptQuery, { freshness: 'Year' }),
       ]);
+      [breakingResult, structuralResult, transcriptResult] = webResults;
     }
   }
 
-  if (breakingResult.status === 'rejected' && structuralResult.status === 'rejected') {
-    const reason = breakingResult.reason?.message || structuralResult.reason?.message || 'Search API error.';
+  if (
+    breakingResult.status === 'rejected' &&
+    structuralResult.status === 'rejected' &&
+    transcriptResult.status === 'rejected' &&
+    itunesResult.status === 'rejected'
+  ) {
+    const reason =
+      breakingResult.reason?.message ||
+      structuralResult.reason?.message ||
+      transcriptResult.reason?.message ||
+      itunesResult.reason?.message ||
+      'Search API error.';
     throw new Error(String(reason));
   }
 
@@ -285,6 +392,12 @@ export async function fetchAudienceContext(audience: string): Promise<string> {
   if (structuralResult.status === 'fulfilled' && structuralResult.value.length > 0) {
     digestSections.push(`Structural (annual + macro):\n${structuralResult.value.join('\n\n')}`);
   }
+  if (transcriptResult.status === 'fulfilled' && transcriptResult.value.length > 0) {
+    digestSections.push(`Podcast Transcript Signals:\n${transcriptResult.value.join('\n\n')}`);
+  }
+  if (itunesResult.status === 'fulfilled' && itunesResult.value.length > 0) {
+    digestSections.push(`Podcasts (Apple):\n${itunesResult.value.join('\n\n')}`);
+  }
 
   if (!digestSections.length) {
     return `No web results returned for: "${normalizedAudience}".`;
@@ -294,6 +407,8 @@ export async function fetchAudienceContext(audience: string): Promise<string> {
     audience: normalizedAudience,
     hasBreakingContext: breakingResult.status === 'fulfilled' && breakingResult.value.length > 0,
     hasStructuralContext: structuralResult.status === 'fulfilled' && structuralResult.value.length > 0,
+    hasTranscriptContext: transcriptResult.status === 'fulfilled' && transcriptResult.value.length > 0,
+    hasPodcastApiContext: itunesResult.status === 'fulfilled' && itunesResult.value.length > 0,
     sections: digestSections.length,
   });
 
