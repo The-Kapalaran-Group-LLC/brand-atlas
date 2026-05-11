@@ -8,6 +8,7 @@ import {
   extractUrlsFromEvidenceDigest,
   formatDevilsAdvocateLens,
   getDeploymentCandidatesFromEnv,
+  resolveMatrixCategoryResultsWithFallback,
   resolveBrandEvidenceMode,
   scoreEvidenceDomain,
   sanitizeDemographicClaim,
@@ -246,5 +247,33 @@ describe('hard design token rules prompt mapping', () => {
     expect(block).toContain('No hard design tokens were successfully scraped');
     expect(block).toContain('best-estimate HEX');
     expect(block).toContain('estimated/unverified');
+  });
+});
+
+describe('cultural matrix category fallback resolution', () => {
+  it('returns empty array for a failed category without rejecting the whole result', async () => {
+    const resolved = await resolveMatrixCategoryResultsWithFallback({
+      moments: Promise.resolve([
+        {
+          text: 'Moment insight',
+          isHighlyUnique: true,
+          sourceType: 'Mainstream',
+          confidenceLevel: 'high',
+          trendLifecycle: 'peaking',
+          isFromDocument: false,
+        },
+      ]),
+      beliefs: Promise.reject(new Error('beliefs failed')),
+      tone: Promise.resolve([]),
+      language: Promise.resolve([]),
+      behaviors: Promise.resolve([]),
+      contradictions: Promise.resolve([]),
+      community: Promise.resolve([]),
+      influencers: Promise.resolve([]),
+    });
+
+    expect(resolved.moments).toHaveLength(1);
+    expect(resolved.beliefs).toEqual([]);
+    expect(resolved.tone).toEqual([]);
   });
 });

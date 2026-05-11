@@ -2363,6 +2363,243 @@ const CulturalRawSignalsSchema = z.object({
   sources: z.array(SourceSchema),
 });
 
+const CULTURAL_MATRIX_CATEGORY_KEYS = [
+  'moments',
+  'beliefs',
+  'tone',
+  'language',
+  'behaviors',
+  'contradictions',
+  'community',
+  'influencers',
+] as const;
+
+type CulturalMatrixCategoryKey = (typeof CULTURAL_MATRIX_CATEGORY_KEYS)[number];
+
+type CulturalMatrixCategoryPromises = Record<CulturalMatrixCategoryKey, Promise<MatrixItem[]>>;
+
+type CulturalMatrixGenerationContext = {
+  audience: string;
+  brand?: string;
+  generations?: string[];
+  topicFocus?: string;
+  sourcesType?: string[];
+  normalizedRerunFilters: CulturalRerunFilters;
+  systemInstruction: string;
+  evidenceDigest: string;
+  allowedEvidenceUrlList: string;
+  rawSignals: z.infer<typeof CulturalRawSignalsSchema>;
+};
+
+const CulturalMatrixCategoryResultSchema = z.object({
+  items: z.array(MatrixItemSchema),
+  sources: z.array(SourceSchema).default([]),
+});
+
+const CulturalMatrixMetaSchema = z.object({
+  demographics: z.object({
+    age: z.string().nullable(),
+    race: z.string().nullable(),
+    gender: z.string().nullable(),
+  }),
+  sociological_analysis: z.string(),
+  vocabulary: z.object({
+    wordsTheyUse: z.array(z.string()),
+    wordsToAvoid: z.array(z.string()),
+  }),
+  sources: z.array(SourceSchema),
+});
+
+const CULTURAL_CATEGORY_PROMPT_LABELS: Record<CulturalMatrixCategoryKey, string> = {
+  moments: 'MOMENTS: Context of the time. What external forces are shaping behaviour right now? (Current events, social climate, trends)',
+  beliefs: 'BELIEFS: What they believe and what external forces shape behavior right now. (Beliefs, values, myths, perceptions)',
+  tone: 'TONE: What they feel and how they feel that is unique. (Attitude, emotions, personality, outlook)',
+  language: 'LANGUAGE: How they communicate. (Vernacular, symbols, codes, visuals)',
+  behaviors: 'BEHAVIORS: How they act/interact and what rituals carry meaning. (Actions, customs, rituals, ceremonies)',
+  contradictions: 'CONTRADICTIONS: What tensions or shifts are emerging in values or behaviors?',
+  community: 'COMMUNITY: Who do people look to for identity or belonging?',
+  influencers: 'INFLUENCERS: People shaping their beliefs and behavior.',
+};
+
+function buildRerunFiltersInstructionForCategory(rerunFilters?: CulturalRerunFilters): string {
+  const confidenceLevels = rerunFilters?.confidenceLevels || [];
+  const evidenceTypes = rerunFilters?.evidenceTypes || [];
+  const trendStages = rerunFilters?.trendStages || [];
+  const sourceTypes = rerunFilters?.sourceTypes || [];
+  const hasFilters = confidenceLevels.length > 0 || evidenceTypes.length > 0 || trendStages.length > 0 || sourceTypes.length > 0;
+
+  if (!hasFilters) return 'No filtered rerun constraints are active.';
+
+  return `Filtered rerun constraints:
+- confidenceLevel must be one of: ${confidenceLevels.join(', ') || 'any'}
+- evidence marker in text must include one of: ${evidenceTypes.join(', ') || 'any'}
+- trendLifecycle must be one of: ${trendStages.join(', ') || 'any'}
+- sourceType should map to one of: ${sourceTypes.join(', ') || 'any'}`;
+}
+
+async function generateMatrixCategoryItems(
+  context: CulturalMatrixGenerationContext,
+  category: CulturalMatrixCategoryKey
+): Promise<MatrixItem[]> {
+  const contextStr = context.brand ? ` in the context of the brand/category: "${context.brand}"` : '';
+  const topicStr = context.topicFocus ? `\nTopic focus: "${context.topicFocus}".` : '';
+  const generationStr = context.generations && context.generations.length > 0
+    ? `\nGeneration constraint: ${context.generations.join(', ')}.`
+    : '';
+  const sourcesTypeStr = context.sourcesType && context.sourcesType.length > 0
+    ? `\nSource-type emphasis: ${context.sourcesType.join(', ')}.`
+    : '';
+  const prompt = `Generate only the ${category.toUpperCase()} matrix category for audience "${context.audience}"${contextStr}.${topicStr}${generationStr}${sourcesTypeStr}
+
+Category definition:
+${CULTURAL_CATEGORY_PROMPT_LABELS[category]}
+
+Raw signals for ${category}:
+${JSON.stringify(context.rawSignals[category] || [])}
+
+Full raw signal context:
+${JSON.stringify(context.rawSignals)}
+
+Evidence digest (quality and date weighted):
+${context.evidenceDigest}
+
+Allowed source URLs from Evidence Digest (exact strings only):
+${context.allowedEvidenceUrlList}
+
+Rules:
+- Return 6-10 items when evidence supports it. If evidence is weak, return fewer.
+- Do not fabricate facts, statistics, URLs, dates, or sources.
+- Use confidenceLevel rigorously: low | medium | high.
+- Use trendLifecycle rigorously: emerging | peaking | declining.
+- Use [KNOWN], [INFERRED], or [SPECULATIVE] labels in each item text where applicable.
+- Keep the list sorted by potency (highest signal strength first).
+- ${buildRerunFiltersInstructionForCategory(context.normalizedRerunFilters)}
+
+Return JSON shape:
+{
+  "items": MatrixItem[],
+  "sources": Source[]
+}`;
+
+  const parsed = await runStructuredCall({
+    schema: CulturalMatrixCategoryResultSchema,
+    schemaName: `cultural_matrix_${category}`,
+    mode: 'cultural',
+    outputType: 'analysis',
+    messages: [
+      { role: 'system', content: context.systemInstruction },
+      { role: 'user', content: prompt },
+    ],
+    qualityGate: (payload) => !isThinStructuredPayload(payload),
+    maxRetries: 2,
+  });
+
+  return parsed.items || [];
+}
+
+async function generateMoments(context: CulturalMatrixGenerationContext): Promise<MatrixItem[]> {
+  return generateMatrixCategoryItems(context, 'moments');
+}
+
+async function generateBeliefs(context: CulturalMatrixGenerationContext): Promise<MatrixItem[]> {
+  return generateMatrixCategoryItems(context, 'beliefs');
+}
+
+async function generateTone(context: CulturalMatrixGenerationContext): Promise<MatrixItem[]> {
+  return generateMatrixCategoryItems(context, 'tone');
+}
+
+async function generateLanguage(context: CulturalMatrixGenerationContext): Promise<MatrixItem[]> {
+  return generateMatrixCategoryItems(context, 'language');
+}
+
+async function generateBehaviors(context: CulturalMatrixGenerationContext): Promise<MatrixItem[]> {
+  return generateMatrixCategoryItems(context, 'behaviors');
+}
+
+async function generateContradictions(context: CulturalMatrixGenerationContext): Promise<MatrixItem[]> {
+  return generateMatrixCategoryItems(context, 'contradictions');
+}
+
+async function generateCommunity(context: CulturalMatrixGenerationContext): Promise<MatrixItem[]> {
+  return generateMatrixCategoryItems(context, 'community');
+}
+
+async function generateInfluencers(context: CulturalMatrixGenerationContext): Promise<MatrixItem[]> {
+  return generateMatrixCategoryItems(context, 'influencers');
+}
+
+async function generateCulturalMatrixMeta(context: CulturalMatrixGenerationContext): Promise<z.infer<typeof CulturalMatrixMetaSchema>> {
+  const contextStr = context.brand ? ` in the context of the brand/category: "${context.brand}"` : '';
+  const topicStr = context.topicFocus ? `\nTopic focus: "${context.topicFocus}".` : '';
+  const generationStr = context.generations && context.generations.length > 0
+    ? `\nGeneration constraint: ${context.generations.join(', ')}.`
+    : '';
+  const sourcesTypeStr = context.sourcesType && context.sourcesType.length > 0
+    ? `\nSource-type emphasis: ${context.sourcesType.join(', ')}.`
+    : '';
+
+  const prompt = `Generate the non-category cultural matrix metadata for audience "${context.audience}"${contextStr}.${topicStr}${generationStr}${sourcesTypeStr}
+
+Raw signals:
+${JSON.stringify(context.rawSignals)}
+
+Evidence digest (quality and date weighted):
+${context.evidenceDigest}
+
+Allowed source URLs from Evidence Digest (exact strings only):
+${context.allowedEvidenceUrlList}
+
+Rules:
+- sociological_analysis must be exactly two concise paragraphs.
+- Demographics may be inferred when exact statistics are unavailable, but inferred values must be labeled [INFERRED].
+- Do not fabricate URLs or sources.
+- vocabulary lists must be practical, concise, and immediately useful for copywriters.
+
+Return JSON shape:
+{
+  "demographics": { "age": string | null, "race": string | null, "gender": string | null },
+  "sociological_analysis": string,
+  "vocabulary": { "wordsTheyUse": string[], "wordsToAvoid": string[] },
+  "sources": Source[]
+}`;
+
+  return runStructuredCall({
+    schema: CulturalMatrixMetaSchema,
+    schemaName: 'cultural_matrix_meta',
+    mode: 'cultural',
+    outputType: 'analysis',
+    messages: [
+      { role: 'system', content: context.systemInstruction },
+      { role: 'user', content: prompt },
+    ],
+    qualityGate: (payload) => !isThinStructuredPayload(payload),
+    maxRetries: 2,
+  });
+}
+
+export async function resolveMatrixCategoryResultsWithFallback(
+  categoryPromises: CulturalMatrixCategoryPromises
+): Promise<Record<CulturalMatrixCategoryKey, MatrixItem[]>> {
+  const entries = await Promise.all(
+    CULTURAL_MATRIX_CATEGORY_KEYS.map(async (category) => {
+      try {
+        const items = await categoryPromises[category];
+        console.log(`[cultural-matrix] Category "${category}" generated.`, { itemCount: items.length });
+        return [category, items] as [CulturalMatrixCategoryKey, MatrixItem[]];
+      } catch (error) {
+        logDetailedError(error, `[cultural-matrix] Category "${category}" failed; applying empty-array fallback.`);
+        return [category, []] as [CulturalMatrixCategoryKey, MatrixItem[]];
+      }
+    })
+  );
+
+  return entries.reduce((acc, [category, items]) => {
+    acc[category] = items;
+    return acc;
+  }, {} as Record<CulturalMatrixCategoryKey, MatrixItem[]>);
+}
+
 export async function generateCulturalMatrix(
   audience: string,
   brand?: string,
@@ -2513,43 +2750,61 @@ export async function generateCulturalMatrix(
     maxRetries: 3,
   });
 
-  const interpretationPrompt = `Using the extracted raw signals below, produce the final Cultural Matrix with high specificity and explicit uncertainty labeling.
+  const generationContext: CulturalMatrixGenerationContext = {
+    audience,
+    brand,
+    generations,
+    topicFocus,
+    sourcesType,
+    normalizedRerunFilters,
+    systemInstruction,
+    evidenceDigest,
+    allowedEvidenceUrlList,
+    rawSignals,
+  };
 
-Raw signals:
-${JSON.stringify(rawSignals)}
-
-Rules:
-- Add a required sociological_analysis field before the category arrays. It must be exactly two paragraphs.
-- In sociological_analysis, summarize the socio-economic, historical, and cultural forces shaping the audience and use that summary to derive the final matrix.
-- Keep each category 6-10 items when evidence supports it.
-- Use confidenceLevel rigorously.
-- Use trendLifecycle rigorously for each insight.
-- Label uncertain language in text fields with [KNOWN], [INFERRED], [SPECULATIVE].
-- For vocabulary lists, keep entries concise and practical for immediate copywriting use.
-- Ensure sources remain credible and recent, flagging stale evidence when necessary.
-- In filtered rerun mode, keep only insights that satisfy the selected filters exactly.
-- In filtered rerun mode, if evidence does not support enough insights, return fewer instead of guessing.
-- SOURCE GROUNDING:
-  - Every claim in demographics and behaviors MUST be supported by the Evidence Digest signals.
-  - Use only the exact URLs listed below for sources; do not invent or rewrite URLs.
-  - If age, race/ethnicity, or gender lacks exact statistics, you may infer it from credible cultural signals.
-  - Any inferred demographic value MUST be labeled with [INFERRED].
-
-Allowed Evidence URLs:
-${allowedEvidenceUrlList}`;
-
-  const interpretedMatrix = await runStructuredCall({
-    schema: CulturalMatrixSchema,
-    schemaName: 'cultural_matrix',
-    mode: 'cultural',
-    outputType: 'analysis',
-    messages: [
-      { role: 'system', content: systemInstruction },
-      { role: 'user', content: interpretationPrompt },
-    ],
-    qualityGate: (payload) => !isThinStructuredPayload(payload),
-    maxRetries: 3,
+  const categoryResults = await resolveMatrixCategoryResultsWithFallback({
+    moments: generateMoments(generationContext),
+    beliefs: generateBeliefs(generationContext),
+    tone: generateTone(generationContext),
+    language: generateLanguage(generationContext),
+    behaviors: generateBehaviors(generationContext),
+    contradictions: generateContradictions(generationContext),
+    community: generateCommunity(generationContext),
+    influencers: generateInfluencers(generationContext),
   });
+
+  const meta = await generateCulturalMatrixMeta(generationContext).catch((error) => {
+    logDetailedError(error, '[cultural-matrix] Metadata generation failed; applying safe defaults.');
+    return {
+      demographics: {
+        age: null,
+        race: null,
+        gender: null,
+      },
+      sociological_analysis: '',
+      vocabulary: {
+        wordsTheyUse: [],
+        wordsToAvoid: [],
+      },
+      sources: [],
+    };
+  });
+
+  const interpretedMatrix: CulturalMatrix = {
+    demographics: meta.demographics,
+    sociological_analysis: meta.sociological_analysis,
+    moments: categoryResults.moments,
+    beliefs: categoryResults.beliefs,
+    tone: categoryResults.tone,
+    language: categoryResults.language,
+    behaviors: categoryResults.behaviors,
+    contradictions: categoryResults.contradictions,
+    community: categoryResults.community,
+    influencers: categoryResults.influencers,
+    vocabulary: meta.vocabulary,
+    sources: sanitizeSources([...(meta.sources || []), ...(rawSignals.sources || [])]),
+  };
 
   const backfillDemographicField = (
     interpretedValue?: string | null,
