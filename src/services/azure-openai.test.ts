@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildBrandEvidenceRulesBlock,
+  buildBrandDeepDiveQuestionSearchTopic,
   buildHardDesignTokenRulesBlock,
+  buildMatrixQuestionSearchTopic,
   buildBrandModeSubQueries,
   deriveRecentNewsFromSources,
   evaluateQualityGateDecision,
   extractUrlsFromEvidenceDigest,
   formatDevilsAdvocateLens,
   getDeploymentCandidatesFromEnv,
+  normalizeMatrixTerminology,
   resolveMatrixCategoryResultsWithFallback,
   resolveBrandEvidenceMode,
   scoreEvidenceDomain,
@@ -76,6 +79,55 @@ describe('deployment fallback helpers', () => {
     });
 
     expect(shouldRetry).toBe(false);
+  });
+});
+
+describe('matrix terminology normalization', () => {
+  it('replaces matrix phrasing with cultural analysis phrasing', () => {
+    const normalized = normalizeMatrixTerminology(
+      'What the matrix suggests is that this matrix captures weak signals beyond our matrix baseline.'
+    );
+
+    expect(normalized).toContain('the cultural analysis');
+    expect(normalized).toContain('this cultural analysis');
+    expect(normalized).toContain('our cultural analysis');
+    expect(normalized.toLowerCase()).not.toContain('matrix');
+  });
+});
+
+describe('matrix question search topic builder', () => {
+  it('builds a search topic from context and question for ask flow web evidence', () => {
+    const topic = buildMatrixQuestionSearchTopic('How does Gen Z compare?', {
+      audience: 'Gen Z creators',
+      brand: 'Nike',
+      topicFocus: 'AI usage',
+      generations: ['Gen Z (1997–2012)'],
+      sourcesType: ['Mainstream', 'Niche/Fringe'],
+    });
+
+    expect(topic).toContain('Audience: Gen Z creators');
+    expect(topic).toContain('Brand: Nike');
+    expect(topic).toContain('Topic Focus: AI usage');
+    expect(topic).toContain('Generations: Gen Z (1997–2012)');
+    expect(topic).toContain('Source Emphasis: Mainstream, Niche/Fringe');
+    expect(topic).toContain('Question: How does Gen Z compare?');
+  });
+});
+
+describe('brand deep dive question search topic builder', () => {
+  it('builds a search topic from design-excavator prompt context and question', () => {
+    const topic = buildBrandDeepDiveQuestionSearchTopic('How is Apple evolving visual language?', {
+      brands: ['Apple', 'Samsung'],
+      analysisObjective: 'Compare visual systems',
+      targetAudience: 'Design leaders',
+      timeHorizon: '12 months',
+    });
+
+    expect(topic).toContain('Brands: Apple, Samsung');
+    expect(topic).toContain('Objective: Compare visual systems');
+    expect(topic).toContain('Audience: Design leaders');
+    expect(topic).toContain('Time Horizon: 12 months');
+    expect(topic).toContain('Question: How is Apple evolving visual language?');
   });
 });
 

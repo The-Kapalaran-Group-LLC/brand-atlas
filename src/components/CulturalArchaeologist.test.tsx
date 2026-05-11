@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CulturalArchaeologist from './CulturalArchaeologist';
 
@@ -306,5 +306,74 @@ describe('CulturalArchaeologist', () => {
     expect(screen.getByText('18-34')).toBeInTheDocument();
     expect(screen.getByText('Multi-ethnic urban cohorts')).toBeInTheDocument();
     expect(screen.getByText('Women and non-binary skew')).toBeInTheDocument();
+  });
+
+  it('does not render evidence type chips in deep-dive strategic implications', async () => {
+    generateCulturalMatrix.mockResolvedValueOnce({
+      ...mockMatrix,
+      moments: [
+        {
+          text: 'First signal',
+          isHighlyUnique: false,
+          sourceType: 'Mainstream',
+          confidenceLevel: 'high' as const,
+          trendLifecycle: 'peaking' as const,
+        },
+      ],
+    });
+    generateDeepDive.mockResolvedValueOnce({
+      originationDate: '2026-05-11',
+      relevance: 'High relevance to current market shifts.',
+      expandedContext: '[KNOWN] Expanded context detail',
+      strategicImplications: [
+        '[KNOWN] Product and brand messaging should separate augmentation from substitution clearly.',
+      ],
+      realWorldExamples: ['[INFERRED] Example detail'],
+      sources: [{ title: 'Reuters', url: 'https://www.reuters.com/example' }],
+    });
+
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    const deepDiveButton = await screen.findByTitle('Generate Deep Dive');
+    fireEvent.click(deepDiveButton);
+
+    const strategicHeading = await screen.findByText('Strategic Implications');
+    const strategicSection = strategicHeading.closest('section');
+    expect(strategicSection).not.toBeNull();
+    expect(screen.getByText('Product and brand messaging should separate augmentation from substitution clearly.')).toBeInTheDocument();
+    expect(within(strategicSection as HTMLElement).queryByText(/^known$/i)).not.toBeInTheDocument();
+  });
+
+  it('attaches ask-answer evidence chips to the specific sentence they belong to', async () => {
+    askMatrixQuestion.mockResolvedValueOnce({
+      answer: '[KNOWN] Gen Z is using AI pragmatically in school and work contexts. [INFERRED] Direct cross-generation preference claims are not supported by this data.',
+      relevantInsights: [],
+    });
+
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    const askInput = await screen.findByPlaceholderText(/Ask a question about this audience/i);
+    fireEvent.change(askInput, { target: { value: 'Does Gen Z like AI more than other generations?' } });
+    fireEvent.click(screen.getByRole('button', { name: /^ask$/i }));
+
+    const askCard = await screen.findByTestId('ask-answer-card');
+    const sentenceOne = within(askCard).getByTestId('ask-answer-sentence-0-0');
+    const sentenceTwo = within(askCard).getByTestId('ask-answer-sentence-0-1');
+
+    expect(sentenceOne).toHaveTextContent('Gen Z is using AI pragmatically in school and work contexts.');
+    expect(within(sentenceOne).getByText(/^known$/i)).toBeInTheDocument();
+    expect(within(sentenceOne).queryByText(/^inferred$/i)).not.toBeInTheDocument();
+
+    expect(sentenceTwo).toHaveTextContent('Direct cross-generation preference claims are not supported by this data.');
+    expect(within(sentenceTwo).getByText(/^inferred$/i)).toBeInTheDocument();
+    expect(within(sentenceTwo).queryByText(/^known$/i)).not.toBeInTheDocument();
   });
 });

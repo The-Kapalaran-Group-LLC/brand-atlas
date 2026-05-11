@@ -968,11 +968,60 @@ export function evaluateQualityGateDecision<T>(
   return 'fail';
 }
 
+export function normalizeMatrixTerminology(value: string): string {
+  if (!value) return '';
+
+  return value
+    .replace(/\bthe matrix\b/gi, 'the cultural analysis')
+    .replace(/\bthis matrix\b/gi, 'this cultural analysis')
+    .replace(/\bour matrix\b/gi, 'our cultural analysis')
+    .replace(/\bmatrix\b/gi, 'cultural analysis')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+export function buildMatrixQuestionSearchTopic(
+  question: string,
+  context?: { audience?: string; brand?: string; topicFocus?: string; generations?: string[]; sourcesType?: string[] }
+): string {
+  const contextParts = [
+    context?.audience ? `Audience: ${context.audience}` : '',
+    context?.brand ? `Brand: ${context.brand}` : '',
+    context?.topicFocus ? `Topic Focus: ${context.topicFocus}` : '',
+    context?.generations && context.generations.length > 0 ? `Generations: ${context.generations.join(', ')}` : '',
+    context?.sourcesType && context.sourcesType.length > 0 ? `Source Emphasis: ${context.sourcesType.join(', ')}` : '',
+  ].filter(Boolean);
+
+  return `${contextParts.join(' | ')} | Question: ${question}`.trim();
+}
+
+export function buildBrandDeepDiveQuestionSearchTopic(
+  question: string,
+  context?: { brands?: string[]; analysisObjective?: string; targetAudience?: string; timeHorizon?: string }
+): string {
+  const contextParts = [
+    context?.brands && context.brands.length > 0 ? `Brands: ${context.brands.join(', ')}` : '',
+    context?.analysisObjective ? `Objective: ${context.analysisObjective}` : '',
+    context?.targetAudience ? `Audience: ${context.targetAudience}` : '',
+    context?.timeHorizon ? `Time Horizon: ${context.timeHorizon}` : '',
+  ].filter(Boolean);
+
+  return `${contextParts.join(' | ')} | Question: ${question}`.trim();
+}
+
 async function createTargetedSubQueries(topic: string, mode: SessionMode): Promise<string[]> {
+  const normalizedTopic = topic.trim();
+  const prependPrimaryQuery = (queries: string[]): string[] => {
+    const merged = [normalizedTopic, ...queries]
+      .map((query) => query.trim())
+      .filter(Boolean);
+    return Array.from(new Set(merged)).slice(0, 5);
+  };
+
   if (mode === 'brand') {
     const finalQueries = buildBrandModeSubQueries(topic);
     console.log('[brand-research] Using hardcoded strategic sub-queries', { topic, queries: finalQueries });
-    return finalQueries;
+    return prependPrimaryQuery(finalQueries);
   }
 
   const plan = await runStructuredCall({
@@ -992,7 +1041,7 @@ async function createTargetedSubQueries(topic: string, mode: SessionMode): Promi
     ],
   });
 
-  return plan.queries.map((query) => query.trim()).filter(Boolean).slice(0, 5);
+  return prependPrimaryQuery(plan.queries);
 }
 
 async function gatherEvidenceForTopic(topic: string, mode: SessionMode): Promise<string> {
@@ -1000,20 +1049,49 @@ async function gatherEvidenceForTopic(topic: string, mode: SessionMode): Promise
   if (!queries.length) return 'Evidence digest unavailable.';
 
   // Fetch real backend search results in parallel; do not ask the model to invent URLs.
+  const searchErrors: string[] = [];
   const searchPromises = queries.map(async (query) => {
     try {
       const baseUrl = getApiBaseUrl();
       const res = await fetch(`${baseUrl}/api/search?q=${encodeURIComponent(query)}`);
-      if (!res.ok) return '';
+      if (!res.ok) {
+        let message = `HTTP ${res.status}`;
+        try {
+          const payload = await res.json();
+          message = payload?.error || payload?.message || message;
+        } catch {
+          try {
+            const text = await res.text();
+            message = text || message;
+          } catch {
+            // keep fallback message
+          }
+        }
+        const compact = `[search:${mode}] ${query} -> ${message}`;
+        searchErrors.push(compact);
+        console.warn('[evidence] Search request failed', { mode, query, status: res.status, message });
+        return '';
+      }
       const data = await res.json();
       return `Query: ${query}\nResults:\n${data.context}`;
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown search fetch error';
+      const compact = `[search:${mode}] ${query} -> ${message}`;
+      searchErrors.push(compact);
+      console.warn('[evidence] Search request threw', { mode, query, message });
       return '';
     }
   });
 
   const searchResults = await Promise.all(searchPromises);
   const digest = searchResults.filter(Boolean).join('\n\n');
+  if (!digest && searchErrors.length > 0) {
+    console.warn('[evidence] Evidence digest unavailable after search failures.', {
+      mode,
+      failureCount: searchErrors.length,
+      failures: searchErrors.slice(0, 3),
+    });
+  }
 
   return digest ? digest.slice(0, 15000) : 'Evidence digest unavailable.';
 }
@@ -2019,7 +2097,14 @@ function looksLikeBrandDeepDiveCorrectionPrompt(prompt: string): boolean {
   return [...directRescanPatterns, ...issuePatterns].some((pattern) => pattern.test(normalized));
 }
 
-export async function askMatrixQuestion(matrix: CulturalMatrix, question: string): Promise<{ answer: string, relevantInsights: string[] }> {
+export async function askMatrixQuestion(
+  matrix: CulturalMatrix,
+  question: string,
+  context?: { audience?: string; brand?: string; topicFocus?: string; generations?: string[]; sourcesType?: string[] }
+): Promise<{ answer: string, relevantInsights: string[] }> {
+  const searchTopic = buildMatrixQuestionSearchTopic(question, context);
+  const evidenceDigest = await gatherEvidenceForTopic(searchTopic, 'matrix-qa');
+
   const parsed = await runStructuredCall({
     schema: MatrixAnswerSchema,
     schemaName: 'matrix_answer',
@@ -2028,21 +2113,33 @@ export async function askMatrixQuestion(matrix: CulturalMatrix, question: string
     messages: [
       {
         role: 'system',
-        content: composeSystemPrompt("You are an expert analyst. Answer using ONLY the provided matrix data. Do not invent facts. If the data is insufficient, explicitly say so. Provide a clear answer, and list the exact 'text' of relevant insights from the data.", 'matrix-qa'),
+        content: composeSystemPrompt("You are an expert analyst. Use BOTH the provided cultural analysis data and the web evidence digest to answer. Keep the answer as succinct as possible while still complete. Do not invent facts. If evidence is insufficient, explicitly say so. List the exact 'text' of relevant insights from the data. Never refer to the results as 'the matrix'; always call it 'the cultural analysis'.", 'matrix-qa'),
       },
-      { role: 'user', content: `Data:\n\n${JSON.stringify(matrix)}\n\nQuestion: "${question}"` },
+      {
+        role: 'user',
+        content: `Cultural Analysis Data:\n\n${JSON.stringify(matrix)}\n\nWeb Evidence Digest:\n${evidenceDigest}\n\nQuestion: "${question}"\n\nReturn:\n1) answer: succinct but complete\n2) relevantInsights: exact "text" values from the cultural analysis data that ground the answer`,
+      },
     ],
     qualityGate: (result) => !isThinStructuredPayload(result),
   });
 
-  updateSessionBrief('matrix-qa', parsed);
-  return parsed;
+  const normalized = {
+    ...parsed,
+    answer: normalizeMatrixTerminology(parsed.answer),
+  };
+
+  updateSessionBrief('matrix-qa', normalized);
+  return normalized;
 }
 
 export async function askBrandDeepDiveQuestion(
   report: BrandDeepDiveReport,
-  question: string
+  question: string,
+  context?: { brands?: string[]; analysisObjective?: string; targetAudience?: string; timeHorizon?: string }
 ): Promise<{ answer: string }> {
+  const searchTopic = buildBrandDeepDiveQuestionSearchTopic(question, context);
+  const evidenceDigest = await gatherEvidenceForTopic(searchTopic, 'brand-qa');
+
   const parsed = await runStructuredCall({
     schema: BrandDeepDiveAnswerSchema,
     schemaName: 'brand_deep_dive_answer',
@@ -2051,11 +2148,11 @@ export async function askBrandDeepDiveQuestion(
     messages: [
       {
         role: 'system',
-        content: composeSystemPrompt('You are an expert brand strategist and design analyst. Answer using ONLY the provided brand deep dive report data. Do not invent facts. If the report does not contain enough information, explicitly say so. Provide a concise, direct answer.', 'brand-qa'),
+        content: composeSystemPrompt('You are an expert brand strategist and design analyst. Answer using the provided brand deep dive report data plus web evidence digest. Do not invent facts. If evidence is insufficient, explicitly say so. Provide a concise, direct answer.', 'brand-qa'),
       },
       {
         role: 'user',
-        content: `Data:\n\n${JSON.stringify(report)}\n\nQuestion: "${question}"`,
+        content: `Brand Deep Dive Report Data:\n\n${JSON.stringify(report)}\n\nWeb Evidence Digest:\n${evidenceDigest}\n\nQuestion: "${question}"`,
       },
     ],
     qualityGate: (result) => !isThinStructuredPayload(result),
@@ -2151,7 +2248,12 @@ export async function submitBrandDeepDivePrompt(input: {
     };
   }
 
-  const answer = await askBrandDeepDiveQuestion(input.currentReport, normalizedPrompt);
+  const answer = await askBrandDeepDiveQuestion(input.currentReport, normalizedPrompt, {
+    brands: input.brands.map((brand) => brand.name).filter(Boolean),
+    analysisObjective: input.analysisObjective,
+    targetAudience: input.targetAudience,
+    timeHorizon: input.timeHorizon,
+  });
   return {
     mode: "answer",
     answer: answer.answer,
@@ -2449,10 +2551,24 @@ async function generateMatrixCategoryItems(
   const sourcesTypeStr = context.sourcesType && context.sourcesType.length > 0
     ? `\nSource-type emphasis: ${context.sourcesType.join(', ')}.`
     : '';
+  const categoryRoleBlock = category === 'moments'
+    ? `
+Role:
+You are a Macro-Economic Trend Analyst.
+
+Moments mandate:
+- Extract 6-10 Moments from the Evidence Digest.
+- You MUST provide a balanced mix of:
+  1) breaking, highly up-to-date cultural shifts from the last 7 days, and
+  2) recurring, structural macro-economic forces.
+- Layer in psychological beliefs only when they are clearly tied to macro-forces.
+- Prioritize hard macro-forces over soft speculation.`
+    : '';
   const prompt = `Generate only the ${category.toUpperCase()} matrix category for audience "${context.audience}"${contextStr}.${topicStr}${generationStr}${sourcesTypeStr}
 
 Category definition:
 ${CULTURAL_CATEGORY_PROMPT_LABELS[category]}
+${categoryRoleBlock}
 
 Raw signals for ${category}:
 ${JSON.stringify(context.rawSignals[category] || [])}

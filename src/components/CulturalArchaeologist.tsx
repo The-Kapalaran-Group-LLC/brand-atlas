@@ -300,8 +300,40 @@ const extractEvidenceTags = (value: string): { cleanText: string; labels: Eviden
 
 type AskAnswerSection = {
   title?: string;
-  text: string;
-  labels: EvidenceTagLabel[];
+  sentences: Array<{
+    text: string;
+    labels: EvidenceTagLabel[];
+  }>;
+};
+
+const splitIntoAskAnswerSentences = (value: string): string[] => {
+  if (!value || !value.trim()) return [];
+  const normalized = value.replace(/\r\n/g, '\n').replace(/\n+/g, ' ').trim();
+  if (!normalized) return [];
+  const parts = normalized
+    .split(/(?<=[.!?])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts.length > 0 ? parts : [normalized];
+};
+
+const constrainSentenceEvidenceLabels = (labels: EvidenceTagLabel[]): EvidenceTagLabel[] => {
+  if (labels.length <= 1) return labels;
+  // Keep exactly one evidence chip per sentence to avoid contradictory multi-tagging.
+  return [labels[0]];
+};
+
+const parseAskAnswerSentences = (value: string): AskAnswerSection['sentences'] => {
+  const sentenceParts = splitIntoAskAnswerSentences(value);
+  return sentenceParts
+    .map((sentence) => {
+      const parsed = extractEvidenceTags(sentence);
+      return {
+        text: parsed.cleanText,
+        labels: constrainSentenceEvidenceLabels(parsed.labels),
+      };
+    })
+    .filter((sentence) => sentence.text);
 };
 
 const structureAskAnswer = (value: string): AskAnswerSection[] => {
@@ -320,20 +352,16 @@ const structureAskAnswer = (value: string): AskAnswerSection[] => {
   return baseChunks.map((chunk) => {
     const optionMatch = chunk.match(/^(Option\s+\d+)\s*:\s*(.*)$/is);
     if (optionMatch) {
-      const parsed = extractEvidenceTags(optionMatch[2].trim());
       return {
         title: optionMatch[1],
-        text: parsed.cleanText,
-        labels: parsed.labels,
+        sentences: parseAskAnswerSentences(optionMatch[2].trim()),
       };
     }
 
-    const parsed = extractEvidenceTags(chunk);
     return {
-      text: parsed.cleanText,
-      labels: parsed.labels,
+      sentences: parseAskAnswerSentences(chunk),
     };
-  });
+  }).filter((section) => section.sentences.length > 0);
 };
 
 const evidenceLabelChipClass = (label: EvidenceTagLabel): string => {
@@ -1266,7 +1294,14 @@ export default function CulturalArchaeologist() {
     try {
       const result = await runUserAction({
         actionName: 'ask-cultural-question',
-        action: () => askMatrixQuestion(matrix, matrixQuestion),
+        action: () =>
+          askMatrixQuestion(matrix, matrixQuestion, {
+            audience: matrixMeta?.audience,
+            brand: matrixMeta?.brand,
+            topicFocus: matrixMeta?.topicFocus,
+            generations: matrixMeta?.generations,
+            sourcesType: matrixMeta?.sourcesType,
+          }),
       });
       setMatrixAnswer(result.answer);
       setHighlightedInsights(result.relevantInsights || []);
@@ -2091,7 +2126,7 @@ export default function CulturalArchaeologist() {
                             title: (
                               <>
                                 <Presentation className="w-4 h-4 text-blue-500" />
-                                Real-World Examples
+                                Real World Examples
                               </>
                             ),
                             content: (
@@ -2099,7 +2134,7 @@ export default function CulturalArchaeologist() {
                                 {deepDiveResult.realWorldExamples.map((ex, i) => {
                                   const parsedExample = extractEvidenceTags(ex);
                                   return (
-                                  <li key={i} className="text-zinc-700 text-sm bg-blue-50/50 p-3 rounded-xl border border-blue-100/50">
+                                  <li key={i} className="text-zinc-700 text-sm p-3">
                                     <span>
                                       {parsedExample.cleanText}
                                       {parsedExample.labels.map((label) => (
@@ -2128,14 +2163,7 @@ export default function CulturalArchaeologist() {
                                   const parsedImplication = extractEvidenceTags(imp);
                                   return (
                                   <li key={i} className="text-zinc-700 text-sm">
-                                    <span>
-                                      {parsedImplication.cleanText}
-                                      {parsedImplication.labels.map((label) => (
-                                        <span key={`implication-${i}-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}>
-                                          {label}
-                                        </span>
-                                      ))}
-                                    </span>
+                                    <span>{parsedImplication.cleanText}</span>
                                   </li>
                                   );
                                 })}
@@ -2189,13 +2217,13 @@ export default function CulturalArchaeologist() {
                       <section>
                         <h4 className="text-lg font-bold text-zinc-900 mb-3 flex items-center gap-2">
                           <Presentation className="w-5 h-5 text-blue-500" />
-                          Real-World Examples
+                          Real World Examples
                         </h4>
                         <ul className="space-y-3">
                           {deepDiveResult.realWorldExamples.map((ex, i) => {
                             const parsedExample = extractEvidenceTags(ex);
                             return (
-                              <li key={i} className="text-zinc-700 text-sm bg-blue-50/50 p-3 rounded-xl border border-blue-100/50">
+                              <li key={i} className="text-zinc-700 text-sm p-3">
                                 <span>
                                   {parsedExample.cleanText}
                                   {parsedExample.labels.map((label) => (
@@ -2221,14 +2249,7 @@ export default function CulturalArchaeologist() {
                               const parsedImplication = extractEvidenceTags(imp);
                               return (
                                 <li key={i} className="text-zinc-700 text-sm">
-                                  <span>
-                                    {parsedImplication.cleanText}
-                                    {parsedImplication.labels.map((label) => (
-                                      <span key={`implication-desktop-${i}-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}>
-                                        {label}
-                                      </span>
-                                    ))}
-                                  </span>
+                                  <span>{parsedImplication.cleanText}</span>
                                 </li>
                               );
                             })}
@@ -3032,6 +3053,7 @@ export default function CulturalArchaeologist() {
                   <motion.div 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
+                    data-testid="ask-answer-card"
                     className="mt-6 p-6 bg-white rounded-2xl border border-indigo-100 text-zinc-700 shadow-sm leading-relaxed"
                   >
                     <div className="space-y-4">
@@ -3041,14 +3063,27 @@ export default function CulturalArchaeologist() {
                             {section.title && (
                               <h4 className="text-sm font-semibold text-zinc-900 mb-2">{section.title}</h4>
                             )}
-                            <p className="text-zinc-700 text-[15px] leading-7 whitespace-pre-wrap">
-                              {section.text}
-                              {section.labels.map((label) => (
-                                <span key={`ask-label-${index}-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}>
-                                  {label}
+                            <div className="text-zinc-700 text-[15px] leading-7 whitespace-pre-wrap">
+                              {section.sentences.map((sentence, sentenceIndex) => (
+                                <span
+                                  key={`ask-sentence-${index}-${sentenceIndex}`}
+                                  data-testid={`ask-answer-sentence-${index}-${sentenceIndex}`}
+                                  className="inline"
+                                >
+                                  {sentence.text}
+                                  {sentence.labels.map((label) => (
+                                    <span
+                                      key={`ask-label-${index}-${sentenceIndex}-${label}`}
+                                      data-testid={`ask-answer-chip-${index}-${sentenceIndex}-${label}`}
+                                      className={`inline-flex items-center h-[18px] ml-2 px-1.5 leading-none text-[10px] uppercase tracking-wider font-semibold rounded-md align-middle ${evidenceLabelChipClass(label)}`}
+                                    >
+                                      {label}
+                                    </span>
+                                  ))}
+                                  {sentenceIndex < section.sentences.length - 1 ? ' ' : ''}
                                 </span>
                               ))}
-                            </p>
+                            </div>
                           </div>
                         ))
                       ) : (
@@ -3096,7 +3131,7 @@ export default function CulturalArchaeologist() {
 
               <div className="mb-8 p-4 pb-14 bg-zinc-50 border border-zinc-200 rounded-2xl no-print relative">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                  <h4 className="text-sm font-semibold text-zinc-900">Result Filters</h4>
+                  <h4 className="text-sm font-semibold text-zinc-900">Results Filters</h4>
                   {activeFilterCount > 0 && (
                     <button
                       type="button"
