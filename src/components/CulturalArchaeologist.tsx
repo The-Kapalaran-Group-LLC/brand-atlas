@@ -2801,7 +2801,7 @@ export default function CulturalArchaeologist() {
             </button>
 
             <p className="subheader-copy text-xs text-zinc-400 text-center mt-2">
-              AI models can make mistakes. Always double check your work. Remember to think critically.
+              Powered by OpenAI's GPT-5.4. AI models can make mistakes. Always double check your work. Remember to think critically.
             </p>
             <RecentResultsLibrary<CulturalRecentResult>
               mode={APP_RECENT_RESULTS_MODES.CULTURAL_ARCHAEOLOGIST}
