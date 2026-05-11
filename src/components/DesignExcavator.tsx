@@ -1927,7 +1927,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-center pt-2">
-          <div className="justify-self-end md:col-start-2 md:col-span-1">
+          <div className="md:col-span-3 flex justify-center">
             <button
               type="button"
               onClick={() => {
@@ -1957,12 +1957,6 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
               {/* Progress bar is now rendered inside ProgressiveLoader for alignment with % */}
             </button>
           </div>
-          <div
-            className="hidden md:flex items-center justify-center px-3 py-3 rounded-2xl border border-transparent"
-            aria-hidden="true"
-          >
-            <Trash2 className="w-4 h-4 opacity-0" />
-          </div>
         </div>
 
         {error && <p className="text-sm text-red-500">{error}</p>}
@@ -1987,8 +1981,10 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         )}
       </motion.form>
 
-      <p className={`text-xs text-zinc-400 text-center mt-4 sm:mt-3 select-none ${isSearchControlsMinimized ? 'hidden' : ''}`}>
-              Powered by OpenAI's GPT-5.4. AI models can make mistakes. Always double check your work. Remember to think critically.
+      <p className={`subheader-copy text-xs text-zinc-400 text-center mt-8 select-none ${isSearchControlsMinimized ? 'hidden' : ''}`}>
+        AI models can make mistakes. Always double check your work. Remember to think critically.
+        <br />
+        Powered by OpenAI's GPT-5.4.
       </p>
       <RecentResultsLibrary<DesignExcavatorRecentResult>
         mode={APP_RECENT_RESULTS_MODES.DESIGN_EXCAVATOR}
@@ -2015,7 +2011,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }
         }}
-        className={isSearchControlsMinimized ? 'hidden' : 'mt-2'}
+        className={isSearchControlsMinimized ? 'hidden' : 'mt-8'}
       />
 
       </div>

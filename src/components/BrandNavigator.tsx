@@ -1927,8 +1927,10 @@ export default function BrandNavigator() {
               {/* Progress bar is now rendered inside ProgressiveLoader for alignment with % */}
             </button>
 
-            <p className="subheader-copy text-xs text-zinc-400 text-center mt-2">
-              Powered by OpenAI's GPT-5.4. AI models can make mistakes. Always double check your work. Remember to think critically.
+            <p className="subheader-copy text-xs text-zinc-400 text-center mt-8">
+              AI models can make mistakes. Always double check your work. Remember to think critically.
+              <br />
+              Powered by OpenAI's GPT-5.4.
             </p>
             <RecentResultsLibrary<BrandNavigatorRecentResult>
               mode={APP_RECENT_RESULTS_MODES.BRAND_NAVIGATOR}
