@@ -2134,7 +2134,7 @@ export default function CulturalArchaeologist() {
                                 {deepDiveResult.realWorldExamples.map((ex, i) => {
                                   const parsedExample = extractEvidenceTags(ex);
                                   return (
-                                  <li key={i} className="text-zinc-700 text-sm p-3">
+                                  <li key={i} className="text-zinc-700 text-sm">
                                     <span>
                                       {parsedExample.cleanText}
                                       {parsedExample.labels.map((label) => (
@@ -2223,7 +2223,7 @@ export default function CulturalArchaeologist() {
                           {deepDiveResult.realWorldExamples.map((ex, i) => {
                             const parsedExample = extractEvidenceTags(ex);
                             return (
-                              <li key={i} className="text-zinc-700 text-sm p-3">
+                              <li key={i} className="text-zinc-700 text-sm">
                                 <span>
                                   {parsedExample.cleanText}
                                   {parsedExample.labels.map((label) => (
