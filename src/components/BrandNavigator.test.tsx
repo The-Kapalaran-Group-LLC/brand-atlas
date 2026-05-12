@@ -186,7 +186,7 @@ describe('BrandNavigator', () => {
     expect(await screen.findByRole('button', { name: /generate analysis/i })).toBeInTheDocument();
   });
 
-  it('center aligns text in the brand, audience, and topic inputs', async () => {
+  it('left aligns text in the brand, audience, and topic inputs', async () => {
     render(<BrandNavigator />);
     fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
 
@@ -194,12 +194,12 @@ describe('BrandNavigator', () => {
     const audienceInput = screen.getByTestId('audience-input');
     const topicInput = screen.getByPlaceholderText('Topic Focus (Optional)');
 
-    expect(brandsInput.className).toContain('text-center');
-    expect(brandsInput.className).toContain('placeholder:text-center');
-    expect(audienceInput.className).toContain('text-center');
-    expect(audienceInput.className).toContain('placeholder:text-center');
-    expect(topicInput.className).toContain('text-center');
-    expect(topicInput.className).toContain('placeholder:text-center');
+    expect(brandsInput.className).toContain('text-left');
+    expect(brandsInput.className).toContain('placeholder:text-left');
+    expect(audienceInput.className).toContain('text-left');
+    expect(audienceInput.className).toContain('placeholder:text-left');
+    expect(topicInput.className).toContain('text-left');
+    expect(topicInput.className).toContain('placeholder:text-left');
   });
 
   it('vertically centers brand input when empty and keeps chip layout when populated', async () => {

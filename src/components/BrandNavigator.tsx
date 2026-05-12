@@ -1545,7 +1545,7 @@ export default function BrandNavigator() {
                         }
                       }}
                       placeholder={normalizedBrands.length > 0 ? 'Add more brands' : 'Brands (Required)'}
-                      className={`flex-1 min-w-[140px] bg-transparent text-zinc-900 text-center placeholder:text-center placeholder-zinc-400 focus:outline-none ${normalizedBrands.length > 0 ? 'py-1' : 'h-10'}`}
+                      className={`flex-1 min-w-[140px] bg-transparent text-zinc-900 text-left placeholder:text-left placeholder-zinc-400 focus:outline-none ${normalizedBrands.length > 0 ? 'py-1' : 'h-10'}`}
                       disabled={isLoading}
                     />
                   </div>
@@ -1690,7 +1690,7 @@ export default function BrandNavigator() {
                       }
                     }}
                     placeholder="Primary Audience (Optional)"
-                    className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 text-center placeholder:text-center placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
+                    className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 text-left placeholder:text-left placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
                     disabled={isLoading}
                   />
                   {isDetecting && !audience.trim() && (
@@ -1713,7 +1713,7 @@ export default function BrandNavigator() {
                     }
                   }}
                   placeholder="Topic Focus (Optional)"
-                  className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 text-center placeholder:text-center placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
+                  className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 text-left placeholder:text-left placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
                   disabled={isLoading}
                 />
                 {isDetecting && !topicFocus.trim() && (
@@ -1730,12 +1730,12 @@ export default function BrandNavigator() {
                 <button
                   type="button"
                   onClick={() => setIsGenerationDropdownOpen(!isGenerationDropdownOpen)}
-                  className="w-full flex items-center justify-between px-4 py-4 bg-white border border-zinc-200 rounded-2xl text-zinc-700 hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                  className="w-full flex items-center justify-between px-4 py-4 bg-white border border-zinc-200 rounded-2xl text-zinc-700 text-left hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
                   disabled={isLoading}
                 >
                   <div className="flex items-center gap-3 overflow-hidden">
                     <Filter className="w-5 h-5 text-zinc-400 shrink-0" />
-                    <span className="truncate">
+                    <span className="truncate text-left">
                       {selectedGenerations.length > 0 
                         ? `Generations: ${selectedGenerations.map(g => g.split(' ')[0] + (g.split(' ')[1] ? ' ' + g.split(' ')[1] : '')).join(', ')}` 
                         : 'Filter by Generation (Optional)'}
@@ -1786,12 +1786,12 @@ export default function BrandNavigator() {
                 <button
                   type="button"
                   onClick={() => setIsSourcesDropdownOpen(!isSourcesDropdownOpen)}
-                  className="w-full flex items-center justify-between px-4 py-4 bg-white border border-zinc-200 rounded-2xl text-zinc-700 hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                  className="w-full flex items-center justify-between px-4 py-4 bg-white border border-zinc-200 rounded-2xl text-zinc-700 text-left hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
                   disabled={isLoading}
                 >
                   <div className="flex items-center gap-3 overflow-hidden">
                     <FileText className="w-5 h-5 text-zinc-400 shrink-0" />
-                    <span className="truncate">
+                    <span className="truncate text-left">
                       {sourcesType.length > 0 ? sourcesType.join(', ') : 'Sources (Optional)'}
                     </span>
                   </div>
