@@ -1494,7 +1494,7 @@ export default function BrandNavigator() {
             noValidate
             className={`w-full max-w-4xl mt-10 relative flex flex-col gap-4 pb-24 sm:pb-0 ${isResearchControlsMinimized ? 'hidden' : ''}`}
           >
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start content-start">
               <div className="relative flex flex-col w-full self-start" ref={brandDropdownRef}>
                 <div className={`relative flex items-start w-full min-h-14 bg-white border ${showValidation && normalizedBrands.length === 0 ? 'border-red-500 focus-within:ring-red-500/20 focus-within:border-red-500' : 'border-zinc-200 focus-within:ring-indigo-500/20 focus-within:border-indigo-500'} rounded-2xl text-zinc-900 focus-within:outline-none focus-within:ring-2 transition-all shadow-sm text-sm`}>
                   <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
@@ -1675,7 +1675,7 @@ export default function BrandNavigator() {
               </div>
 
               <div className="relative flex flex-col w-full self-start">
-                <div className="relative flex items-center w-full">
+                <div className="relative flex items-start w-full">
                   <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
                   <input
                     data-testid="audience-input"
@@ -1701,7 +1701,7 @@ export default function BrandNavigator() {
                 </div>
               </div>
 
-              <div className="relative flex items-center w-full self-start">
+              <div className="relative flex items-start w-full self-start">
                 <Target className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
                 <input
                   type="text"
