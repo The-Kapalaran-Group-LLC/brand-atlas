@@ -1374,7 +1374,7 @@ export default function BrandNavigator() {
             <div className="absolute top-4 left-4 right-4 z-50 no-print sm:top-6 sm:left-6 sm:right-auto">
               <button
                 onClick={() => navigateToHomeDashboard()}
-                className="inline-flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400/40 focus:ring-offset-2 rounded-md"
+                className="inline-flex h-10 items-center gap-2 text-sm font-medium leading-none text-zinc-500 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400/40 focus:ring-offset-2 rounded-md"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Back to Home
@@ -1384,13 +1384,13 @@ export default function BrandNavigator() {
             <div className="absolute top-20 right-4 z-50 no-print flex flex-col items-end gap-3 sm:top-6 sm:right-6 sm:flex-row sm:items-center sm:gap-2">
               <button
                 onClick={() => navigateToHashRoute('cultural-archaeologist')}
-                className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                className="inline-flex h-10 items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
               >
                 <Search className="w-4 h-4" /> Cultural Archaeologist
               </button>
               <button
                 onClick={() => navigateToHashRoute('design-excavator')}
-                className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                className="inline-flex h-10 items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
               >
                 <Palette className="w-4 h-4" /> Design Excavator
                 <span className="align-super ml-3 inline-block px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold tracking-wide border border-indigo-200">
@@ -1399,7 +1399,7 @@ export default function BrandNavigator() {
               </button>
               <button
                 onClick={handleReset}
-                className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                className="inline-flex h-10 items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
               >
                 <RefreshCw className="w-4 h-4" /> New Search
               </button>
@@ -1497,8 +1497,11 @@ export default function BrandNavigator() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               <div className="relative flex flex-col w-full self-start" ref={brandDropdownRef}>
                 <div className={`relative flex items-start w-full min-h-14 bg-white border ${showValidation && normalizedBrands.length === 0 ? 'border-red-500 focus-within:ring-red-500/20 focus-within:border-red-500' : 'border-zinc-200 focus-within:ring-indigo-500/20 focus-within:border-indigo-500'} rounded-2xl text-zinc-900 focus-within:outline-none focus-within:ring-2 transition-all shadow-sm text-sm`}>
-                  <Tag className="absolute left-4 top-4 w-5 h-5 text-zinc-400" />
-                  <div className="w-full min-h-14 pl-12 pr-12 py-2 flex items-start gap-2 flex-wrap">
+                  <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                  <div
+                    data-testid="brands-input-shell"
+                    className={`w-full min-h-14 pl-12 pr-12 py-2 flex gap-2 flex-wrap ${normalizedBrands.length > 0 ? 'items-start' : 'items-center'}`}
+                  >
                     {normalizedBrands.map((brandChip, chipIndex) => (
                       <span
                         key={`${brandChip}-${chipIndex}`}
@@ -1542,7 +1545,7 @@ export default function BrandNavigator() {
                         }
                       }}
                       placeholder={normalizedBrands.length > 0 ? 'Add more brands' : 'Brands (Required)'}
-                      className="flex-1 min-w-[140px] py-1 bg-transparent text-zinc-900 placeholder-zinc-400 focus:outline-none"
+                      className={`flex-1 min-w-[140px] bg-transparent text-zinc-900 text-center placeholder:text-center placeholder-zinc-400 focus:outline-none ${normalizedBrands.length > 0 ? 'py-1' : 'h-10'}`}
                       disabled={isLoading}
                     />
                   </div>
@@ -1673,7 +1676,7 @@ export default function BrandNavigator() {
 
               <div className="relative flex flex-col w-full self-start">
                 <div className="relative flex items-center w-full">
-                  <Users className="absolute left-4 top-4 w-5 h-5 text-zinc-400" />
+                  <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
                   <input
                     data-testid="audience-input"
                     type="text"
@@ -1687,7 +1690,7 @@ export default function BrandNavigator() {
                       }
                     }}
                     placeholder="Primary Audience (Optional)"
-                    className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
+                    className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 text-center placeholder:text-center placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
                     disabled={isLoading}
                   />
                   {isDetecting && !audience.trim() && (
@@ -1699,7 +1702,7 @@ export default function BrandNavigator() {
               </div>
 
               <div className="relative flex items-center w-full self-start">
-                <Target className="absolute left-4 top-4 w-5 h-5 text-zinc-400" />
+                <Target className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
                 <input
                   type="text"
                   value={topicFocus}
@@ -1710,7 +1713,7 @@ export default function BrandNavigator() {
                     }
                   }}
                   placeholder="Topic Focus (Optional)"
-                  className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
+                  className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 text-center placeholder:text-center placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
                   disabled={isLoading}
                 />
                 {isDetecting && !topicFocus.trim() && (

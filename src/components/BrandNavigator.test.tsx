@@ -186,6 +186,39 @@ describe('BrandNavigator', () => {
     expect(await screen.findByRole('button', { name: /generate analysis/i })).toBeInTheDocument();
   });
 
+  it('center aligns text in the brand, audience, and topic inputs', async () => {
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    const audienceInput = screen.getByTestId('audience-input');
+    const topicInput = screen.getByPlaceholderText('Topic Focus (Optional)');
+
+    expect(brandsInput.className).toContain('text-center');
+    expect(brandsInput.className).toContain('placeholder:text-center');
+    expect(audienceInput.className).toContain('text-center');
+    expect(audienceInput.className).toContain('placeholder:text-center');
+    expect(topicInput.className).toContain('text-center');
+    expect(topicInput.className).toContain('placeholder:text-center');
+  });
+
+  it('vertically centers brand input when empty and keeps chip layout when populated', async () => {
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    const brandsInputShell = screen.getByTestId('brands-input-shell');
+
+    expect(brandsInputShell.className).toContain('items-center');
+    expect(brandsInputShell.className).not.toContain('items-start');
+
+    fireEvent.change(brandsInput, { target: { value: 'Aesop' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+
+    expect(await screen.findByTestId('brand-chip-0')).toBeInTheDocument();
+    expect(brandsInputShell.className).toContain('items-start');
+  });
+
   it('renders high-level summary for each brand result', async () => {
     generateBrandResearchMatrix.mockResolvedValue({
       analysisObjective: 'test objective',

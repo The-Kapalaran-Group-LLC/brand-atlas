@@ -222,6 +222,36 @@ describe('BrandDeepDivePage', () => {
     expect(screen.queryByRole('button', { name: /^compare$/i })).not.toBeInTheDocument();
   });
 
+  it('hides Compare Across Brands actions when only one brand is shown in results', async () => {
+    generateBrandDeepDive.mockResolvedValueOnce({
+      ...sampleReport,
+      brandProfiles: [sampleReport.brandProfiles[0]],
+    });
+
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /add brand/i }));
+    fireEvent.change(screen.getByPlaceholderText('Brand 2 Name'), {
+      target: { value: 'Byredo' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    await screen.findByText(/Ask About This Analysis/i);
+    expect(screen.queryByRole('button', { name: /^compare$/i })).not.toBeInTheDocument();
+
+    const typographyHeading = screen.getAllByText('Typography')[0];
+    const typographyCard = typographyHeading.closest('.cursor-pointer') as HTMLElement | null;
+    if (!typographyCard) {
+      throw new Error('Expected clickable typography card.');
+    }
+    fireEvent.click(typographyCard);
+
+    expect(screen.queryByRole('button', { name: /compare across brands/i })).not.toBeInTheDocument();
+  });
+
   it('renders explicit fallback copy when color and typography token arrays are empty', async () => {
     generateBrandDeepDive.mockResolvedValueOnce({
       ...sampleReport,
@@ -321,6 +351,28 @@ describe('BrandDeepDivePage', () => {
 
     expect(screen.getAllByText('Inferred').length).toBeGreaterThan(0);
     expect(screen.queryByText(/\[INFERRED\]/i)).not.toBeInTheDocument();
+  });
+
+  it('does not render Devil’s Advocate recommendations in Design Excavator output', async () => {
+    generateBrandDeepDive.mockResolvedValueOnce({
+      ...sampleReport,
+      strategicRecommendations: [
+        "Devil's advocate: This identity could be perceived as too restrained for younger audiences.",
+        'Lean into differentiated editorial cues.',
+      ],
+    });
+
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    await screen.findByText(/Ask About This Analysis/i);
+
+    expect(screen.queryByText(/devil.?s advocate/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Lean into differentiated editorial cues.')).toBeInTheDocument();
   });
 
   it('renders a bottom Sources & Research section from report sources', async () => {

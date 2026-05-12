@@ -180,6 +180,10 @@ const evidenceLabelChipClass = (label: EvidenceTagLabel): string => {
   return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
 };
 
+function isDevilsAdvocateLine(value: string): boolean {
+  return /devil'?s advocate/i.test(value || '');
+}
+
 const VISUAL_METHOD_LABEL: Record<VisualMethod, string> = {
   deterministic: 'Derived Domain Logo',
   screenshot: 'Website Screenshot Previews',
@@ -536,6 +540,10 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   };
 
   const openComparePopup = (event: React.MouseEvent<HTMLElement>, target: CompareElement) => {
+    if (!showCompareTab) {
+      return;
+    }
+
     const clickedInteractiveElement = (event.target as HTMLElement | null)?.closest('a,button,input,textarea,select,label');
     if (clickedInteractiveElement) {
       return;
@@ -995,7 +1003,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
   const canAddBrand = brands.length < 6;
   const brandCount = brands.filter((brand) => (brand.name || '').trim()).length;
-  const showCompareTab = brandCount > 1;
+  const reportBrandCount = report?.brandProfiles?.filter((profile) => (profile.brandName || '').trim().length > 0).length || 0;
+  const showCompareTab = reportBrandCount > 1;
 
   useEffect(() => {
     if (!showCompareTab && resultTab === 'compare') {
@@ -1736,7 +1745,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
           <a
             href="/?home=1"
             onClick={(event) => handlePrimaryLinkNavigation(event, onBack)}
-            className="inline-flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400/40 focus:ring-offset-2 rounded-md"
+            className="inline-flex h-10 items-center gap-2 text-sm font-medium leading-none text-zinc-500 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400/40 focus:ring-offset-2 rounded-md"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Home
@@ -1747,21 +1756,21 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
           <a
             href="/#cultural-archaeologist"
             onClick={(event) => handlePrimaryLinkNavigation(event, () => navigateToHashRoute('cultural-archaeologist'))}
-            className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+            className="inline-flex h-10 items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
           >
             <Search className="w-4 h-4" /> Cultural Archaeologist
           </a>
           <a
             href="/#brand-navigator"
             onClick={(event) => handlePrimaryLinkNavigation(event, () => navigateToHashRoute('brand-navigator'))}
-            className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+            className="inline-flex h-10 items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
           >
             <CompassRoseIcon className="w-4 h-4" /> Brand Navigator
           </a>
           <a
             href="/#design-excavator"
             onClick={(event) => handlePrimaryLinkNavigation(event, clearExcavatorSearch)}
-            className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+            className="inline-flex h-10 items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
           >
             <RefreshCw className="w-4 h-4" /> New Search
           </a>
@@ -2536,11 +2545,13 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                     </ul>
                   </section>
                 )}
-                {report.strategicRecommendations?.length > 0 && (
+                {report.strategicRecommendations?.filter((item) => !isDevilsAdvocateLine(item || '')).length > 0 && (
                   <section className="bg-white rounded-3xl border border-zinc-200 p-6">
                     <h4 className="text-sm font-bold text-zinc-900 uppercase tracking-wider mb-4">Strategic Recommendations</h4>
                     <ul className="space-y-3">
-                      {report.strategicRecommendations.map((item, idx) => {
+                      {report.strategicRecommendations
+                        .filter((item) => !isDevilsAdvocateLine(item || ''))
+                        .map((item, idx) => {
                         const parsed = extractEvidenceTags(item || '');
                         return (
                         <li key={idx} className="text-sm text-zinc-700 flex items-start gap-2 leading-relaxed">

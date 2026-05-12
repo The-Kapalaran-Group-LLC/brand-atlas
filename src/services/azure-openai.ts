@@ -1979,12 +1979,6 @@ ${RESEARCH_ACCURACY_PROTOCOL}`;
 
     const normalizedStrict = BrandDeepDiveFallbackSchema.parse(parsedStrict);
     const normalized = sanitizeBrandDeepDiveReport(normalizeBrandDeepDiveReport(normalizedStrict, cappedBrands, input.analysisObjective));
-    const devilsAdvocate = await runDevilsAdvocatePass(topicSummary, normalized, 'brand');
-    normalized.strategicRecommendations = [
-      ...normalized.strategicRecommendations,
-      `[KNOWN] Devil's advocate: ${devilsAdvocate.counterArgument}`,
-      ...devilsAdvocate.keyWeaknesses.map((item) => `[INFERRED] Weakness to monitor: ${item}`),
-    ].slice(0, 14);
     updateSessionBrief('brand', normalized);
     return normalized;
   } catch (strictError) {
