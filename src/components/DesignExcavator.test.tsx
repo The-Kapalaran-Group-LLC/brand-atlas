@@ -322,4 +322,21 @@ describe('BrandDeepDivePage', () => {
     expect(screen.getAllByText('Inferred').length).toBeGreaterThan(0);
     expect(screen.queryByText(/\[INFERRED\]/i)).not.toBeInTheDocument();
   });
+
+  it('renders a bottom Sources & Research section from report sources', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    await screen.findByText(/Ask About This Analysis/i);
+
+    expect(screen.getByRole('heading', { name: /sources & research/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /\[1\].*Aesop/i })).toHaveAttribute(
+      'href',
+      expect.stringMatching(/^https:\/\/www\.aesop\.com\/?$/)
+    );
+  });
 });

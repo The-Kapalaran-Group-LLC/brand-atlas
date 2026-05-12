@@ -234,7 +234,14 @@ type RetryableDeploymentError = {
   status?: number;
   code?: string;
   message?: string;
+  errno?: string;
+  cause?: unknown;
 };
+
+export const STREAM_RETRY_MAX_RETRIES = 5;
+const STREAM_RETRY_BASE_DELAY_MS = 500;
+const STREAM_RETRY_MAX_DELAY_MS = 20_000;
+const STREAM_RETRY_JITTER_RATIO = 0.2;
 
 const normalizeDeploymentName = (value?: string): string => (value || '').trim();
 
@@ -250,14 +257,14 @@ export function getDeploymentCandidatesFromEnv(env: NodeJS.ProcessEnv = process.
 }
 
 export function shouldRetryWithAlternateDeployment(error: unknown): boolean {
+  if (isTransientOpenAIRequestError(error)) {
+    return true;
+  }
+
   const details = error as RetryableDeploymentError | undefined;
   const status = details?.status;
   const code = (details?.code || '').toLowerCase();
   const message = (details?.message || '').toLowerCase();
-
-  if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {
-    return true;
-  }
 
   if (status === 400) {
     if (
@@ -272,6 +279,59 @@ export function shouldRetryWithAlternateDeployment(error: unknown): boolean {
   }
 
   return false;
+}
+
+const normalizeRetryCode = (value?: string): string => (value || '').toLowerCase().trim();
+
+function getNestedCauseMessage(error: RetryableDeploymentError | undefined): string {
+  if (!error || !error.cause || typeof error.cause !== 'object') {
+    return '';
+  }
+  const causeRecord = error.cause as { message?: string };
+  return (causeRecord.message || '').toLowerCase();
+}
+
+export function isTransientOpenAIRequestError(error: unknown): boolean {
+  const details = error as RetryableDeploymentError | undefined;
+  const status = details?.status;
+
+  if (status === 408 || status === 409 || status === 429 || (typeof status === 'number' && status >= 500 && status <= 599)) {
+    return true;
+  }
+
+  const code = normalizeRetryCode(details?.code) || normalizeRetryCode(details?.errno);
+  const message = (details?.message || '').toLowerCase();
+  const causeMessage = getNestedCauseMessage(details);
+  const combined = `${code} ${message} ${causeMessage}`;
+
+  const transientSignals = [
+    'stream disconnected before completion',
+    'response.failed',
+    'timeout',
+    'timed out',
+    'socket hang up',
+    'network',
+    'econnreset',
+    'econnrefused',
+    'etimedout',
+    'enotfound',
+    'ehostunreach',
+  ];
+
+  return transientSignals.some((signal) => combined.includes(signal));
+}
+
+export function computeRetryDelayMs(attempt: number, randomValue: number = Math.random()): number {
+  const safeAttempt = Number.isFinite(attempt) && attempt > 0 ? Math.floor(attempt) : 0;
+  const baseDelay = Math.min(STREAM_RETRY_BASE_DELAY_MS * (2 ** safeAttempt), STREAM_RETRY_MAX_DELAY_MS);
+  const normalizedRandom = Math.min(1, Math.max(0, randomValue));
+  const jitterMultiplier = 1 + ((normalizedRandom * 2) - 1) * STREAM_RETRY_JITTER_RATIO;
+  const jitteredDelay = Math.round(baseDelay * jitterMultiplier);
+  return Math.max(0, Math.min(STREAM_RETRY_MAX_DELAY_MS, jitteredDelay));
+}
+
+async function waitForRetryDelay(delayMs: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 function getOrderedDeployments(modelTier: ModelTier): string[] {
@@ -308,37 +368,71 @@ async function createChatCompletionWithFallback(
 
   let lastError: unknown;
 
-  for (let index = 0; index < orderedDeployments.length; index += 1) {
-    const deployment = orderedDeployments[index];
-    const hasAnotherDeployment = index < orderedDeployments.length - 1;
+  for (let attempt = 0; attempt <= STREAM_RETRY_MAX_RETRIES; attempt += 1) {
+    let sawRetryableError = false;
 
-    try {
-      const response = await client.chat.completions.create({
-        ...requestParams,
-        model: deployment,
-      });
+    for (let index = 0; index < orderedDeployments.length; index += 1) {
+      const deployment = orderedDeployments[index];
+      const hasAnotherDeployment = index < orderedDeployments.length - 1;
 
-      if (deployment !== initialDeployment) {
-        console.warn('[azure-openai] Recovered by switching deployment:', {
-          from: initialDeployment,
-          to: deployment,
+      try {
+        const response = await client.chat.completions.create({
+          ...requestParams,
+          model: deployment,
         });
-      }
 
-      return response;
-    } catch (error) {
-      lastError = error;
-      console.error('[azure-openai] Deployment call failed:', {
-        deployment,
-        status: (error as RetryableDeploymentError)?.status,
-        code: (error as RetryableDeploymentError)?.code,
-        message: (error as RetryableDeploymentError)?.message,
-      });
+        if (deployment !== initialDeployment) {
+          console.warn('[azure-openai] Recovered by switching deployment:', {
+            from: initialDeployment,
+            to: deployment,
+            attempt: attempt + 1,
+          });
+        }
 
-      if (!hasAnotherDeployment || !shouldRetryWithAlternateDeployment(error)) {
-        throw error;
+        return response;
+      } catch (error) {
+        lastError = error;
+        const retryable = shouldRetryWithAlternateDeployment(error);
+        sawRetryableError = sawRetryableError || retryable;
+
+        console.error('[azure-openai] Deployment call failed:', {
+          deployment,
+          attempt: attempt + 1,
+          maxAttempts: STREAM_RETRY_MAX_RETRIES + 1,
+          status: (error as RetryableDeploymentError)?.status,
+          code: (error as RetryableDeploymentError)?.code,
+          message: (error as RetryableDeploymentError)?.message,
+          retryable,
+          hasAnotherDeployment,
+        });
+
+        if (!retryable) {
+          throw error;
+        }
+
+        if (hasAnotherDeployment) {
+          console.log('[azure-openai] Retrying on alternate deployment within same attempt.', {
+            failedDeployment: deployment,
+            nextDeployment: orderedDeployments[index + 1],
+            attempt: attempt + 1,
+          });
+          continue;
+        }
       }
     }
+
+    if (!sawRetryableError || attempt >= STREAM_RETRY_MAX_RETRIES) {
+      break;
+    }
+
+    const delayMs = computeRetryDelayMs(attempt);
+    console.log('[azure-openai] Retrying request after transient failure.', {
+      attempt: attempt + 1,
+      nextAttempt: attempt + 2,
+      delayMs,
+      maxAttempts: STREAM_RETRY_MAX_RETRIES + 1,
+    });
+    await waitForRetryDelay(delayMs);
   }
 
   throw lastError instanceof Error ? lastError : new Error('Azure OpenAI call failed for all deployments.');
@@ -971,7 +1065,7 @@ async function runStructuredCall<T extends z.ZodTypeAny>(params: {
   qualityGate?: (parsed: z.infer<T>) => boolean;
   maxRetries?: number;
 }): Promise<z.infer<T>> {
-  const maxRetries = params.maxRetries ?? 2;
+  const maxRetries = params.maxRetries ?? STREAM_RETRY_MAX_RETRIES;
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
@@ -987,6 +1081,17 @@ async function runStructuredCall<T extends z.ZodTypeAny>(params: {
 
       const qualityDecision = evaluateQualityGateDecision(parsed, params.qualityGate, attempt, maxRetries);
       if (qualityDecision === 'retry') {
+        if (attempt < maxRetries) {
+          const delayMs = computeRetryDelayMs(attempt);
+          console.log('[azure-openai] Structured quality gate requested retry.', {
+            schemaName: params.schemaName,
+            attempt: attempt + 1,
+            nextAttempt: attempt + 2,
+            delayMs,
+            maxAttempts: maxRetries + 1,
+          });
+          await waitForRetryDelay(delayMs);
+        }
         continue;
       }
       if (qualityDecision === 'fail') {
@@ -1002,6 +1107,20 @@ async function runStructuredCall<T extends z.ZodTypeAny>(params: {
       lastError = error;
       if (attempt >= maxRetries) {
         break;
+      }
+      if (isTransientOpenAIRequestError(error)) {
+        const delayMs = computeRetryDelayMs(attempt);
+        console.log('[azure-openai] Structured call retrying after transient error.', {
+          schemaName: params.schemaName,
+          attempt: attempt + 1,
+          nextAttempt: attempt + 2,
+          delayMs,
+          maxAttempts: maxRetries + 1,
+          status: (error as RetryableDeploymentError)?.status,
+          code: (error as RetryableDeploymentError)?.code,
+          message: (error as RetryableDeploymentError)?.message,
+        });
+        await waitForRetryDelay(delayMs);
       }
     }
   }

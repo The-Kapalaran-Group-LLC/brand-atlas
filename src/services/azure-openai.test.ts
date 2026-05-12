@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildBrandEvidenceRulesBlock,
   buildBrandDeepDiveQuestionSearchTopic,
+  computeRetryDelayMs,
   buildHardDesignTokenRulesBlock,
   buildMatrixQuestionSearchTopic,
   buildBrandModeSubQueries,
@@ -10,6 +11,7 @@ import {
   extractUrlsFromEvidenceDigest,
   formatDevilsAdvocateLens,
   getDeploymentCandidatesFromEnv,
+  isTransientOpenAIRequestError,
   normalizeMatrixTerminology,
   resolveMatrixCategoryResultsWithFallback,
   resolveBrandEvidenceMode,
@@ -79,6 +81,41 @@ describe('deployment fallback helpers', () => {
     });
 
     expect(shouldRetry).toBe(false);
+  });
+
+  it('treats 408/409/429/5xx as transient request errors', () => {
+    expect(isTransientOpenAIRequestError({ status: 408 })).toBe(true);
+    expect(isTransientOpenAIRequestError({ status: 409 })).toBe(true);
+    expect(isTransientOpenAIRequestError({ status: 429 })).toBe(true);
+    expect(isTransientOpenAIRequestError({ status: 503 })).toBe(true);
+  });
+
+  it('treats stream disconnect messages as transient request errors', () => {
+    expect(
+      isTransientOpenAIRequestError({
+        message: 'stream disconnected before completion: response.failed event received.',
+      })
+    ).toBe(true);
+  });
+
+  it('does not classify generic 400 validation errors as transient', () => {
+    expect(
+      isTransientOpenAIRequestError({
+        status: 400,
+        code: 'unsupported_parameter',
+        message: 'Unsupported parameter',
+      })
+    ).toBe(false);
+  });
+
+  it('computes retry delay with +/-20% jitter around exponential backoff', () => {
+    expect(computeRetryDelayMs(0, 0)).toBe(400);
+    expect(computeRetryDelayMs(0, 1)).toBe(600);
+    expect(computeRetryDelayMs(3, 0.5)).toBe(4000);
+  });
+
+  it('caps retry delays at 20 seconds', () => {
+    expect(computeRetryDelayMs(10, 0.5)).toBe(20000);
   });
 });
 

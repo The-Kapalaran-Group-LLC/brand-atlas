@@ -2564,6 +2564,37 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
               </div>
             )}
 
+            {/* Sources Section */}
+            {report.sources && report.sources.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.8 }}
+                className="mt-12 p-8 bg-zinc-50 rounded-3xl border border-zinc-200 print-break-inside-avoid"
+                data-testid="design-excavator-sources-section"
+              >
+                <h3 className="text-lg font-semibold text-zinc-900 mb-4 flex items-center gap-2">
+                  <Info className="w-5 h-5 text-zinc-400" />
+                  Sources & Research
+                </h3>
+                <ul className="space-y-3">
+                  {report.sources.map((source, idx) => (
+                    <li key={`${source.url}-${idx}`} className="text-sm">
+                      <a
+                        href={toSafeExternalHref(source.url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 hover:text-indigo-800 hover:underline flex items-start gap-2"
+                      >
+                        <span className="text-zinc-400 mt-0.5">[{idx + 1}]</span>
+                        <span>{source.title}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </motion.div>
+            )}
+
             </motion.div>
           </SectionErrorBoundary>
         )}

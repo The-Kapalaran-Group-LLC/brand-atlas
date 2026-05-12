@@ -57,3 +57,13 @@
   - Verify a listener exists on the chosen localhost port (example: `lsof -nP -iTCP -sTCP:LISTEN | rg 3004`).
   - Always share the active localhost network URL in the completion message.
 - If you encounter the runtime/tooling error `stream disconnected before completion: response.failed event received`, continue the task and retry or proceed with the next safe step instead of stopping.
+
+## Streaming Failure Retry Policy (Hardcoded)
+- Treat `stream disconnected before completion: response.failed event received` as transient unless repeated after max retries.
+- Retry up to `5` times before surfacing failure.
+- Use exponential backoff delays of `0.5s`, `1s`, `2s`, `4s`, `8s` (cap at `20s`).
+- Add retry jitter of `+/-20%` to reduce collision bursts.
+- Prefer retry for transient classes: connection errors, `408`, `409`, `429`, and `5xx`.
+- Use request timeout windows of `5-10 minutes` for long AI generations.
+- Break large AI tasks into smaller chunks to reduce stream duration and failure risk.
+- Log each retry attempt with attempt count, delay, and error class.
