@@ -115,6 +115,25 @@ describe('BrandDeepDivePage', () => {
     ).toBeInTheDocument();
   });
 
+  it('renders top navigation actions as links so they can be opened in new tabs', () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    expect(screen.getByRole('link', { name: /back to home/i })).toHaveAttribute('href', '/?home=1');
+    expect(screen.getByRole('link', { name: /cultural archaeologist/i })).toHaveAttribute('href', '/#cultural-archaeologist');
+    expect(screen.getByRole('link', { name: /brand navigator/i })).toHaveAttribute('href', '/#brand-navigator');
+    expect(screen.getByRole('link', { name: /new search/i })).toHaveAttribute('href', '/#design-excavator');
+  });
+
+  it('uses the same primary generate button size and font treatment as other research pages', () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    const generateButton = screen.getByRole('button', { name: /generate visual analysis/i });
+    expect(generateButton.className).toContain('w-[288px]');
+    expect(generateButton.className).toContain('px-4');
+    expect(generateButton.className).toContain('py-4');
+    expect(generateButton.className).toContain('text-sm');
+  });
+
   it('falls back to larger logo assets instead of favicons', async () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 

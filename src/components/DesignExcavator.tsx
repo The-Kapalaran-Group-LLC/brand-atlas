@@ -519,6 +519,22 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     setToast('Started a new search.');
   };
 
+  const shouldKeepDefaultLinkBehavior = (event: React.MouseEvent<HTMLAnchorElement>): boolean => {
+    return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
+  };
+
+  const handlePrimaryLinkNavigation = (
+    event: React.MouseEvent<HTMLAnchorElement>,
+    navigate: () => void
+  ): void => {
+    if (shouldKeepDefaultLinkBehavior(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    navigate();
+  };
+
   const openComparePopup = (event: React.MouseEvent<HTMLElement>, target: CompareElement) => {
     const clickedInteractiveElement = (event.target as HTMLElement | null)?.closest('a,button,input,textarea,select,label');
     if (clickedInteractiveElement) {
@@ -1717,35 +1733,38 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     <>
       <div className="w-full px-2 sm:px-0">
         <div className="absolute top-4 left-4 right-4 z-50 no-print sm:top-6 sm:left-6 sm:right-auto">
-          <button
-            onClick={onBack}
+          <a
+            href="/?home=1"
+            onClick={(event) => handlePrimaryLinkNavigation(event, onBack)}
             className="inline-flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400/40 focus:ring-offset-2 rounded-md"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Home
-          </button>
+          </a>
         </div>
         {/* Top Navigation / Actions */}
         <div className="absolute top-20 right-4 z-50 no-print flex flex-col items-end gap-3 sm:top-6 sm:right-6 sm:flex-row sm:items-center sm:gap-2">
-          <button
-            onClick={() => navigateToHashRoute('cultural-archaeologist')}
+          <a
+            href="/#cultural-archaeologist"
+            onClick={(event) => handlePrimaryLinkNavigation(event, () => navigateToHashRoute('cultural-archaeologist'))}
             className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
           >
             <Search className="w-4 h-4" /> Cultural Archaeologist
-          </button>
-          <button
-            onClick={() => navigateToHashRoute('brand-navigator')}
+          </a>
+          <a
+            href="/#brand-navigator"
+            onClick={(event) => handlePrimaryLinkNavigation(event, () => navigateToHashRoute('brand-navigator'))}
             className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
           >
             <CompassRoseIcon className="w-4 h-4" /> Brand Navigator
-          </button>
-          <button
-            type="button"
-            onClick={clearExcavatorSearch}
+          </a>
+          <a
+            href="/#design-excavator"
+            onClick={(event) => handlePrimaryLinkNavigation(event, clearExcavatorSearch)}
             className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
           >
             <RefreshCw className="w-4 h-4" /> New Search
-          </button>
+          </a>
         </div>
 
       <AnimatePresence>
@@ -1934,7 +1953,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                 void handleSubmit();
               }}
               disabled={isLoading}
-              className="px-8 py-3 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 transition-colors disabled:opacity-60 inline-flex items-center gap-2 relative overflow-hidden"
+              className="w-[288px] mx-auto px-4 py-4 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-zinc-900/50 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all inline-flex items-center justify-center gap-2 text-sm mt-2 select-none relative overflow-hidden"
             >
               {isLoading ? (
                 <ProgressiveLoader

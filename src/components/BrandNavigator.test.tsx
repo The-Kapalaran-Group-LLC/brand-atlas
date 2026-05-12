@@ -117,6 +117,23 @@ describe('BrandNavigator', () => {
     });
   });
 
+  it('allows long brand chips to wrap so full names remain visible', async () => {
+    render(<BrandNavigator />);
+
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    const longBrandName = 'Rivian Automotive and Electric Adventure Vehicles International';
+
+    fireEvent.change(brandsInput, { target: { value: longBrandName } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+
+    const chip = await screen.findByTestId('brand-chip-0');
+    expect(chip).toHaveTextContent(longBrandName);
+    expect(chip.className).toContain('whitespace-normal');
+    expect(chip.className).toContain('break-words');
+  });
+
   it('shows brand dropdown guidance on first character typed', async () => {
     render(<BrandNavigator />);
 

@@ -834,17 +834,76 @@ export function scoreEvidenceDomain(url: string): { quality: 'authoritative' | '
   return { quality: 'mainstream', weight: 1.0 };
 }
 
+function extractPrimaryBrandFromTopic(topic: string): string {
+  const normalized = (topic || '').trim();
+  if (!normalized) return 'brand';
+
+  const brandsMatch = normalized.match(/Brands?:\s*([^;|]+)/i);
+  if (brandsMatch?.[1]) {
+    const primary = brandsMatch[1].split(',')[0]?.trim();
+    if (primary) return primary.replace(/\([^)]*\)/g, '').trim() || 'brand';
+  }
+
+  const deepDiveMatch = normalized.match(/brand deep dive for\s+(.+?)(?:\s+\|\s+objective:|$)/i);
+  if (deepDiveMatch?.[1]) {
+    const primary = deepDiveMatch[1].split(',')[0]?.trim();
+    if (primary) return primary.replace(/\([^)]*\)/g, '').trim() || 'brand';
+  }
+
+  const objectiveMatch = normalized.match(/objective:\s*([^|;]+)/i);
+  if (objectiveMatch?.[1]) {
+    const words = objectiveMatch[1].trim().split(/\s+/);
+    if (words.length > 0 && words[0]) return words[0];
+  }
+
+  const fallback = normalized.split(/\s+/)[0]?.trim();
+  return fallback || 'brand';
+}
+
+function extractPrimaryCorporateDomainFromTopic(topic: string): string | null {
+  const normalized = (topic || '').trim();
+  if (!normalized) return null;
+
+  const urlMatch = normalized.match(/https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/i);
+  if (urlMatch?.[1]) {
+    return urlMatch[1].replace(/^www\./i, '').toLowerCase();
+  }
+
+  const bareDomainMatch = normalized.match(/\(([a-z0-9.-]+\.[a-z]{2,})\)/i);
+  if (bareDomainMatch?.[1]) {
+    return bareDomainMatch[1].replace(/^www\./i, '').toLowerCase();
+  }
+
+  return null;
+}
+
+function inferCorporateDomainFromBrandName(brandName: string): string | null {
+  const token = (brandName || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+    .trim();
+  if (!token) return null;
+  return `${token}.com`;
+}
+
 export function buildBrandModeSubQueries(topic: string): string[] {
-  const brandMatch = topic.match(/Brands?:\s*([^;]+)/i);
-  const coreBrand = brandMatch ? brandMatch[1].split(',')[0].trim() : topic.split(' ')[0];
-  const safeBrand = coreBrand || topic.trim().split(' ')[0] || 'brand';
+  const safeBrand = extractPrimaryBrandFromTopic(topic);
+  const primaryDomain = extractPrimaryCorporateDomainFromTopic(topic) || inferCorporateDomainFromBrandName(safeBrand);
+  const domainFilter = primaryDomain ? `site:${primaryDomain}` : '';
+  const guidelineQuery = [
+    `"${safeBrand}"`,
+    domainFilter,
+    '("brand guidelines" OR "brand guideline" OR "brand identity" OR "visual identity" OR "style guide")',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return [
+    guidelineQuery,
     `"${safeBrand}" (site:sec.gov OR site:seekingalpha.com OR "investor relations" OR "annual report")`,
     `"${safeBrand}" campaign OR positioning (site:adweek.com OR site:thedrum.com OR site:campaignlive.com OR site:prweek.com)`,
     `"${safeBrand}" ("CMO" OR "CEO" OR "Chief Marketing Officer") interview OR strategy`,
     `"${safeBrand}" reviews weaknesses OR complaints (site:g2.com OR site:trustpilot.com OR site:reddit.com)`,
-    `"${safeBrand}" recent news OR acquisition OR launch`,
   ];
 }
 
@@ -1758,6 +1817,8 @@ Target Audience: ${input.targetAudience || "Not specified"}
 Time Horizon: ${input.timeHorizon || "6-12 months"}
 
 Research guidance:
+- First, search the brand's official corporate/company website for a public "Brand Guidelines" (or similar "Brand Identity"/"Style Guide") page and treat it as the source of truth for brand identity when available.
+- If no official guidelines page exists, fall back to the broader current methodology across the website ecosystem and other credible sources.
 - Prioritize each brand's full website ecosystem (homepage, product pages, campaign pages, blog/editorial, about, investor/newsroom, design system/style guide if public).
 - Use public first-party sources where possible.
 - If a value cannot be confirmed with high confidence (for example CMYK/Pantone), mark uncertainty in text and avoid fabricating precision.
@@ -1881,6 +1942,8 @@ ${JSON.stringify(input.currentReport, null, 2)}
 
 Correction requirements:
 - Return a fully updated complete report, not a partial patch.
+- First, search each brand's official corporate/company website for a public "Brand Guidelines" (or similar "Brand Identity"/"Style Guide") page and treat it as the source of truth when available.
+- If no official guidelines page exists, fall back to the broader current methodology across the website ecosystem and other credible sources.
 - Re-check the brand website ecosystem and prioritize first-party same-domain sources.
 - Correct any likely inaccuracies in logos, colors, typography, imagery descriptions, and strategic conclusions.
 - If a value cannot be verified confidently from official or credible sources, remove the precision instead of guessing.

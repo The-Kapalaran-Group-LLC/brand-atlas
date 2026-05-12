@@ -137,9 +137,23 @@ describe('brand evidence query helpers', () => {
 
     expect(queries).toHaveLength(5);
     expect(queries[0]).toContain('"Nike"');
-    expect(queries[0]).toContain('site:sec.gov');
-    expect(queries[1]).toContain('site:adweek.com');
-    expect(queries[3]).toContain('site:trustpilot.com');
+    expect(queries[0]).toContain('"brand guidelines"');
+    expect(queries[0]).toContain('"style guide"');
+    expect(queries[0]).toContain('site:nike.com');
+    expect(queries[1]).toContain('site:sec.gov');
+    expect(queries[2]).toContain('site:adweek.com');
+    expect(queries[4]).toContain('site:trustpilot.com');
+  });
+
+  it('prioritizes corporate guideline search for brand deep-dive topics with website domains before fallback queries', () => {
+    const queries = buildBrandModeSubQueries('Brand deep dive for Nike (https://www.nike.com), Adidas (adidas.com) | objective: Compare visual systems');
+
+    expect(queries).toHaveLength(5);
+    expect(queries[0]).toContain('"Nike"');
+    expect(queries[0]).toContain('site:nike.com');
+    expect(queries[0]).toContain('"brand identity"');
+    expect(queries[1]).toContain('site:sec.gov');
+    expect(queries[2]).toContain('site:adweek.com');
   });
 });
 

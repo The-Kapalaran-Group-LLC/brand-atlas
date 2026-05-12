@@ -1496,14 +1496,14 @@ export default function BrandNavigator() {
           >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               <div className="relative flex flex-col w-full self-start" ref={brandDropdownRef}>
-                <div className={`relative flex items-center w-full h-14 bg-white border ${showValidation && normalizedBrands.length === 0 ? 'border-red-500 focus-within:ring-red-500/20 focus-within:border-red-500' : 'border-zinc-200 focus-within:ring-indigo-500/20 focus-within:border-indigo-500'} rounded-2xl text-zinc-900 focus-within:outline-none focus-within:ring-2 transition-all shadow-sm text-sm`}>
+                <div className={`relative flex items-start w-full min-h-14 bg-white border ${showValidation && normalizedBrands.length === 0 ? 'border-red-500 focus-within:ring-red-500/20 focus-within:border-red-500' : 'border-zinc-200 focus-within:ring-indigo-500/20 focus-within:border-indigo-500'} rounded-2xl text-zinc-900 focus-within:outline-none focus-within:ring-2 transition-all shadow-sm text-sm`}>
                   <Tag className="absolute left-4 top-4 w-5 h-5 text-zinc-400" />
-                  <div className="w-full h-full pl-12 pr-12 py-0 flex items-center gap-2 flex-nowrap overflow-x-auto">
+                  <div className="w-full min-h-14 pl-12 pr-12 py-2 flex items-start gap-2 flex-wrap">
                     {normalizedBrands.map((brandChip, chipIndex) => (
                       <span
                         key={`${brandChip}-${chipIndex}`}
                         data-testid={`brand-chip-${chipIndex}`}
-                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-100 text-zinc-800 border border-zinc-200 px-3 py-1 text-xs font-medium"
+                        className="inline-flex max-w-full items-start gap-1 rounded-full bg-zinc-100 text-zinc-800 border border-zinc-200 px-3 py-1 text-xs font-medium whitespace-normal break-words"
                       >
                         {brandChip}
                         <button
@@ -1542,7 +1542,7 @@ export default function BrandNavigator() {
                         }
                       }}
                       placeholder={normalizedBrands.length > 0 ? 'Add more brands' : 'Brands (Required)'}
-                      className="flex-1 min-w-[140px] h-full py-0 bg-transparent text-zinc-900 placeholder-zinc-400 focus:outline-none"
+                      className="flex-1 min-w-[140px] py-1 bg-transparent text-zinc-900 placeholder-zinc-400 focus:outline-none"
                       disabled={isLoading}
                     />
                   </div>
