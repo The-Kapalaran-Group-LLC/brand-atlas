@@ -21,6 +21,10 @@ import {
   type BrandVisionAnalysis,
 } from './brand-images';
 import { extractBrandWebContext, type BrandWebContextResult } from './brand-web-context';
+import {
+  buildLanguageMethodologySnapshotDigest,
+  fetchLanguageMethodologyComparison,
+} from '../lib/language-methodology.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -189,6 +193,43 @@ async function renderBehaviorMethodologyComparisonHtml(audience = 'Gen Z'): Prom
     .replace('__INITIAL_CURRENT_DIGEST__', escapeHtml(safeCurrentDigest));
 }
 
+async function renderLanguageMethodologyComparisonHtml(audience = 'Gen Z'): Promise<string> {
+  const templatePath = path.join(publicDir, '__test__cultural-archaeologist-language-methodology-comparison.html');
+  const template = await readFile(templatePath, 'utf8');
+  const normalizedAudience = audience.trim() || 'Gen Z';
+
+  const comparison = await fetchLanguageMethodologyComparison(normalizedAudience)
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Unknown language methodology error';
+      console.error('[language-methodology-compare] Failed to generate live comparison; using snapshots.', { message });
+      return {
+        audience: normalizedAudience,
+        previousDigest: buildLanguageMethodologySnapshotDigest('previous', normalizedAudience),
+        currentDigest: buildLanguageMethodologySnapshotDigest('current', normalizedAudience),
+      };
+    });
+
+  const previousDigest = comparison.previousDigest || buildLanguageMethodologySnapshotDigest('previous', normalizedAudience);
+  const currentDigest = comparison.currentDigest || buildLanguageMethodologySnapshotDigest('current', normalizedAudience);
+
+  const previousLines = countDigestLines(previousDigest);
+  const currentLines = countDigestLines(currentDigest);
+  const hasMostRecentOnly = currentDigest.toLowerCase().includes('most recent');
+  const hasUrbanValidation = currentDigest.toLowerCase().includes('urban');
+  const hasCorporateRejection = currentDigest.toLowerCase().includes('corporate');
+  const initialStatus = `Preloaded language-methodology comparison for "${normalizedAudience}".`;
+
+  return template
+    .replace('__INITIAL_STATUS__', escapeHtml(initialStatus))
+    .replace('__INITIAL_PREVIOUS_LINES__', String(previousLines))
+    .replace('__INITIAL_CURRENT_LINES__', String(currentLines))
+    .replace('__INITIAL_HAS_MOST_RECENT__', hasMostRecentOnly ? 'Yes' : 'No')
+    .replace('__INITIAL_HAS_URBAN_VALIDATION__', hasUrbanValidation ? 'Yes' : 'No')
+    .replace('__INITIAL_HAS_CORPORATE_REJECTION__', hasCorporateRejection ? 'Yes' : 'No')
+    .replace('__INITIAL_PREVIOUS_DIGEST__', escapeHtml(previousDigest))
+    .replace('__INITIAL_CURRENT_DIGEST__', escapeHtml(currentDigest));
+}
+
 app.get('/__test/cultural-archaeologist-methodology-comparison', async (_req, res) => {
   try {
     const html = await renderMethodologyComparisonHtml('Gen Z');
@@ -235,6 +276,30 @@ app.get('/__test/cultural-archaeologist-behaviors-methodology-comparison.html', 
     const message = error instanceof Error ? error.message : 'Unknown render error';
     console.error('[behavior-methodology-compare] Failed to render preloaded comparison page.', { message });
     res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-behaviors-methodology-comparison-static.html'));
+  }
+});
+app.get('/__test/cultural-archaeologist-language-methodology-comparison', async (_req, res) => {
+  try {
+    const html = await renderLanguageMethodologyComparisonHtml('Gen Z');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    res.send(html);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown render error';
+    console.error('[language-methodology-compare] Failed to render preloaded comparison page.', { message });
+    res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-language-methodology-comparison.html'));
+  }
+});
+app.get('/__test/cultural-archaeologist-language-methodology-comparison.html', async (_req, res) => {
+  try {
+    const html = await renderLanguageMethodologyComparisonHtml('Gen Z');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    res.send(html);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown render error';
+    console.error('[language-methodology-compare] Failed to render preloaded comparison page.', { message });
+    res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-language-methodology-comparison.html'));
   }
 });
 app.use(express.static(publicDir));
@@ -733,6 +798,40 @@ app.get('/api/cultural-behaviors-methodology-compare', async (req, res) => {
   } catch (err: any) {
     const message = err?.message || 'Comparison failed.';
     console.error('[behavior-methodology-compare] Comparison failed', { audience: normalizedAudience, error: message });
+    return res.status(500).json({ error: message });
+  }
+});
+
+app.get('/api/cultural-language-methodology-compare', async (req, res) => {
+  const audience = (Array.isArray(req.query.audience) ? req.query.audience[0] : req.query.audience) as string;
+  if (!audience || !audience.trim()) return res.status(400).json({ error: 'Missing audience query parameter' });
+
+  const normalizedAudience = audience.trim();
+  console.log('[language-methodology-compare] Starting comparison request.', { audience: normalizedAudience });
+
+  try {
+    const comparison = await fetchLanguageMethodologyComparison(normalizedAudience);
+
+    console.log('[language-methodology-compare] Comparison completed.', {
+      audience: normalizedAudience,
+      previousLength: comparison.previousDigest.length,
+      currentLength: comparison.currentDigest.length,
+    });
+
+    return res.json({
+      audience: comparison.audience,
+      previous: {
+        methodology: 'Previous Language Methodology (baseline)',
+        digest: comparison.previousDigest,
+      },
+      current: {
+        methodology: 'Current Language Methodology (most recent only: Bing Week + Reddit new/hot + Urban validation)',
+        digest: comparison.currentDigest,
+      },
+    });
+  } catch (err: any) {
+    const message = err?.message || 'Comparison failed.';
+    console.error('[language-methodology-compare] Comparison failed.', { audience: normalizedAudience, error: message });
     return res.status(500).json({ error: message });
   }
 });

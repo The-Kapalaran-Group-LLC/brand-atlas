@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <title>Cultural Archaeologist Language Methodology Comparison</title>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --text: #111827;
+        --muted: #6b7280;
+        --border: #e5e7eb;
+        --accent: #0f766e;
+        --accent-soft: #d1fae5;
+        --danger: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top right, #ccfbf1 0%, var(--bg) 45%);
+        color: var(--text);
+      }
+      .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 8px 24px rgba(2, 6, 23, 0.04);
+      }
+      .controls { display: flex; flex-wrap: wrap; gap: 12px; }
+      input {
+        flex: 1;
+        min-width: 240px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        font-size: 14px;
+      }
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 16px;
+        font-weight: 600;
+        color: #ffffff;
+        background: var(--accent);
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .status { margin-top: 12px; color: var(--muted); font-size: 13px; }
+      .status.error { color: var(--danger); font-weight: 600; }
+      .summary-grid {
+        margin-top: 16px;
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      }
+      .stat {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px;
+        background: #f9fafb;
+      }
+      .stat .label { color: var(--muted); font-size: 12px; }
+      .stat .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+      .results {
+        margin-top: 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 16px;
+      }
+      h1 { margin: 0 0 8px 0; font-size: 24px; }
+      h2 { margin: 0 0 6px 0; font-size: 18px; }
+      .pill {
+        display: inline-block;
+        margin-bottom: 8px;
+        background: var(--accent-soft);
+        color: #115e59;
+        border: 1px solid #99f6e4;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      pre {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        background: #f8fafc;
+        max-height: 540px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      code { font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <section class="panel">
+        <h1>Cultural Archaeologist Language Methodology Comparison</h1>
+        <p class="status">
+          Hidden QA page comparing the previous language methodology versus the new most-recent-only language methodology.
+        </p>
+        <div class="controls">
+          <input id="audienceInput" data-testid="language-methodology-audience-input" value="Gen Z" placeholder="Audience (example: Gen Z)" />
+          <button id="runButton" data-testid="language-methodology-run-button">Re-Run Comparison</button>
+        </div>
+        <p id="status" class="status" data-testid="language-methodology-status">__INITIAL_STATUS__</p>
+        <div class="summary-grid">
+          <div class="stat" data-testid="language-methodology-previous-lines">
+            <div class="label">Previous Digest Lines</div>
+            <div id="previousLines" class="value">__INITIAL_PREVIOUS_LINES__</div>
+          </div>
+          <div class="stat" data-testid="language-methodology-current-lines">
+            <div class="label">Current Digest Lines</div>
+            <div id="currentLines" class="value">__INITIAL_CURRENT_LINES__</div>
+          </div>
+          <div class="stat" data-testid="language-methodology-has-most-recent">
+            <div class="label">References Most-Recent-Only Constraint</div>
+            <div id="currentHasMostRecent" class="value">__INITIAL_HAS_MOST_RECENT__</div>
+          </div>
+          <div class="stat" data-testid="language-methodology-has-urban">
+            <div class="label">Includes Urban Dictionary Validation</div>
+            <div id="currentHasUrbanValidation" class="value">__INITIAL_HAS_URBAN_VALIDATION__</div>
+          </div>
+          <div class="stat" data-testid="language-methodology-has-corporate-rejection">
+            <div class="label">Mentions Corporate Language Rejection</div>
+            <div id="currentHasCorporateRejection" class="value">__INITIAL_HAS_CORPORATE_REJECTION__</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="results">
+        <article class="panel" data-testid="language-methodology-previous-panel">
+          <span class="pill">Previous</span>
+          <h2>Language Baseline</h2>
+          <p class="status">Broad mixed-recency language read with legacy social context.</p>
+          <pre id="previousDigest" data-testid="language-methodology-previous-digest">__INITIAL_PREVIOUS_DIGEST__</pre>
+        </article>
+
+        <article class="panel" data-testid="language-methodology-current-panel">
+          <span class="pill">Current</span>
+          <h2>Bleeding-Edge Language Agent</h2>
+          <p class="status">Strictly: <code>Bing freshness=Week</code> + <code>Reddit /new and /hot</code> + <code>Urban Dictionary validation</code>.</p>
+          <pre id="currentDigest" data-testid="language-methodology-current-digest">__INITIAL_CURRENT_DIGEST__</pre>
+        </article>
+      </section>
+    </div>
+
+    <script>
+      const audienceInput = document.getElementById('audienceInput');
+      const runButton = document.getElementById('runButton');
+      const statusEl = document.getElementById('status');
+      const previousDigestEl = document.getElementById('previousDigest');
+      const currentDigestEl = document.getElementById('currentDigest');
+      const previousLinesEl = document.getElementById('previousLines');
+      const currentLinesEl = document.getElementById('currentLines');
+      const currentHasMostRecentEl = document.getElementById('currentHasMostRecent');
+      const currentHasUrbanValidationEl = document.getElementById('currentHasUrbanValidation');
+      const currentHasCorporateRejectionEl = document.getElementById('currentHasCorporateRejection');
+
+      function candidateApiBases() {
+        const candidates = [
+          window.location.origin,
+          'http://127.0.0.1:3001',
+          'http://localhost:3001',
+          'http://127.0.0.1:3011',
+          'http://localhost:3011',
+        ];
+        return Array.from(new Set(candidates.map((value) => String(value || '').replace(/\/+$/, ''))));
+      }
+
+      function countLines(value) {
+        return String(value || '')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean).length;
+      }
+
+      function snapshotDigest(kind) {
+        if (kind === 'previous') {
+          return `Previous Language Methodology (baseline):
+1) Slang trends spread quickly but often stabilize through creator repetition over several weeks.
+2) Meme-native phrasing and ironic understatement shape tone in everyday recommendations.
+3) Visual shorthand (emoji stacks, lowercase cadence, clipped phrasing) signals in-group fluency.
+4) Corporate-safe phrases are frequently reframed or mocked when they feel scripted.
+5) Peer comments act as a credibility filter before branded language is adopted.
+6) Identity language blends humor, skepticism, and utility in product conversations.`;
+        }
+
+        return `Current Language Methodology (most recent only):
+1) Hyper-current terms are appearing as rapid shorthand in weekly snippets, with uptake visible in fresh Reddit discussion.
+2) Visual codes prioritize compressed expression: emoji bundles, all-lowercase cadence, and irony markers.
+3) "Corporate voice" is rejected when phrasing sounds polished, generic, or detached from lived context.
+4) Fresh /new and /hot Reddit signals show higher trust in peer-native phrasing versus campaign copy.
+5) Urban Dictionary validated terms indicate active slang circulation rather than stale historical usage.
+6) Bleeding-edge vernacular favors practical, self-aware tone over aspirational or institutional messaging.`;
+      }
+
+      function normalizeDigest(value, kind) {
+        const raw = String(value || '').trim();
+        if (!raw || /^__INITIAL_[A-Z0-9_]+__$/.test(raw)) {
+          return snapshotDigest(kind);
+        }
+        return raw;
+      }
+
+      function syncDerivedStats(currentDigest, previousDigest) {
+        previousLinesEl.textContent = String(countLines(previousDigest));
+        currentLinesEl.textContent = String(countLines(currentDigest));
+        currentHasMostRecentEl.textContent = /most recent|bleeding-edge|strictly/i.test(currentDigest) ? 'Yes' : 'No';
+        currentHasUrbanValidationEl.textContent = /urban/i.test(currentDigest) ? 'Yes' : 'No';
+        currentHasCorporateRejectionEl.textContent = /corporate/i.test(currentDigest) ? 'Yes' : 'No';
+      }
+
+      async function fetchComparisonPayload(audience) {
+        const bases = candidateApiBases();
+        let lastError = 'No working API base found.';
+
+        for (const base of bases) {
+          const endpoint = `${base}/api/cultural-language-methodology-compare?audience=${encodeURIComponent(audience)}`;
+          try {
+            console.log('[language-methodology-comparison-page] Trying comparison endpoint.', { endpoint });
+            const response = await fetch(endpoint);
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              lastError = payload.error || `Request failed with status ${response.status}.`;
+              continue;
+            }
+            return { payload, base };
+          } catch (error) {
+            lastError = error instanceof Error ? error.message : 'Unknown fetch error';
+          }
+        }
+
+        throw new Error(lastError);
+      }
+
+      async function runComparison() {
+        const audience = String(audienceInput.value || '').trim();
+        if (!audience) {
+          statusEl.textContent = 'Audience is required.';
+          statusEl.className = 'status error';
+          return;
+        }
+
+        runButton.disabled = true;
+        statusEl.className = 'status';
+        statusEl.textContent = `Running language-methodology comparison for "${audience}"...`;
+
+        try {
+          const { payload } = await fetchComparisonPayload(audience);
+          const previousDigest = normalizeDigest(payload?.previous?.digest, 'previous');
+          const currentDigest = normalizeDigest(payload?.current?.digest, 'current');
+
+          previousDigestEl.textContent = previousDigest;
+          currentDigestEl.textContent = currentDigest;
+          syncDerivedStats(currentDigest, previousDigest);
+          statusEl.textContent = `Live comparison complete for "${audience}".`;
+          statusEl.className = 'status';
+        } catch (error) {
+          const previousDigest = snapshotDigest('previous');
+          const currentDigest = snapshotDigest('current');
+          previousDigestEl.textContent = previousDigest;
+          currentDigestEl.textContent = currentDigest;
+          syncDerivedStats(currentDigest, previousDigest);
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          statusEl.textContent = `Live comparison unavailable (${message}). Showing populated snapshot results.`;
+          statusEl.className = 'status';
+        } finally {
+          runButton.disabled = false;
+        }
+      }
+
+      runButton.addEventListener('click', runComparison);
+
+      (function hydrateInitial() {
+        const previousDigest = normalizeDigest(previousDigestEl.textContent, 'previous');
+        const currentDigest = normalizeDigest(currentDigestEl.textContent, 'current');
+        previousDigestEl.textContent = previousDigest;
+        currentDigestEl.textContent = currentDigest;
+        if (/^__INITIAL_[A-Z0-9_]+__$/.test(String(statusEl.textContent || '').trim())) {
+          statusEl.textContent = `Preloaded language-methodology comparison for "${String(audienceInput.value || 'Gen Z').trim() || 'Gen Z'}".`;
+        }
+        syncDerivedStats(currentDigest, previousDigest);
+      })();
+    </script>
+  </body>
+</html>

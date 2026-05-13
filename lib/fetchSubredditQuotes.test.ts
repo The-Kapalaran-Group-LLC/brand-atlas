@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { fetchSubredditQuotes } from './fetchSubredditQuotes';
+import { fetchSubredditQuotes, fetchSubredditQuotesFresh } from './fetchSubredditQuotes';
 
 describe('fetchSubredditQuotes', () => {
   afterEach(() => {
@@ -87,5 +87,45 @@ describe('fetchSubredditQuotes', () => {
 
   it('throws on invalid subreddit names', async () => {
     await expect(fetchSubredditQuotes('bad/name')).rejects.toThrow('Invalid subreddit name format.');
+  });
+});
+
+describe('fetchSubredditQuotesFresh', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('fetches latest /new and /hot listings for fresh vernacular signals', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: {
+            children: [
+              { data: { title: 'new signal one', selftext: 'new details' } },
+            ],
+          },
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: {
+            children: [
+              { data: { title: 'hot signal one', selftext: 'hot details' } },
+            ],
+          },
+        }),
+      } as Response);
+
+    const quotes = await fetchSubredditQuotesFresh('GenZ');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy.mock.calls[0][0].toString()).toContain('/r/GenZ/new.json');
+    expect(fetchSpy.mock.calls[1][0].toString()).toContain('/r/GenZ/hot.json');
+    expect(quotes.newQuotes).toEqual(['new signal one new details']);
+    expect(quotes.hotQuotes).toEqual(['hot signal one hot details']);
   });
 });

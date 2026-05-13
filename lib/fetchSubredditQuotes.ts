@@ -19,6 +19,7 @@ type RedditListingResponse = {
 };
 
 type RedditTopWindow = 'year' | 'month';
+type RedditSort = 'top' | 'new' | 'hot';
 
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
@@ -70,18 +71,30 @@ function assertValidSubredditName(subreddit: string): string {
 }
 
 async function fetchTopPosts(subreddit: string, limit: number, window: RedditTopWindow): Promise<RedditPostData[]> {
+  return fetchPostsBySort(subreddit, limit, 'top', window);
+}
+
+async function fetchPostsBySort(
+  subreddit: string,
+  limit: number,
+  sort: RedditSort,
+  window?: RedditTopWindow
+): Promise<RedditPostData[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REDDIT_TIMEOUT_MS);
 
   try {
-    const url = new URL(`/r/${subreddit}/top.json`, REDDIT_BASE_URL);
+    const url = new URL(`/r/${subreddit}/${sort}.json`, REDDIT_BASE_URL);
     url.searchParams.set('limit', String(limit));
-    url.searchParams.set('t', window);
+    if (sort === 'top' && window) {
+      url.searchParams.set('t', window);
+    }
     url.searchParams.set('raw_json', '1');
 
-    console.log('[reddit-scraper] Fetching stabilized subreddit top posts.', {
+    console.log('[reddit-scraper] Fetching subreddit posts.', {
       subreddit,
       limit,
+      sort,
       window,
       endpoint: url.toString(),
     });
@@ -137,4 +150,33 @@ export async function fetchSubredditQuotes(subredditName: string, limit = DEFAUL
     .map(toPostQuote)
     .filter(isMeaningfulQuote)
     .slice(0, DEFAULT_POST_LIMIT);
+}
+
+export async function fetchSubredditQuotesFresh(subredditName: string, limit = DEFAULT_POST_LIMIT): Promise<{
+  newQuotes: string[];
+  hotQuotes: string[];
+}> {
+  const subreddit = assertValidSubredditName(subredditName);
+  const cappedLimit = Number.isFinite(limit) ? Math.max(1, Math.min(Math.floor(limit), DEFAULT_POST_LIMIT)) : DEFAULT_POST_LIMIT;
+
+  const [newPosts, hotPosts] = await Promise.all([
+    fetchPostsBySort(subreddit, cappedLimit, 'new'),
+    fetchPostsBySort(subreddit, cappedLimit, 'hot'),
+  ]);
+
+  const mapPostsToQuotes = (posts: RedditPostData[]): string[] => posts
+    .map(toPostQuote)
+    .filter(isMeaningfulQuote)
+    .slice(0, DEFAULT_POST_LIMIT);
+
+  const newQuotes = mapPostsToQuotes(newPosts);
+  const hotQuotes = mapPostsToQuotes(hotPosts);
+
+  console.log('[reddit-scraper] Fresh subreddit quotes collected.', {
+    subreddit,
+    newQuotes: newQuotes.length,
+    hotQuotes: hotQuotes.length,
+  });
+
+  return { newQuotes, hotQuotes };
 }
