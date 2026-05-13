@@ -77,16 +77,62 @@ describe('fetchAudienceContext', () => {
     const firstUrl = new URL(fetchMock.mock.calls[0][0] as string);
     const secondUrl = new URL(fetchMock.mock.calls[1][0] as string);
 
-    expect(firstUrl.searchParams.get('freshness')).toBe('Day');
+    expect(firstUrl.searchParams.get('freshness')).toBe('Week');
     expect(firstUrl.searchParams.get('q')).toContain('Gen Z beauty buyers');
 
     expect(secondUrl.searchParams.get('freshness')).toBe('Year');
     expect(secondUrl.searchParams.get('q')).toContain('annual report OR macro trend');
 
-    expect(context).toContain('Breaking (last 24h):');
+    expect(context).toContain('Breaking (last 7 days):');
     expect(context).toContain('Structural (annual + macro):');
     expect(context).toContain('Breaking shift in consumer discretionary spending this week.');
     expect(context).toContain('Annual report commentary shows margin compression by segment.');
+  });
+
+  it('supports behavior-focused grounding by appending ritual query terms without strict recency filters', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          webPages: {
+            value: [
+              { snippet: 'Morning money-tracking routines are becoming normalized among Gen Z households.' },
+            ],
+          },
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          webPages: {
+            value: [
+              { snippet: 'Behavioral guide content increasingly drives repeat product usage rituals.' },
+            ],
+          },
+        }),
+      } as Response);
+
+    const context = await fetchAudienceContext('Gen Z beauty buyers', { behaviorFocus: true });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const firstUrl = new URL(fetchMock.mock.calls[0][0] as string);
+    const secondUrl = new URL(fetchMock.mock.calls[1][0] as string);
+    const firstQuery = firstUrl.searchParams.get('q') || '';
+    const secondQuery = secondUrl.searchParams.get('q') || '';
+
+    expect(firstUrl.searchParams.get('freshness')).toBeNull();
+    expect(secondUrl.searchParams.get('freshness')).toBeNull();
+    expect(firstQuery).toContain('routine');
+    expect(firstQuery).toContain('habit');
+    expect(secondQuery).toContain('guide');
+
+    expect(context).toContain('Behavioral routines (up-to-date, stabilized):');
+    expect(context).toContain('Morning money-tracking routines are becoming normalized among Gen Z households.');
+    expect(context).toContain('Behavioral guide content increasingly drives repeat product usage rituals.');
   });
 
   it('returns partial context when one web lane fails but the other lane succeeds', async () => {
@@ -109,7 +155,7 @@ describe('fetchAudienceContext', () => {
 
     const context = await fetchAudienceContext('Millennial freelancers');
 
-    expect(context).toContain('Breaking (last 24h):');
+    expect(context).toContain('Breaking (last 7 days):');
     expect(context).toContain('Short-term hiring slowdown is affecting creator economies.');
     expect(context).not.toContain('Structural (annual + macro):');
   });
@@ -161,7 +207,7 @@ describe('fetchAudienceContext', () => {
     const secondUrl = new URL(fetchMock.mock.calls[1][0] as string);
 
     expect(firstUrl.origin + firstUrl.pathname).toBe('https://www.googleapis.com/customsearch/v1');
-    expect(firstUrl.searchParams.get('dateRestrict')).toBe('d1');
+    expect(firstUrl.searchParams.get('dateRestrict')).toBe('d7');
     expect(secondUrl.searchParams.get('dateRestrict')).toBe('y1');
     expect(firstUrl.searchParams.get('cx')).toBe('google-test-engine');
 

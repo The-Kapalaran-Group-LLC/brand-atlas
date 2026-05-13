@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildBrandEvidenceRulesBlock,
+  buildCategoryRoleBlock,
   buildBrandDeepDiveQuestionSearchTopic,
   computeRetryDelayMs,
   buildHardDesignTokenRulesBlock,
@@ -129,6 +130,40 @@ describe('matrix terminology normalization', () => {
     expect(normalized).toContain('this cultural analysis');
     expect(normalized).toContain('our cultural analysis');
     expect(normalized.toLowerCase()).not.toContain('matrix');
+  });
+});
+
+describe('category role block prompts', () => {
+  it('includes the new sustained lexical sentiment requirements for tone', () => {
+    const block = buildCategoryRoleBlock('tone');
+
+    expect(block).toContain('Psychographic Profiler');
+    expect(block).toContain('lexical sentiment analysis');
+    expect(block).toContain('sustained emotional baseline');
+    expect(block).toContain('same stabilized, multi-month Evidence Digest standard used for BELIEFS');
+    expect(block).toContain('Ignore breaking-news/API recency spikes');
+    expect(block).toContain('archetype spectrum');
+  });
+
+  it('keeps beliefs focused on multi-month stabilized consensus', () => {
+    const block = buildCategoryRoleBlock('beliefs');
+
+    expect(block).toContain('Digital Anthropologist');
+    expect(block).toContain('stabilized, highly-corroborated consensus from the past several months');
+    expect(block).toContain('Ignore fleeting daily controversies');
+  });
+
+  it('uses a behavioral scientist split between consistent rituals and recent fads for behaviors', () => {
+    const block = buildCategoryRoleBlock('behaviors');
+
+    expect(block).toContain('Behavioral Scientist');
+    expect(block).toContain('Extract 6-10');
+    expect(block).toContain('Consistent');
+    expect(block).toContain('Recent');
+    expect(block).toContain('routine');
+    expect(block).toContain('habit');
+    expect(block).toContain('guide');
+    expect(block).toContain('not most recent');
   });
 });
 

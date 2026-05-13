@@ -377,10 +377,12 @@ describe('CulturalArchaeologist', () => {
     expect(within(sentenceTwo).queryByText(/^known$/i)).not.toBeInTheDocument();
   });
 
-  it('shows methodology comparison launcher in the research view navigation', async () => {
+  it('does not show methodology comparison launchers in the research view navigation', async () => {
     render(<CulturalArchaeologist />);
 
-    expect(await screen.findByTestId('open-methodology-comparison-inline-button')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /methodology compare/i })).toBeInTheDocument();
+    expect(screen.queryByTestId('open-methodology-comparison-inline-button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /methodology compare/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('open-tone-methodology-comparison-inline-button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /tone method compare/i })).not.toBeInTheDocument();
   });
 });

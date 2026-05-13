@@ -129,6 +129,12 @@ const normalizeSourceTypeValue = (value?: string): string => {
   return (value || '').trim().toLowerCase(); // already safe
 };
 
+const shouldHideSourceTypeChip = (sourceType?: string): boolean => {
+  const normalized = normalizeSourceTypeValue(sourceType);
+  if (!normalized) return true;
+  return normalized.includes('provided corpus');
+};
+
 const mapInsightSourceToSearchSource = (sourceType?: string): string | null => {
   const normalized = normalizeSourceTypeValue(sourceType);
   if (!normalized) return null;
@@ -1979,19 +1985,6 @@ export default function CulturalArchaeologist() {
                 </span>
               </button>
               <button
-                data-testid="open-methodology-comparison-inline-button"
-                onClick={() => {
-                  const targetPath = '/cultural-archaeologist-methodology-comparison-static.html';
-                  console.log('[CulturalArchaeologist] Opening methodology comparison page from research view.', { targetPath, audience: 'Gen Z' });
-                  if (typeof window !== 'undefined') {
-                    window.open(targetPath, '_blank', 'noopener,noreferrer');
-                  }
-                }}
-                className="inline-flex h-10 items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
-              >
-                <ExternalLink className="w-4 h-4" /> Methodology Compare
-              </button>
-              <button
                 onClick={handleReset}
                 className="inline-flex h-10 items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
               >
@@ -3494,6 +3487,24 @@ function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], on
 
     return { cleanText: stripped, labels };
   };
+
+  const renderInsightText = (text: string) => {
+    if (title !== 'Tone') return text;
+
+    const parts = text.split(/(archetype spectrum:\s*)/gi);
+    if (parts.length <= 1) return text;
+
+    return parts.map((part, partIndex) => {
+      if (/^archetype spectrum:\s*$/i.test(part)) {
+        return (
+          <strong key={`tone-archetype-label-${partIndex}`}>
+            {part}
+          </strong>
+        );
+      }
+      return part;
+    });
+  };
   
   const safeItems = items || [];
   const hasItems = safeItems.length > 0;
@@ -3551,7 +3562,7 @@ function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], on
                     </span>
                   )}
                   <span className="flex-1 pr-8">
-                    {cleanText}
+                    {renderInsightText(cleanText)}
                     {labels.map((label) => (
                       <span key={`${index}-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}>
                         {label}
@@ -3565,7 +3576,7 @@ function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], on
                     <span className="inline-block ml-2 align-middle">
                       <TrendLifecycleBadge stage={item.trendLifecycle} />
                     </span>
-                    {item.sourceType && (
+                    {item.sourceType && !shouldHideSourceTypeChip(item.sourceType) && (
                       <span className="inline-block ml-2 px-1.5 py-0.5 bg-zinc-100 text-zinc-500 text-[10px] uppercase tracking-wider font-semibold rounded border border-zinc-200 align-middle">
                         {item.sourceType}
                       </span>

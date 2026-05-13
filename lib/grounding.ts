@@ -5,6 +5,7 @@ const GOOGLE_SEARCH_ENDPOINT = 'https://www.googleapis.com/customsearch/v1';
 const DEFAULT_RESULT_COUNT = 5;
 const BING_TIMEOUT_MS = 8000;
 const MACRO_STRUCTURAL_SUFFIX = 'annual report OR macro trend';
+const BEHAVIORAL_STABILITY_SUFFIX = 'routine OR routines OR habit OR habits OR guide OR rituals';
 
 type BingWebPageResult = {
   name?: string;
@@ -18,7 +19,7 @@ type BingSearchResponse = {
   };
 };
 
-type BingSearchFreshness = 'Day' | 'Year';
+type BingSearchFreshness = 'Day' | 'Week' | 'Year';
 type SearchProvider = 'google' | 'bing';
 type GptMethodology = 'previous' | 'current';
 
@@ -198,6 +199,7 @@ async function fetchBing(
 
 function mapFreshnessToGoogleDateRestrict(freshness?: BingSearchFreshness): string | null {
   if (freshness === 'Day') return 'd1';
+  if (freshness === 'Week') return 'd7';
   if (freshness === 'Year') return 'y1';
   return null;
 }
@@ -289,22 +291,30 @@ async function fetchGoogle(
   }
 }
 
-export async function fetchAudienceContext(audience: string): Promise<string> {
+export async function fetchAudienceContext(
+  audience: string,
+  options?: { behaviorFocus?: boolean }
+): Promise<string> {
   const normalizedAudience = normalizeWhitespace(audience || '');
   if (!normalizedAudience) {
     throw new Error('Audience is required to fetch grounding context.');
   }
+  const behaviorFocus = Boolean(options?.behaviorFocus);
 
-  const breakingQuery = normalizedAudience;
-  const structuralMacroQuery = `${normalizedAudience} ${MACRO_STRUCTURAL_SUFFIX}`;
+  const breakingQuery = behaviorFocus
+    ? `${normalizedAudience} ${BEHAVIORAL_STABILITY_SUFFIX}`
+    : normalizedAudience;
+  const structuralMacroQuery = behaviorFocus
+    ? `${normalizedAudience} ${MACRO_STRUCTURAL_SUFFIX} ${BEHAVIORAL_STABILITY_SUFFIX}`
+    : `${normalizedAudience} ${MACRO_STRUCTURAL_SUFFIX}`;
 
   const provider = resolveSearchProvider();
   const fetcher = provider === 'google' ? fetchGoogle : fetchBing;
-  console.log('[grounding] Audience context provider selected', { provider });
+  console.log('[grounding] Audience context provider selected', { provider, behaviorFocus });
 
   const webLanes: Array<{ key: 'breaking' | 'structural'; query: string; freshness?: BingSearchFreshness }> = [
-    { key: 'breaking', query: breakingQuery, freshness: 'Day' },
-    { key: 'structural', query: structuralMacroQuery, freshness: 'Year' },
+    { key: 'breaking', query: breakingQuery, freshness: behaviorFocus ? undefined : 'Week' },
+    { key: 'structural', query: structuralMacroQuery, freshness: behaviorFocus ? undefined : 'Year' },
   ];
 
   let webResults = await Promise.allSettled(webLanes.map((lane) => fetcher(lane.query, { freshness: lane.freshness })));
@@ -321,8 +331,8 @@ export async function fetchAudienceContext(audience: string): Promise<string> {
         reason: firstErrorMessage,
       });
       webResults = await Promise.allSettled([
-        fetchBing(breakingQuery, { freshness: 'Day' }),
-        fetchBing(structuralMacroQuery, { freshness: 'Year' }),
+        fetchBing(breakingQuery, { freshness: behaviorFocus ? undefined : 'Week' }),
+        fetchBing(structuralMacroQuery, { freshness: behaviorFocus ? undefined : 'Year' }),
       ]);
       [breakingResult, structuralResult] = webResults;
     }
@@ -338,10 +348,16 @@ export async function fetchAudienceContext(audience: string): Promise<string> {
 
   const digestSections: string[] = [];
   if (breakingResult.status === 'fulfilled' && breakingResult.value.length > 0) {
-    digestSections.push(`Breaking (last 24h):\n${breakingResult.value.join('\n\n')}`);
+    const breakingLabel = behaviorFocus
+      ? 'Behavioral routines (up-to-date, stabilized):'
+      : 'Breaking (last 7 days):';
+    digestSections.push(`${breakingLabel}\n${breakingResult.value.join('\n\n')}`);
   }
   if (structuralResult.status === 'fulfilled' && structuralResult.value.length > 0) {
-    digestSections.push(`Structural (annual + macro):\n${structuralResult.value.join('\n\n')}`);
+    const structuralLabel = behaviorFocus
+      ? 'Behavioral macro context (habit persistence + guides):'
+      : 'Structural (annual + macro):';
+    digestSections.push(`${structuralLabel}\n${structuralResult.value.join('\n\n')}`);
   }
 
   if (!digestSections.length) {
@@ -426,7 +442,7 @@ export async function fetchAudienceContextWithGptSearch(audience: string, method
     ? `Audience: "${normalizedAudience}".
 Generate an evidence digest for the current dual-lane methodology.
 Return plain text with exactly these two headers:
-Breaking (last 24h):
+Breaking (last 7 days):
 Structural (annual + macro):
 Under each header provide 3-6 concise evidence lines.`
     : `Audience: "${normalizedAudience}".

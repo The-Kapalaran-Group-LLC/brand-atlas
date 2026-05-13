@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
     <title>Cultural Archaeologist Methodology Comparison</title>
     <style>
       :root {
@@ -133,23 +134,27 @@
           <input id="audienceInput" data-testid="methodology-audience-input" value="Gen Z" placeholder="Audience (example: Gen Z)" />
           <button id="runButton" data-testid="methodology-run-button">Re-Run Comparison</button>
         </div>
-        <p id="status" class="status" data-testid="methodology-status">__INITIAL_STATUS__</p>
+        <p id="status" class="status" data-testid="methodology-status">Preloaded comparison for "Gen Z".</p>
+        <p class="status">
+          Related page:
+          <a href="/__test__cultural-archaeologist-tone-methodology-comparison-static.html">Tone Methodology Comparison</a>
+        </p>
         <div class="summary-grid">
           <div class="stat" data-testid="methodology-previous-lines">
             <div class="label">Previous Digest Lines</div>
-            <div id="previousLines" class="value">__INITIAL_PREVIOUS_LINES__</div>
+            <div id="previousLines" class="value">7</div>
           </div>
           <div class="stat" data-testid="methodology-current-lines">
             <div class="label">Current Digest Lines</div>
-            <div id="currentLines" class="value">__INITIAL_CURRENT_LINES__</div>
+            <div id="currentLines" class="value">12</div>
           </div>
           <div class="stat" data-testid="methodology-current-breaking">
             <div class="label">Current Digest: Breaking Section</div>
-            <div id="currentHasBreaking" class="value">__INITIAL_HAS_BREAKING__</div>
+            <div id="currentHasBreaking" class="value">Yes</div>
           </div>
           <div class="stat" data-testid="methodology-current-structural">
             <div class="label">Current Digest: Structural Section</div>
-            <div id="currentHasStructural" class="value">__INITIAL_HAS_STRUCTURAL__</div>
+            <div id="currentHasStructural" class="value">Yes</div>
           </div>
         </div>
       </section>
@@ -159,14 +164,40 @@
           <span class="pill">Previous</span>
           <h2>Single-Lane Baseline</h2>
           <p class="status">Legacy format with one broad query.</p>
-          <pre id="previousDigest" data-testid="methodology-previous-digest">__INITIAL_PREVIOUS_DIGEST__</pre>
+          <pre id="previousDigest" data-testid="methodology-previous-digest">Audience: Gen Z
+Methodology: Previous (single-lane baseline)
+
+1) Short-form video platforms continue to dominate daily attention and trend discovery.
+2) AI use among students and early-career workers is rising for productivity and experimentation.
+3) Cost-of-living pressure is shaping purchase timing, brand switching, and value sensitivity.
+4) Community belonging is often built through niche creator ecosystems and fandom spaces.
+5) Trust in institutions remains mixed, with stronger reliance on peers and transparent creators.
+6) Identity expression is increasingly visual and memetic across social channels.
+7) Mental wellness framing appears frequently in lifestyle and work-life discussions.</pre>
         </article>
 
         <article class="panel" data-testid="methodology-current-panel">
           <span class="pill">Current</span>
           <h2>Dual-Lane Macro Method</h2>
           <p class="status">Breaking (`Day`) + structural macro (`Year` + annual report/macro trend).</p>
-          <pre id="currentDigest" data-testid="methodology-current-digest">__INITIAL_CURRENT_DIGEST__</pre>
+          <pre id="currentDigest" data-testid="methodology-current-digest">Audience: Gen Z
+Methodology: Current (breaking + structural macro lanes)
+
+Breaking (last 7 days):
+1) AI assistants are being discussed less as novelty and more as default workflow tooling.
+2) Viral discourse continues to reward practical "how I used this today" examples over abstract AI hype.
+3) Back-to-school / early-career content spikes show increased interest in skill-stacking and portfolio-building.
+4) Creator-led explainers are outperforming brand-led thought leadership in perceived usefulness.
+
+Structural (annual + macro):
+1) Economic pressure has normalized "value-first" behavior: delayed purchases, dupe culture, and selective premium spend.
+2) Identity is increasingly performed through participatory formats (remix, stitch, duet, template trends).
+3) Trust formation continues to shift from institutional messaging toward peer proof and lived-experience narratives.
+4) Mental wellness language has moved from niche discourse to a default framing in productivity and lifestyle talk.
+5) Community legitimacy is granted by consistency, transparency, and shared constraints (not just aesthetics).
+6) Platform-native communication compresses tone: concise, referential, and symbol-heavy language dominates.
+7) Long-horizon implication: brands that show practical utility + cultural fluency outperform purely aspirational positioning.
+8) Long-horizon implication: audiences reward systems that reduce uncertainty and cognitive load, especially in volatile cycles.</pre>
         </article>
       </section>
     </div>
@@ -181,19 +212,6 @@
       const currentLinesEl = document.getElementById('currentLines');
       const currentHasBreakingEl = document.getElementById('currentHasBreaking');
       const currentHasStructuralEl = document.getElementById('currentHasStructural');
-
-      function hasTemplatePlaceholders() {
-        const values = [
-          statusEl.textContent,
-          previousDigestEl.textContent,
-          currentDigestEl.textContent,
-          previousLinesEl.textContent,
-          currentLinesEl.textContent,
-          currentHasBreakingEl.textContent,
-          currentHasStructuralEl.textContent,
-        ].join(' ');
-        return values.includes('__INITIAL_');
-      }
 
       function candidateApiBases() {
         const candidates = [
@@ -261,7 +279,7 @@
 
           const previousLines = countLines(previousDigest);
           const currentLines = countLines(currentDigest);
-          const hasBreaking = currentDigest.includes('Breaking (last 24h):');
+          const hasBreaking = currentDigest.includes('Breaking (last 7 days):') || currentDigest.includes('Breaking (last 24h):');
           const hasStructural = currentDigest.includes('Structural (annual + macro):');
 
           previousLinesEl.textContent = String(previousLines);
@@ -289,13 +307,6 @@
       }
 
       runButton.addEventListener('click', runComparison);
-      window.addEventListener('load', () => {
-        if (hasTemplatePlaceholders()) {
-          statusEl.className = 'status';
-          statusEl.textContent = 'Loading precomputed comparison results...';
-          runComparison();
-        }
-      });
     </script>
   </body>
 </html>

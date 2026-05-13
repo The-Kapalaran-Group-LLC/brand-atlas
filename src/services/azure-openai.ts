@@ -1222,7 +1222,9 @@ async function createTargetedSubQueries(topic: string, mode: SessionMode): Promi
   return prependPrimaryQuery(plan.queries);
 }
 
-async function gatherEvidenceForTopic(topic: string, mode: SessionMode): Promise<string> {
+type EvidenceIntent = 'general' | 'behaviors';
+
+async function gatherEvidenceForTopic(topic: string, mode: SessionMode, intent: EvidenceIntent = 'general'): Promise<string> {
   const queries = await createTargetedSubQueries(topic, mode);
   if (!queries.length) return 'Evidence digest unavailable.';
 
@@ -1231,7 +1233,12 @@ async function gatherEvidenceForTopic(topic: string, mode: SessionMode): Promise
   const searchPromises = queries.map(async (query) => {
     try {
       const baseUrl = getApiBaseUrl();
-      const res = await fetch(`${baseUrl}/api/search?q=${encodeURIComponent(query)}`);
+      const searchUrl = new URL(`${baseUrl}/api/search`);
+      searchUrl.searchParams.set('q', query);
+      if (intent === 'behaviors') {
+        searchUrl.searchParams.set('mode', 'behaviors');
+      }
+      const res = await fetch(searchUrl.toString());
       if (!res.ok) {
         let message = `HTTP ${res.status}`;
         try {
@@ -2665,6 +2672,7 @@ type CulturalMatrixGenerationContext = {
   normalizedRerunFilters: CulturalRerunFilters;
   systemInstruction: string;
   evidenceDigest: string;
+  behaviorEvidenceDigest?: string;
   allowedEvidenceUrlList: string;
   rawSignals: z.infer<typeof CulturalRawSignalsSchema>;
 };
@@ -2699,6 +2707,67 @@ const CULTURAL_CATEGORY_PROMPT_LABELS: Record<CulturalMatrixCategoryKey, string>
   influencers: 'INFLUENCERS: People shaping their beliefs and behavior.',
 };
 
+export function buildCategoryRoleBlock(category: CulturalMatrixCategoryKey): string {
+  if (category === 'moments') {
+    return `
+Role:
+You are a Macro-Economic Trend Analyst.
+
+Moments mandate:
+- Analyze the provided Evidence Digest.
+- Extract 6-10 Moments from the Evidence Digest.
+- You MUST provide a balanced mix of:
+  1) breaking, highly up-to-date cultural shifts from the last 7 days, and
+  2) recurring, structural macro-economic forces.
+- Layer in some psychological beliefs only when they are clearly tied to macro-forces.
+- Primarily focus on hard macro-forces over soft speculation.`;
+  }
+
+  if (category === 'beliefs') {
+    return `
+Role:
+You are a Digital Anthropologist.
+
+Beliefs mandate:
+- Analyze the raw, unfiltered Reddit discussion verbatim from the source data and evidence context.
+- Extract 6-10 BELIEFS (core values and perceptions).
+- Focus on stabilized, highly-corroborated consensus from the past several months.
+- Ignore fleeting daily controversies or highly recent outrage.
+- When applicable, include at least 1 recent topic and explicitly mark it as "Recent".`;
+  }
+
+  if (category === 'tone') {
+    return `
+Role:
+You are a Psychographic Profiler.
+
+Tone mandate:
+- Analyze the provided social media comment corpus and evidence digest.
+- Perform lexical sentiment analysis to determine the sustained emotional baseline of this audience over the past several months.
+- Use the same stabilized, multi-month Evidence Digest standard used for BELIEFS.
+- Ignore breaking-news/API recency spikes and reactive daily outrage so the tone does not mirror the 24-hour news cycle.
+- Extract 6-10 Tone insights and map each insight to an archetype spectrum (for example: Stable vs Reactive, Hopeful vs Cynical, Guarded vs Expressive).`;
+  }
+
+  if (category === 'behaviors') {
+    return `
+Role:
+You are a Behavioral Scientist.
+
+Behavior mandate:
+- Read the provided evidence digest.
+- Temporal need: up-to-date but not most recent.
+- Enhance interpretation for stabilized rituals (routine, habit, guide), not passing viral TikTok challenges.
+- Extract 6-10 Behaviors.
+- There are two distinct areas of focus:
+  1) Consistent: Established, sustained actions, purchasing habits, and regular rituals.
+  2) Recent: Passing fads, trends, and highly recent viral challenges.
+- Balance the final results with what they do consistently and what they do recently.`;
+  }
+
+  return '';
+}
+
 function buildRerunFiltersInstructionForCategory(rerunFilters?: CulturalRerunFilters): string {
   const confidenceLevels = rerunFilters?.confidenceLevels || [];
   const evidenceTypes = rerunFilters?.evidenceTypes || [];
@@ -2727,31 +2796,10 @@ async function generateMatrixCategoryItems(
   const sourcesTypeStr = context.sourcesType && context.sourcesType.length > 0
     ? `\nSource-type emphasis: ${context.sourcesType.join(', ')}.`
     : '';
-  const categoryRoleBlock = category === 'moments'
-    ? `
-Role:
-You are a Macro-Economic Trend Analyst.
-
-Moments mandate:
-- Analyze the provided Evidence Digest.
-- Extract 6-10 Moments from the Evidence Digest.
-- You MUST provide a balanced mix of:
-  1) breaking, highly up-to-date cultural shifts from the last 7 days, and
-  2) recurring, structural macro-economic forces.
-- Layer in some psychological beliefs only when they are clearly tied to macro-forces.
-- Primarily focus on hard macro-forces over soft speculation.`
-    : category === 'beliefs'
-      ? `
-Role:
-You are a Digital Anthropologist.
-
-Beliefs mandate:
-- Analyze the raw, unfiltered Reddit discussion verbatim from the source data and evidence context.
-- Extract 6-10 BELIEFS (core values and perceptions).
-- Focus on stabilized, highly-corroborated consensus from the past several months.
-- Ignore fleeting daily controversies or highly recent outrage.
-- When applicable, include at least 1 recent topic and explicitly mark it as "Recent".`
-    : '';
+  const categoryRoleBlock = buildCategoryRoleBlock(category);
+  const categoryEvidenceDigest = category === 'behaviors' && context.behaviorEvidenceDigest
+    ? context.behaviorEvidenceDigest
+    : context.evidenceDigest;
   const prompt = `Generate only the ${category.toUpperCase()} matrix category for audience "${context.audience}"${contextStr}.${topicStr}${generationStr}${sourcesTypeStr}
 
 Category definition:
@@ -2765,7 +2813,7 @@ Full raw signal context:
 ${JSON.stringify(context.rawSignals)}
 
 Evidence digest (quality and date weighted):
-${context.evidenceDigest}
+${categoryEvidenceDigest}
 
 Allowed source URLs from Evidence Digest (exact strings only):
 ${context.allowedEvidenceUrlList}
@@ -2968,13 +3016,20 @@ export async function generateCulturalMatrix(
     `Audience: ${audience}; Brand: ${brand || 'n/a'}; Topic: ${topicFocus || 'n/a'}; Generations: ${(generations || []).join(', ') || 'n/a'}`,
     'cultural'
   );
+  const behaviorEvidenceDigest = await gatherEvidenceForTopic(
+    `Audience: ${audience}; Brand: ${brand || 'n/a'}; Topic: ${topicFocus || 'n/a'}; Focus: routines habits guides behavioral rituals; Generations: ${(generations || []).join(', ') || 'n/a'}`,
+    'cultural',
+    'behaviors'
+  );
   const allowedEvidenceUrls = extractUrlsFromEvidenceDigest(evidenceDigest);
-  const allowedEvidenceUrlList = allowedEvidenceUrls.length > 0
-    ? allowedEvidenceUrls.map((url, idx) => `${idx + 1}. ${url}`).join('\n')
+  const allowedBehaviorEvidenceUrls = extractUrlsFromEvidenceDigest(behaviorEvidenceDigest);
+  const mergedAllowedEvidenceUrls = Array.from(new Set([...allowedEvidenceUrls, ...allowedBehaviorEvidenceUrls]));
+  const allowedEvidenceUrlList = mergedAllowedEvidenceUrls.length > 0
+    ? mergedAllowedEvidenceUrls.map((url, idx) => `${idx + 1}. ${url}`).join('\n')
     : 'No source URLs were provided in the Evidence Digest.';
   console.log('[cultural-matrix] Extracted evidence URL allowlist.', {
-    allowlistCount: allowedEvidenceUrls.length,
-    allowlist: allowedEvidenceUrls,
+    allowlistCount: mergedAllowedEvidenceUrls.length,
+    allowlist: mergedAllowedEvidenceUrls,
   });
   let redditVerbatim = "";
   try {
@@ -3063,6 +3118,7 @@ export async function generateCulturalMatrix(
     normalizedRerunFilters,
     systemInstruction,
     evidenceDigest,
+    behaviorEvidenceDigest,
     allowedEvidenceUrlList,
     rawSignals,
   };

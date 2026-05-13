@@ -6,7 +6,11 @@ import dotenv from 'dotenv';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { fetchAudienceContext, fetchAudienceContextWithGptSearch } from '../lib/grounding.js';
+import {
+  fetchAudienceContext,
+  fetchAudienceContextPreviousMethodology,
+  fetchAudienceContextWithGptSearch,
+} from '../lib/grounding.js';
 import { fetchSubredditQuotes } from '../lib/fetchSubredditQuotes.js';
 import { processImageForUI, type ProcessedImageResult } from './image-processing';
 import {
@@ -76,7 +80,7 @@ const escapeHtml = (value: string): string => value
   .replaceAll("'", '&#39;');
 
 async function renderMethodologyComparisonHtml(audience = 'Gen Z'): Promise<string> {
-  const templatePath = path.join(publicDir, 'cultural-archaeologist-methodology-comparison.html');
+  const templatePath = path.join(publicDir, '__test__cultural-archaeologist-methodology-comparison.html');
   const template = await readFile(templatePath, 'utf8');
   const normalizedAudience = audience.trim() || 'Gen Z';
 
@@ -94,7 +98,7 @@ async function renderMethodologyComparisonHtml(audience = 'Gen Z'): Promise<stri
 
   const previousLines = countDigestLines(previousDigest);
   const currentLines = countDigestLines(currentDigest);
-  const hasBreaking = currentDigest.includes('Breaking (last 24h):') ? 'Yes' : 'No';
+  const hasBreaking = (currentDigest.includes('Breaking (last 7 days):') || currentDigest.includes('Breaking (last 24h):')) ? 'Yes' : 'No';
   const hasStructural = currentDigest.includes('Structural (annual + macro):') ? 'Yes' : 'No';
   const initialStatus = `Preloaded comparison for "${normalizedAudience}".`;
 
@@ -108,26 +112,28 @@ async function renderMethodologyComparisonHtml(audience = 'Gen Z'): Promise<stri
     .replace('__INITIAL_CURRENT_DIGEST__', escapeHtml(currentDigest));
 }
 
-app.get('/cultural-archaeologist-methodology-comparison', async (_req, res) => {
+app.get('/__test/cultural-archaeologist-methodology-comparison', async (_req, res) => {
   try {
     const html = await renderMethodologyComparisonHtml('Gen Z');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     res.send(html);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown render error';
     console.error('[methodology-compare] Failed to render preloaded comparison page.', { message });
-    res.sendFile(path.join(publicDir, 'cultural-archaeologist-methodology-comparison.html'));
+    res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-methodology-comparison.html'));
   }
 });
-app.get('/cultural-archaeologist-methodology-comparison.html', async (_req, res) => {
+app.get('/__test/cultural-archaeologist-methodology-comparison.html', async (_req, res) => {
   try {
     const html = await renderMethodologyComparisonHtml('Gen Z');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     res.send(html);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown render error';
     console.error('[methodology-compare] Failed to render preloaded comparison page.', { message });
-    res.sendFile(path.join(publicDir, 'cultural-archaeologist-methodology-comparison.html'));
+    res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-methodology-comparison.html'));
   }
 });
 app.use(express.static(publicDir));
@@ -522,9 +528,10 @@ app.get('/api/brand-web-context', async (req, res) => {
 
 app.get('/api/search', async (req, res) => {
   const query = req.query.q as string;
+  const mode = String(req.query.mode || '').trim().toLowerCase();
   if (!query) return res.status(400).json({ error: 'Missing query' });
   try {
-    const context = await fetchAudienceContext(query);
+    const context = await fetchAudienceContext(query, { behaviorFocus: mode === 'behaviors' });
     res.json({ context });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
