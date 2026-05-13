@@ -2840,6 +2840,21 @@ Contradictions mandate:
 - Do NOT mention "Dataset A" or "Dataset B" in the final user-facing contradiction text.`;
   }
 
+  if (category === 'community') {
+    return `
+Role:
+You are a Network Graph Analyst.
+
+Community mandate:
+- Review the provided community evidence.
+- Extract 6-10 Community identity anchors.
+- You MUST provide a "barbell" mix:
+  1) foundational, long-standing hubs (legacy forums/groups/people), and
+  2) highly up-to-date, rapidly emerging micro-communities (fast-growing private channels, rising individual voice) from roughly the last 30 days.
+- Use Bing/Reddit-informed evidence to balance foundational hubs with breakout micro-communities.
+- Even if you have difficulty verifying the exact name/topic of a micro-community, fallback to identify the location of the community (for example: Reddit, Discord, Substack).`;
+  }
+
   return '';
 }
 

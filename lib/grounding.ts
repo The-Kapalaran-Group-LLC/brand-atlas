@@ -1,4 +1,5 @@
 import { AzureOpenAI } from 'openai';
+import { fetchSubredditQuotes, fetchSubredditQuotesFresh } from './fetchSubredditQuotes';
 
 const BING_SEARCH_ENDPOINT = 'https://api.bing.microsoft.com/v7.0/search';
 const GOOGLE_SEARCH_ENDPOINT = 'https://www.googleapis.com/customsearch/v1';
@@ -19,7 +20,7 @@ type BingSearchResponse = {
   };
 };
 
-type BingSearchFreshness = 'Day' | 'Week' | 'Year';
+type BingSearchFreshness = 'Day' | 'Week' | 'Month' | 'Year';
 type SearchProvider = 'google' | 'bing';
 type GptMethodology = 'previous' | 'current';
 
@@ -200,6 +201,7 @@ async function fetchBing(
 function mapFreshnessToGoogleDateRestrict(freshness?: BingSearchFreshness): string | null {
   if (freshness === 'Day') return 'd1';
   if (freshness === 'Week') return 'd7';
+  if (freshness === 'Month') return 'm1';
   if (freshness === 'Year') return 'y1';
   return null;
 }
@@ -409,6 +411,175 @@ export async function fetchAudienceContextPreviousMethodology(audience: string):
   });
 
   return `Previous Methodology (single-lane baseline):\n${result.value.join('\n\n')}`;
+}
+
+function inferCommunitySubredditCandidates(audience: string): string[] {
+  const normalizedAudience = normalizeWhitespace(audience);
+  const tokens = normalizedAudience
+    .split(/\s+/)
+    .map((token) => token.replace(/[^A-Za-z0-9_]/g, ''))
+    .filter(Boolean);
+  const joined = tokens.join('');
+  const first = tokens[0] || '';
+  const candidates = new Set<string>();
+
+  if (/\bgen\s*z\b/i.test(normalizedAudience)) {
+    candidates.add('GenZ');
+    candidates.add('teenagers');
+  }
+  if (joined) candidates.add(joined);
+  if (first) candidates.add(first);
+
+  return Array.from(candidates).filter(Boolean).slice(0, 2);
+}
+
+export async function fetchCommunityContextPreviousMethodology(audience: string): Promise<string> {
+  const normalizedAudience = normalizeWhitespace(audience || '');
+  if (!normalizedAudience) {
+    throw new Error('Audience is required to fetch community grounding context.');
+  }
+
+  const provider = resolveSearchProvider();
+  const fetcher = provider === 'google' ? fetchGoogle : fetchBing;
+  const baselineQuery = `${normalizedAudience} community identity anchors reddit discord substack`;
+
+  console.log('[grounding] Previous community methodology provider selected', {
+    provider,
+    audience: normalizedAudience,
+  });
+
+  let baselineResult = await Promise.allSettled([fetcher(baselineQuery)]);
+
+  if (provider === 'google' && baselineResult[0].status === 'rejected') {
+    const message = String(baselineResult[0].reason?.message || '');
+    if (isGoogleCustomSearchAccessError(message) && hasBingSearchKey()) {
+      console.warn('[grounding] Previous community methodology Google unavailable; retrying with Bing fallback.', {
+        reason: message,
+      });
+      baselineResult = await Promise.allSettled([fetchBing(baselineQuery)]);
+    }
+  }
+
+  const [result] = baselineResult;
+  if (result.status === 'rejected') {
+    throw new Error(String(result.reason?.message || 'Search API error.'));
+  }
+
+  if (!result.value.length) {
+    return `No web results returned for: "${normalizedAudience}".`;
+  }
+
+  return `Previous Community Methodology (single-lane baseline):
+${result.value.join('\n\n')}`;
+}
+
+export async function fetchCommunityContextBarbellMethodology(audience: string): Promise<string> {
+  const normalizedAudience = normalizeWhitespace(audience || '');
+  if (!normalizedAudience) {
+    throw new Error('Audience is required to fetch community grounding context.');
+  }
+
+  const provider = resolveSearchProvider();
+  const fetcher = provider === 'google' ? fetchGoogle : fetchBing;
+  const foundationalQuery = `${normalizedAudience} top subreddits forum communities legacy creators identity`;
+  const breakoutQuery = `${normalizedAudience} Discord Substack Reddit emerging micro community growth last 30 days`;
+
+  console.log('[grounding] Community barbell methodology start', {
+    provider,
+    audience: normalizedAudience,
+  });
+
+  let webResults = await Promise.allSettled([
+    fetcher(foundationalQuery),
+    fetcher(breakoutQuery, { freshness: 'Month' }),
+  ]);
+  let [foundationalResult, breakoutResult] = webResults;
+
+  const allWebFailed = webResults.every((result) => result.status === 'rejected');
+  if (provider === 'google' && allWebFailed) {
+    const firstErrorMessage =
+      (foundationalResult.status === 'rejected' ? String(foundationalResult.reason?.message || '') : '') ||
+      (breakoutResult.status === 'rejected' ? String(breakoutResult.reason?.message || '') : '');
+
+    if (isGoogleCustomSearchAccessError(firstErrorMessage) && hasBingSearchKey()) {
+      console.warn('[grounding] Community barbell Google unavailable; retrying with Bing fallback.', {
+        reason: firstErrorMessage,
+      });
+      webResults = await Promise.allSettled([
+        fetchBing(foundationalQuery),
+        fetchBing(breakoutQuery, { freshness: 'Month' }),
+      ]);
+      [foundationalResult, breakoutResult] = webResults;
+    }
+  }
+
+  const subredditCandidates = inferCommunitySubredditCandidates(normalizedAudience);
+  const redditSettled = await Promise.allSettled(
+    subredditCandidates.map(async (subreddit) => {
+      const [foundationalQuotes, freshQuotes] = await Promise.all([
+        fetchSubredditQuotes(subreddit, 4),
+        fetchSubredditQuotesFresh(subreddit, 4),
+      ]);
+      return { subreddit, foundationalQuotes, freshQuotes };
+    })
+  );
+
+  const redditSignals = redditSettled
+    .filter(
+      (result): result is PromiseFulfilledResult<{
+        subreddit: string;
+        foundationalQuotes: string[];
+        freshQuotes: { newQuotes: string[]; hotQuotes: string[] };
+      }> => result.status === 'fulfilled'
+    )
+    .map((result) => result.value)
+    .find((candidate) =>
+      candidate.foundationalQuotes.length > 0
+      || candidate.freshQuotes.newQuotes.length > 0
+      || candidate.freshQuotes.hotQuotes.length > 0
+    );
+
+  if (foundationalResult.status === 'rejected' && breakoutResult.status === 'rejected' && !redditSignals) {
+    const reason =
+      foundationalResult.reason?.message ||
+      breakoutResult.reason?.message ||
+      'Community barbell retrieval failed.';
+    throw new Error(String(reason));
+  }
+
+  const foundationalLines: string[] = [];
+  const breakoutLines: string[] = [];
+
+  if (foundationalResult.status === 'fulfilled') {
+    foundationalLines.push(...foundationalResult.value);
+  }
+  if (breakoutResult.status === 'fulfilled') {
+    breakoutLines.push(...breakoutResult.value);
+  }
+
+  if (redditSignals?.foundationalQuotes?.length) {
+    foundationalLines.push(`Reddit (r/${redditSignals.subreddit} top posts): ${redditSignals.foundationalQuotes.join(' | ')}`);
+  }
+  const freshReddit = [...(redditSignals?.freshQuotes?.newQuotes || []), ...(redditSignals?.freshQuotes?.hotQuotes || [])];
+  if (freshReddit.length > 0 && redditSignals?.subreddit) {
+    breakoutLines.push(`Reddit (r/${redditSignals.subreddit} new/hot posts): ${freshReddit.join(' | ')}`);
+  }
+
+  if (!foundationalLines.length && !breakoutLines.length) {
+    return `No web results returned for: "${normalizedAudience}".`;
+  }
+
+  const fallbackPlatformLocation = 'If exact micro-community names are uncertain, fallback to platform location only (for example: Reddit, Discord, Substack).';
+  const sections: string[] = [];
+  if (foundationalLines.length > 0) {
+    sections.push(`Foundational hubs (long-standing):\n${foundationalLines.join('\n\n')}`);
+  }
+  if (breakoutLines.length > 0) {
+    sections.push(`Breakout micro-communities (last 30 days):\n${breakoutLines.join('\n\n')}`);
+  }
+  sections.push(`Location fallback rule:\n${fallbackPlatformLocation}`);
+
+  return sections.join('\n\n');
 }
 
 export async function fetchAudienceContextWithGptSearch(audience: string, methodology: GptMethodology): Promise<string> {

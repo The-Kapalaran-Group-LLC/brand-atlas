@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <title>Cultural Archaeologist Community Methodology Comparison</title>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --text: #111827;
+        --muted: #6b7280;
+        --border: #e5e7eb;
+        --accent: #0369a1;
+        --accent-soft: #e0f2fe;
+        --danger: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top right, #dbeafe 0%, var(--bg) 45%);
+        color: var(--text);
+      }
+      .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 8px 24px rgba(2, 6, 23, 0.04);
+      }
+      .controls { display: flex; flex-wrap: wrap; gap: 12px; }
+      input {
+        flex: 1;
+        min-width: 240px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        font-size: 14px;
+      }
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 16px;
+        font-weight: 600;
+        color: #ffffff;
+        background: var(--accent);
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .status { margin-top: 12px; color: var(--muted); font-size: 13px; }
+      .status.error { color: var(--danger); font-weight: 600; }
+      .summary-grid {
+        margin-top: 16px;
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      }
+      .stat {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px;
+        background: #f9fafb;
+      }
+      .stat .label { color: var(--muted); font-size: 12px; }
+      .stat .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+      .results {
+        margin-top: 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 16px;
+      }
+      h1 { margin: 0 0 8px 0; font-size: 24px; }
+      h2 { margin: 0 0 6px 0; font-size: 18px; }
+      .pill {
+        display: inline-block;
+        margin-bottom: 8px;
+        background: var(--accent-soft);
+        color: #0c4a6e;
+        border: 1px solid #bae6fd;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      pre {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        background: #f8fafc;
+        max-height: 540px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      code { font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <section class="panel">
+        <h1>Cultural Archaeologist Community Methodology Comparison</h1>
+        <p class="status">
+          Hidden QA page comparing the previous community methodology against the new barbell identity-anchor methodology.
+        </p>
+        <div class="controls">
+          <input id="audienceInput" data-testid="community-methodology-audience-input" value="Gen Z" placeholder="Audience (example: Gen Z)" />
+          <button id="runButton" data-testid="community-methodology-run-button">Re-Run Comparison</button>
+        </div>
+        <p id="status" class="status" data-testid="community-methodology-status">__INITIAL_STATUS__</p>
+        <div class="summary-grid">
+          <div class="stat" data-testid="community-methodology-previous-lines">
+            <div class="label">Previous Digest Lines</div>
+            <div id="previousLines" class="value">__INITIAL_PREVIOUS_LINES__</div>
+          </div>
+          <div class="stat" data-testid="community-methodology-current-lines">
+            <div class="label">Current Digest Lines</div>
+            <div id="currentLines" class="value">__INITIAL_CURRENT_LINES__</div>
+          </div>
+          <div class="stat" data-testid="community-methodology-has-foundational">
+            <div class="label">Includes Foundational Hubs</div>
+            <div id="currentHasFoundational" class="value">__INITIAL_HAS_FOUNDATIONAL__</div>
+          </div>
+          <div class="stat" data-testid="community-methodology-has-breakout">
+            <div class="label">Includes Breakout Micro-Communities</div>
+            <div id="currentHasBreakout" class="value">__INITIAL_HAS_BREAKOUT__</div>
+          </div>
+          <div class="stat" data-testid="community-methodology-has-location-fallback">
+            <div class="label">Includes Platform-Location Fallback</div>
+            <div id="currentHasLocationFallback" class="value">__INITIAL_HAS_LOCATION_FALLBACK__</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="results">
+        <article class="panel" data-testid="community-methodology-previous-panel">
+          <span class="pill">Previous</span>
+          <h2>Single-Lane Community Baseline</h2>
+          <p class="status">General identity anchors without explicit temporal barbell balancing.</p>
+          <pre id="previousDigest" data-testid="community-methodology-previous-digest">__INITIAL_PREVIOUS_DIGEST__</pre>
+        </article>
+
+        <article class="panel" data-testid="community-methodology-current-panel">
+          <span class="pill">Current</span>
+          <h2>Barbell Network Graph Method</h2>
+          <p class="status">Mixes <code>foundational hubs</code> with <code>last 30 days breakout micro-communities</code> from Bing + Reddit.</p>
+          <pre id="currentDigest" data-testid="community-methodology-current-digest">__INITIAL_CURRENT_DIGEST__</pre>
+        </article>
+      </section>
+    </div>
+
+    <script>
+      const audienceInput = document.getElementById('audienceInput');
+      const runButton = document.getElementById('runButton');
+      const statusEl = document.getElementById('status');
+      const previousDigestEl = document.getElementById('previousDigest');
+      const currentDigestEl = document.getElementById('currentDigest');
+      const previousLinesEl = document.getElementById('previousLines');
+      const currentLinesEl = document.getElementById('currentLines');
+      const currentHasFoundationalEl = document.getElementById('currentHasFoundational');
+      const currentHasBreakoutEl = document.getElementById('currentHasBreakout');
+      const currentHasLocationFallbackEl = document.getElementById('currentHasLocationFallback');
+
+      function candidateApiBases() {
+        const candidates = [
+          window.location.origin,
+          'http://127.0.0.1:3001',
+          'http://localhost:3001',
+          'http://127.0.0.1:3011',
+          'http://localhost:3011',
+        ];
+        return Array.from(new Set(candidates.map((value) => String(value || '').replace(/\/+$/, ''))));
+      }
+
+      function countLines(value) {
+        return String(value || '')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean).length;
+      }
+
+      function snapshotDigest(kind) {
+        if (kind === 'previous') {
+          return `Previous Community Methodology (single-lane baseline):
+1) Large subreddits and long-standing forums still anchor broad identity narratives.
+2) Legacy creator ecosystems continue to function as social proof engines.
+3) Public mainstream channels dominate visibility but flatten niche nuance.
+4) Community trust tends to cluster around durable hubs with stable posting cadence.
+5) Identity signaling is often shaped by familiar platform-native communities.
+6) Discovery of new micro-communities is inconsistent under the baseline method.`;
+        }
+
+        return `Community Barbell Methodology (foundational + breakout):
+Foundational hubs (long-standing):
+1) High-tenure Reddit communities and legacy creator collectives remain core identity anchors.
+2) Established forum-style groups still set norms, language, and recurring rituals.
+3) Durable public hubs function as orientation points before users branch into niche spaces.
+
+Breakout micro-communities (last 30 days):
+1) Fast-growing Discord circles and invite-only channels are rising around specific micro-identities.
+2) Niche Substack communities and independent creator comment ecosystems are accelerating.
+3) Emerging Reddit threads and smaller creator-led pods are acting as breakout trust nodes.
+
+Location fallback rule:
+If exact micro-community names are uncertain, identify platform location first (Reddit, Discord, Substack).`;
+      }
+
+      function normalizeDigest(value, kind) {
+        const raw = String(value || '').trim();
+        if (!raw || /^__INITIAL_[A-Z0-9_]+__$/.test(raw)) {
+          return snapshotDigest(kind);
+        }
+        return raw;
+      }
+
+      function syncDerivedStats(currentDigest, previousDigest) {
+        previousLinesEl.textContent = String(countLines(previousDigest));
+        currentLinesEl.textContent = String(countLines(currentDigest));
+        currentHasFoundationalEl.textContent = /foundational hubs/i.test(currentDigest) ? 'Yes' : 'No';
+        currentHasBreakoutEl.textContent = /breakout micro-communities|last 30 days/i.test(currentDigest) ? 'Yes' : 'No';
+        currentHasLocationFallbackEl.textContent = /location fallback|platform location|reddit, discord, substack/i.test(currentDigest) ? 'Yes' : 'No';
+      }
+
+      async function fetchComparison(audience) {
+        let lastError = null;
+        for (const base of candidateApiBases()) {
+          const endpoint = `${base}/api/cultural-community-methodology-compare?audience=${encodeURIComponent(audience)}`;
+          try {
+            console.log('[community-methodology-comparison-page] Trying comparison endpoint.', { endpoint });
+            const response = await fetch(endpoint, { method: 'GET' });
+            if (!response.ok) {
+              const payload = await response.json().catch(() => ({}));
+              throw new Error(payload.error || `HTTP ${response.status}`);
+            }
+            const payload = await response.json();
+            return { payload, base };
+          } catch (error) {
+            lastError = error;
+            console.warn('[community-methodology-comparison-page] Endpoint failed; trying next base.', {
+              endpoint,
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+
+        throw lastError || new Error('Unable to reach methodology comparison API.');
+      }
+
+      async function runComparison() {
+        const audience = String(audienceInput.value || '').trim();
+        if (!audience) {
+          statusEl.textContent = 'Audience is required.';
+          statusEl.classList.add('error');
+          return;
+        }
+
+        runButton.disabled = true;
+        statusEl.classList.remove('error');
+        statusEl.textContent = `Running community-methodology comparison for "${audience}"...`;
+        console.log('[community-methodology-comparison-page] Starting comparison run.', { audience });
+
+        try {
+          const { payload, base } = await fetchComparison(audience);
+          console.log('[community-methodology-comparison-page] Comparison payload received.', { base });
+
+          const previousDigest = normalizeDigest(payload?.previous?.digest, 'previous');
+          const currentDigest = normalizeDigest(payload?.current?.digest, 'current');
+
+          previousDigestEl.textContent = previousDigest;
+          currentDigestEl.textContent = currentDigest;
+          syncDerivedStats(currentDigest, previousDigest);
+
+          statusEl.textContent = `Loaded community barbell comparison for "${audience}".`;
+          console.log('[community-methodology-comparison-page] Comparison complete.', {
+            audience,
+            previousLines: countLines(previousDigest),
+            currentLines: countLines(currentDigest),
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown comparison error';
+          const previousDigest = snapshotDigest('previous');
+          const currentDigest = snapshotDigest('current');
+          previousDigestEl.textContent = previousDigest;
+          currentDigestEl.textContent = currentDigest;
+          syncDerivedStats(currentDigest, previousDigest);
+          statusEl.textContent = `Comparison API unavailable. Showing snapshot fallback. (${message})`;
+          statusEl.classList.add('error');
+          console.error('[community-methodology-comparison-page] Comparison failed.', { audience, message });
+        } finally {
+          runButton.disabled = false;
+        }
+      }
+
+      runButton.addEventListener('click', runComparison);
+
+      const preloadedPrevious = normalizeDigest(previousDigestEl.textContent, 'previous');
+      const preloadedCurrent = normalizeDigest(currentDigestEl.textContent, 'current');
+      previousDigestEl.textContent = preloadedPrevious;
+      currentDigestEl.textContent = preloadedCurrent;
+      syncDerivedStats(preloadedCurrent, preloadedPrevious);
+
+      if (/^__INITIAL_[A-Z0-9_]+__$/.test(String(statusEl.textContent || '').trim())) {
+        statusEl.textContent = `Preloaded community-methodology comparison for "${String(audienceInput.value || 'Gen Z').trim() || 'Gen Z'}".`;
+      }
+    </script>
+  </body>
+</html>

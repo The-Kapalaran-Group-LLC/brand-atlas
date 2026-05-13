@@ -205,6 +205,21 @@ describe('category role block prompts', () => {
     expect(block).toContain("Evidence Type");
     expect(block).toContain('Extract 6-10');
   });
+
+  it('uses a network graph analyst barbell brief for community anchors', () => {
+    const block = buildCategoryRoleBlock('community');
+
+    expect(block).toContain('Network Graph Analyst');
+    expect(block).toContain('Extract 6-10');
+    expect(block).toContain('barbell');
+    expect(block).toContain('foundational, long-standing hubs');
+    expect(block).toContain('rapidly emerging micro-communities');
+    expect(block).toContain('last 30 days');
+    expect(block).toContain('fallback to identify the location of the community');
+    expect(block).toContain('Reddit');
+    expect(block).toContain('Discord');
+    expect(block).toContain('Substack');
+  });
 });
 
 describe('matrix question search topic builder', () => {

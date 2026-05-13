@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 import {
   fetchAudienceContext,
   fetchAudienceContextPreviousMethodology,
+  fetchCommunityContextBarbellMethodology,
+  fetchCommunityContextPreviousMethodology,
   fetchAudienceContextWithGptSearch,
 } from '../lib/grounding.js';
 import { fetchSubredditQuotes } from '../lib/fetchSubredditQuotes.js';
@@ -107,6 +109,43 @@ Behavioral macro context (habit persistence + guides):
 };
 
 const shouldUseBehaviorSnapshotFallback = (digest: string): boolean => {
+  const normalized = (digest || '').toLowerCase();
+  return (
+    normalized.includes('temporarily unavailable') ||
+    normalized.startsWith('no web results returned for:')
+  );
+};
+
+const buildCommunityMethodologySnapshotDigest = (
+  methodology: 'previous' | 'current',
+  audience: string
+): string => {
+  if (methodology === 'previous') {
+    return `Previous Community Methodology (single-lane baseline) for "${audience}":
+1) Large subreddits and long-standing forums still anchor broad identity narratives.
+2) Legacy creator ecosystems continue to function as social proof engines.
+3) Public mainstream channels dominate visibility but flatten niche nuance.
+4) Community trust tends to cluster around durable hubs with stable posting cadence.
+5) Identity signaling is often shaped by familiar platform-native communities.
+6) Discovery of new micro-communities is inconsistent under the baseline method.`;
+  }
+
+  return `Community Barbell Methodology (foundational + breakout) for "${audience}":
+Foundational hubs (long-standing):
+1) High-tenure Reddit communities and legacy creator collectives remain core identity anchors.
+2) Established forum-style groups still set norms, language, and recurring rituals.
+3) Durable public hubs function as orientation points before users branch into niche spaces.
+
+Breakout micro-communities (last 30 days):
+1) Fast-growing Discord circles and invite-only channels are rising around specific micro-identities.
+2) Niche Substack communities and independent creator comment ecosystems are accelerating.
+3) Emerging Reddit threads and smaller creator-led pods are acting as breakout trust nodes.
+
+Location fallback rule:
+If exact micro-community names are uncertain, identify platform location first (Reddit, Discord, Substack).`;
+};
+
+const shouldUseCommunitySnapshotFallback = (digest: string): boolean => {
   const normalized = (digest || '').toLowerCase();
   return (
     normalized.includes('temporarily unavailable') ||
@@ -230,6 +269,47 @@ async function renderLanguageMethodologyComparisonHtml(audience = 'Gen Z'): Prom
     .replace('__INITIAL_CURRENT_DIGEST__', escapeHtml(currentDigest));
 }
 
+async function renderCommunityMethodologyComparisonHtml(audience = 'Gen Z'): Promise<string> {
+  const templatePath = path.join(publicDir, '__test__cultural-archaeologist-community-methodology-comparison.html');
+  const template = await readFile(templatePath, 'utf8');
+  const normalizedAudience = audience.trim() || 'Gen Z';
+
+  const [previousResult, currentResult] = await Promise.allSettled([
+    fetchCommunityContextPreviousMethodology(normalizedAudience),
+    fetchCommunityContextBarbellMethodology(normalizedAudience),
+  ]);
+
+  const previousDigest = previousResult.status === 'fulfilled'
+    ? previousResult.value
+    : buildComparisonFallbackDigest('previous', previousResult.reason);
+  const currentDigest = currentResult.status === 'fulfilled'
+    ? currentResult.value
+    : buildComparisonFallbackDigest('current', currentResult.reason);
+  const safePreviousDigest = shouldUseCommunitySnapshotFallback(previousDigest)
+    ? buildCommunityMethodologySnapshotDigest('previous', normalizedAudience)
+    : previousDigest;
+  const safeCurrentDigest = shouldUseCommunitySnapshotFallback(currentDigest)
+    ? buildCommunityMethodologySnapshotDigest('current', normalizedAudience)
+    : currentDigest;
+
+  const previousLines = countDigestLines(safePreviousDigest);
+  const currentLines = countDigestLines(safeCurrentDigest);
+  const hasFoundational = safeCurrentDigest.toLowerCase().includes('foundational hubs');
+  const hasBreakout = safeCurrentDigest.toLowerCase().includes('breakout micro-communities');
+  const hasLocationFallback = safeCurrentDigest.toLowerCase().includes('location fallback');
+  const initialStatus = `Preloaded community-methodology comparison for "${normalizedAudience}".`;
+
+  return template
+    .replace('__INITIAL_STATUS__', escapeHtml(initialStatus))
+    .replace('__INITIAL_PREVIOUS_LINES__', String(previousLines))
+    .replace('__INITIAL_CURRENT_LINES__', String(currentLines))
+    .replace('__INITIAL_HAS_FOUNDATIONAL__', hasFoundational ? 'Yes' : 'No')
+    .replace('__INITIAL_HAS_BREAKOUT__', hasBreakout ? 'Yes' : 'No')
+    .replace('__INITIAL_HAS_LOCATION_FALLBACK__', hasLocationFallback ? 'Yes' : 'No')
+    .replace('__INITIAL_PREVIOUS_DIGEST__', escapeHtml(safePreviousDigest))
+    .replace('__INITIAL_CURRENT_DIGEST__', escapeHtml(safeCurrentDigest));
+}
+
 app.get('/__test/cultural-archaeologist-methodology-comparison', async (_req, res) => {
   try {
     const html = await renderMethodologyComparisonHtml('Gen Z');
@@ -300,6 +380,30 @@ app.get('/__test/cultural-archaeologist-language-methodology-comparison.html', a
     const message = error instanceof Error ? error.message : 'Unknown render error';
     console.error('[language-methodology-compare] Failed to render preloaded comparison page.', { message });
     res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-language-methodology-comparison.html'));
+  }
+});
+app.get('/__test/cultural-archaeologist-community-methodology-comparison', async (_req, res) => {
+  try {
+    const html = await renderCommunityMethodologyComparisonHtml('Gen Z');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    res.send(html);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown render error';
+    console.error('[community-methodology-compare] Failed to render preloaded comparison page.', { message });
+    res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-community-methodology-comparison-static.html'));
+  }
+});
+app.get('/__test/cultural-archaeologist-community-methodology-comparison.html', async (_req, res) => {
+  try {
+    const html = await renderCommunityMethodologyComparisonHtml('Gen Z');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    res.send(html);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown render error';
+    console.error('[community-methodology-compare] Failed to render preloaded comparison page.', { message });
+    res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-community-methodology-comparison-static.html'));
   }
 });
 app.get('/__test/cultural-archaeologist-contradictions-methodology-comparison', (_req, res) => {
@@ -842,6 +946,58 @@ app.get('/api/cultural-language-methodology-compare', async (req, res) => {
   } catch (err: any) {
     const message = err?.message || 'Comparison failed.';
     console.error('[language-methodology-compare] Comparison failed.', { audience: normalizedAudience, error: message });
+    return res.status(500).json({ error: message });
+  }
+});
+
+app.get('/api/cultural-community-methodology-compare', async (req, res) => {
+  const audience = (Array.isArray(req.query.audience) ? req.query.audience[0] : req.query.audience) as string;
+  if (!audience || !audience.trim()) return res.status(400).json({ error: 'Missing audience query parameter' });
+
+  const normalizedAudience = audience.trim();
+  console.log('[community-methodology-compare] Starting comparison request.', { audience: normalizedAudience });
+
+  try {
+    const [previousResult, currentResult] = await Promise.allSettled([
+      fetchCommunityContextPreviousMethodology(normalizedAudience),
+      fetchCommunityContextBarbellMethodology(normalizedAudience),
+    ]);
+
+    const previousDigest = previousResult.status === 'fulfilled'
+      ? previousResult.value
+      : buildComparisonFallbackDigest('previous', previousResult.reason);
+    const currentDigest = currentResult.status === 'fulfilled'
+      ? currentResult.value
+      : buildComparisonFallbackDigest('current', currentResult.reason);
+    const safePreviousDigest = shouldUseCommunitySnapshotFallback(previousDigest)
+      ? buildCommunityMethodologySnapshotDigest('previous', normalizedAudience)
+      : previousDigest;
+    const safeCurrentDigest = shouldUseCommunitySnapshotFallback(currentDigest)
+      ? buildCommunityMethodologySnapshotDigest('current', normalizedAudience)
+      : currentDigest;
+
+    console.log('[community-methodology-compare] Comparison completed.', {
+      audience: normalizedAudience,
+      previousStatus: previousResult.status,
+      currentStatus: currentResult.status,
+      previousLength: safePreviousDigest.length,
+      currentLength: safeCurrentDigest.length,
+    });
+
+    return res.json({
+      audience: normalizedAudience,
+      previous: {
+        methodology: 'Previous Community Methodology (single-lane baseline)',
+        digest: safePreviousDigest,
+      },
+      current: {
+        methodology: 'Current Community Methodology (barbell: foundational hubs + breakout micro-communities)',
+        digest: safeCurrentDigest,
+      },
+    });
+  } catch (err: any) {
+    const message = err?.message || 'Comparison failed.';
+    console.error('[community-methodology-compare] Comparison failed.', { audience: normalizedAudience, error: message });
     return res.status(500).json({ error: message });
   }
 });

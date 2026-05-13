@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchAudienceContext, fetchAudienceContextPreviousMethodology } from './grounding';
+import {
+  fetchAudienceContext,
+  fetchAudienceContextPreviousMethodology,
+  fetchCommunityContextBarbellMethodology,
+  fetchCommunityContextPreviousMethodology,
+} from './grounding';
 
 describe('fetchAudienceContext', () => {
   const originalKey = process.env.BING_SEARCH_KEY;
@@ -296,5 +301,126 @@ describe('fetchAudienceContext', () => {
     expect(firstUrl.searchParams.get('freshness')).toBeNull();
     expect(context).toContain('Previous Methodology (single-lane baseline):');
     expect(context).toContain('Baseline signal about Gen Z spending pressure and creator income volatility.');
+  });
+
+  it('supports previous community methodology with a single baseline lane', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          webPages: {
+            value: [
+              { snippet: 'Large legacy subreddit hubs continue to influence identity signaling patterns.' },
+            ],
+          },
+        }),
+      } as Response);
+
+    const context = await fetchCommunityContextPreviousMethodology('Gen Z');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const firstUrl = new URL(fetchMock.mock.calls[0][0] as string);
+    expect(firstUrl.searchParams.get('q')).toContain('community identity anchors');
+    expect(firstUrl.searchParams.get('freshness')).toBeNull();
+    expect(context).toContain('Previous Community Methodology (single-lane baseline):');
+    expect(context).toContain('Large legacy subreddit hubs continue to influence identity signaling patterns.');
+  });
+
+  it('uses a community barbell retrieval mix with foundational hubs and breakout micro-communities', async () => {
+    const requests: string[] = [];
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requests.push(url);
+
+      if (url.includes('api.bing.microsoft.com/v7.0/search')) {
+        if (url.includes('freshness=Month')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              webPages: {
+                value: [
+                  { snippet: 'Discord invite links and Substack communities are rising in the last 30 days.' },
+                ],
+              },
+            }),
+          } as Response;
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            webPages: {
+              value: [
+                { snippet: 'Legacy creator forums and large subreddit hubs remain foundational to identity norms.' },
+              ],
+            },
+          }),
+        } as Response;
+      }
+
+      if (url.includes('/r/GenZ/top.json')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            data: {
+              children: [{ data: { title: 'Weekly identity thread', selftext: 'Longstanding shared rituals' } }],
+            },
+          }),
+        } as Response;
+      }
+
+      if (url.includes('/r/GenZ/new.json')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            data: {
+              children: [{ data: { title: 'New Discord dropped', selftext: 'Private creator micro-channel' } }],
+            },
+          }),
+        } as Response;
+      }
+
+      if (url.includes('/r/GenZ/hot.json')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            data: {
+              children: [{ data: { title: 'Substack growth spike', selftext: 'Niche paid community momentum' } }],
+            },
+          }),
+        } as Response;
+      }
+
+      if (url.includes('/r/teenagers/top.json') || url.includes('/r/teenagers/new.json') || url.includes('/r/teenagers/hot.json')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ data: { children: [] } }),
+        } as Response;
+      }
+
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    const context = await fetchCommunityContextBarbellMethodology('Gen Z');
+
+    expect(requests.some((url) => url.includes('api.bing.microsoft.com/v7.0/search') && url.includes('freshness=Month'))).toBe(true);
+    expect(requests.some((url) => url.includes('/r/GenZ/top.json'))).toBe(true);
+    expect(requests.some((url) => url.includes('/r/GenZ/new.json'))).toBe(true);
+    expect(requests.some((url) => url.includes('/r/GenZ/hot.json'))).toBe(true);
+
+    expect(context).toContain('Foundational hubs (long-standing):');
+    expect(context).toContain('Breakout micro-communities (last 30 days):');
+    expect(context).toContain('Reddit (r/GenZ top posts):');
+    expect(context).toContain('Reddit (r/GenZ new/hot posts):');
+    expect(context).toContain('Location fallback rule:');
   });
 });
