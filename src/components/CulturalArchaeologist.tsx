@@ -3491,19 +3491,20 @@ function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], on
   const renderInsightText = (text: string) => {
     if (title !== 'Tone') return text;
 
-    const parts = text.split(/(archetype spectrum:\s*)/gi);
-    if (parts.length <= 1) return text;
+    const match = text.match(/archetype spectrum:\s*/i);
+    if (!match || typeof match.index !== 'number') return text;
 
-    return parts.map((part, partIndex) => {
-      if (/^archetype spectrum:\s*$/i.test(part)) {
-        return (
-          <strong key={`tone-archetype-label-${partIndex}`}>
-            {part}
-          </strong>
-        );
-      }
-      return part;
-    });
+    const prefix = text.slice(0, match.index).trimEnd();
+    const label = text.slice(match.index, match.index + match[0].length);
+    const suffix = text.slice(match.index + match[0].length).trimStart();
+
+    return [
+      prefix,
+      <br key="tone-archetype-break-1" />,
+      <br key="tone-archetype-break-2" />,
+      <strong key="tone-archetype-label">{label}</strong>,
+      suffix ? ` ${suffix}` : '',
+    ];
   };
   
   const safeItems = items || [];

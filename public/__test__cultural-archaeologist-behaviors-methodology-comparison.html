@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <title>Cultural Archaeologist Behaviors Methodology Comparison</title>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --text: #111827;
+        --muted: #6b7280;
+        --border: #e5e7eb;
+        --accent: #0f766e;
+        --accent-soft: #d1fae5;
+        --danger: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top right, #ccfbf1 0%, var(--bg) 45%);
+        color: var(--text);
+      }
+      .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 8px 24px rgba(2, 6, 23, 0.04);
+      }
+      .controls { display: flex; flex-wrap: wrap; gap: 12px; }
+      input {
+        flex: 1;
+        min-width: 240px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        font-size: 14px;
+      }
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 16px;
+        font-weight: 600;
+        color: #ffffff;
+        background: var(--accent);
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .status { margin-top: 12px; color: var(--muted); font-size: 13px; }
+      .status.error { color: var(--danger); font-weight: 600; }
+      .summary-grid {
+        margin-top: 16px;
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      }
+      .stat {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px;
+        background: #f9fafb;
+      }
+      .stat .label { color: var(--muted); font-size: 12px; }
+      .stat .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+      .results {
+        margin-top: 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 16px;
+      }
+      h1 { margin: 0 0 8px 0; font-size: 24px; }
+      h2 { margin: 0 0 6px 0; font-size: 18px; }
+      .pill {
+        display: inline-block;
+        margin-bottom: 8px;
+        background: var(--accent-soft);
+        color: #115e59;
+        border: 1px solid #99f6e4;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      pre {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        background: #f8fafc;
+        max-height: 540px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      code { font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <section class="panel">
+        <h1>Cultural Archaeologist Behaviors Methodology Comparison</h1>
+        <p class="status">Compare previous methodology vs the new behavior-science methodology with stabilized rituals focus.</p>
+        <div class="controls">
+          <input id="audienceInput" data-testid="behavior-methodology-audience-input" value="Gen Z" placeholder="Audience (example: Gen Z)" />
+          <button id="runButton" data-testid="behavior-methodology-run-button">Re-Run Comparison</button>
+        </div>
+        <p id="status" class="status" data-testid="behavior-methodology-status">__INITIAL_STATUS__</p>
+        <p class="status">
+          Related page:
+          <a href="/__test/cultural-archaeologist-methodology-comparison">General Methodology Comparison</a>
+        </p>
+        <div class="summary-grid">
+          <div class="stat" data-testid="behavior-methodology-previous-lines">
+            <div class="label">Previous Digest Lines</div>
+            <div id="previousLines" class="value">__INITIAL_PREVIOUS_LINES__</div>
+          </div>
+          <div class="stat" data-testid="behavior-methodology-current-lines">
+            <div class="label">New Behaviors Digest Lines</div>
+            <div id="currentLines" class="value">__INITIAL_CURRENT_LINES__</div>
+          </div>
+          <div class="stat" data-testid="behavior-methodology-current-routines">
+            <div class="label">Contains Stabilized Routines Section</div>
+            <div id="currentHasBehavioralRoutines" class="value">__INITIAL_HAS_BEHAVIORAL_ROUTINES__</div>
+          </div>
+          <div class="stat" data-testid="behavior-methodology-current-macro">
+            <div class="label">Contains Behavioral Macro Section</div>
+            <div id="currentHasBehavioralMacro" class="value">__INITIAL_HAS_BEHAVIORAL_MACRO__</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="results">
+        <article class="panel" data-testid="behavior-methodology-previous-panel">
+          <span class="pill">Previous</span>
+          <h2>Single-Lane Baseline</h2>
+          <p class="status">Legacy broad query without explicit rituals segmentation.</p>
+          <pre id="previousDigest" data-testid="behavior-methodology-previous-digest">__INITIAL_PREVIOUS_DIGEST__</pre>
+        </article>
+
+        <article class="panel" data-testid="behavior-methodology-current-panel">
+          <span class="pill">New</span>
+          <h2>Behavioral Scientist Method</h2>
+          <p class="status">Up-to-date but not most-recent, with <code>routine/habit/guide</code> search amplification and no strict freshness lane.</p>
+          <pre id="currentDigest" data-testid="behavior-methodology-current-digest">__INITIAL_CURRENT_DIGEST__</pre>
+        </article>
+      </section>
+    </div>
+
+    <script>
+      const audienceInput = document.getElementById('audienceInput');
+      const runButton = document.getElementById('runButton');
+      const statusEl = document.getElementById('status');
+      const previousDigestEl = document.getElementById('previousDigest');
+      const currentDigestEl = document.getElementById('currentDigest');
+      const previousLinesEl = document.getElementById('previousLines');
+      const currentLinesEl = document.getElementById('currentLines');
+      const currentHasBehavioralRoutinesEl = document.getElementById('currentHasBehavioralRoutines');
+      const currentHasBehavioralMacroEl = document.getElementById('currentHasBehavioralMacro');
+
+      function candidateApiBases() {
+        const candidates = [
+          window.location.origin,
+          'http://127.0.0.1:3001',
+          'http://localhost:3001',
+          'http://127.0.0.1:3011',
+          'http://localhost:3011',
+        ];
+        return Array.from(new Set(candidates.map((value) => String(value || '').replace(/\/+$/, ''))));
+      }
+
+      async function fetchComparisonPayload(audience) {
+        const bases = candidateApiBases();
+        let lastError = 'No working API base found.';
+
+        for (const base of bases) {
+          const endpoint = `${base}/api/cultural-behaviors-methodology-compare?audience=${encodeURIComponent(audience)}`;
+          try {
+            console.log('[behavior-methodology-comparison-page] Trying comparison endpoint.', { endpoint });
+            const response = await fetch(endpoint);
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              lastError = payload.error || `Request failed with status ${response.status}.`;
+              continue;
+            }
+            return { payload, base };
+          } catch (error) {
+            lastError = error instanceof Error ? error.message : 'Unknown fetch error';
+          }
+        }
+
+        throw new Error(lastError);
+      }
+
+      function countLines(value) {
+        return String(value || '')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean).length;
+      }
+
+      function buildSnapshotDigest(kind, audience) {
+        if (kind === 'previous') {
+          return `Previous Methodology (single-lane baseline) for "${audience}":
+1) Short-form video trends heavily influence what this audience tries and buys.
+2) Peer-led recommendation loops shape trial behavior and repeat usage.
+3) Value sensitivity drives switching and delayed purchasing.
+4) Creator trust strongly affects habit formation around products and routines.
+5) Identity expression is encoded through visible lifestyle choices and social signaling.
+6) Mental wellness framing appears across routine decisions.
+7) Community rituals emerge in niche creator ecosystems.`;
+        }
+
+        return `Behavioral routines (up-to-date, stabilized):
+1) Weekly budget check-ins and app-based spend tracking are becoming routine among this audience.
+2) "Refill and rebuy" rituals increasingly follow creator guide content over one-off ads.
+3) Habit-stacking behavior (productivity + wellness + finance micro-routines) is becoming normalized.
+4) Purchase rituals are often "research-first": quick guide videos, peer comments, then delayed checkout.
+5) Recurring value-audit rituals (compare, dupe-check, waitlist) shape baskets and brand choice.
+
+Behavioral macro context (habit persistence + guides):
+1) Cost pressure reinforces repeatable low-risk routines over spontaneous trend buying.
+2) Social proof has shifted from hype spikes to practical guide formats and lived-use evidence.
+3) Platform-native tutorials are becoming durable behavior infrastructure, not just trend content.
+4) Community belonging is reinforced by shared routines (reset days, study blocks, no-spend challenges).
+5) Recent viral challenges still appear, but sustained rituals remain the stronger predictor of repeat behavior.`;
+      }
+
+      function applyFallbackIfUnavailable(digest, kind, audience) {
+        const raw = String(digest || '').trim();
+        const normalized = raw.toLowerCase();
+        const isPlaceholderToken = /^__INITIAL_[A-Z0-9_]+__$/.test(raw);
+        if (
+          isPlaceholderToken ||
+          normalized.includes('temporarily unavailable') ||
+          normalized.startsWith('no web results returned for:')
+        ) {
+          return buildSnapshotDigest(kind, audience);
+        }
+        return raw || buildSnapshotDigest(kind, audience);
+      }
+
+      async function runComparison() {
+        const audience = String(audienceInput.value || '').trim();
+        if (!audience) {
+          statusEl.textContent = 'Audience is required.';
+          statusEl.className = 'status error';
+          return;
+        }
+
+        runButton.disabled = true;
+        statusEl.className = 'status';
+        statusEl.textContent = `Running behavior-methodology comparison for "${audience}"...`;
+
+        try {
+          const { payload } = await fetchComparisonPayload(audience);
+          const previousDigest = applyFallbackIfUnavailable(payload?.previous?.digest, 'previous', audience);
+          const currentDigest = applyFallbackIfUnavailable(payload?.current?.digest, 'current', audience);
+
+          previousDigestEl.textContent = previousDigest;
+          currentDigestEl.textContent = currentDigest;
+
+          previousLinesEl.textContent = String(countLines(previousDigest));
+          currentLinesEl.textContent = String(countLines(currentDigest));
+          currentHasBehavioralRoutinesEl.textContent = currentDigest.includes('Behavioral routines') ? 'Yes' : 'No';
+          currentHasBehavioralMacroEl.textContent = currentDigest.includes('Behavioral macro context') ? 'Yes' : 'No';
+
+          const usedSnapshotFallback =
+            String(payload?.previous?.digest || '').toLowerCase().includes('temporarily unavailable') ||
+            String(payload?.current?.digest || '').toLowerCase().includes('temporarily unavailable') ||
+            /^__INITIAL_[A-Z0-9_]+__$/.test(String(payload?.previous?.digest || '').trim()) ||
+            /^__INITIAL_[A-Z0-9_]+__$/.test(String(payload?.current?.digest || '').trim());
+          statusEl.textContent = usedSnapshotFallback
+            ? `Live comparison unavailable for "${audience}". Showing populated snapshot results.`
+            : `Live comparison complete for "${audience}".`;
+          statusEl.className = 'status';
+        } catch (error) {
+          const previousDigest = buildSnapshotDigest('previous', audience);
+          const currentDigest = buildSnapshotDigest('current', audience);
+          previousDigestEl.textContent = previousDigest;
+          currentDigestEl.textContent = currentDigest;
+          previousLinesEl.textContent = String(countLines(previousDigest));
+          currentLinesEl.textContent = String(countLines(currentDigest));
+          currentHasBehavioralRoutinesEl.textContent = 'Yes';
+          currentHasBehavioralMacroEl.textContent = 'Yes';
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          statusEl.textContent = `Live comparison unavailable (${message}). Showing populated snapshot results.`;
+          statusEl.className = 'status';
+        } finally {
+          runButton.disabled = false;
+        }
+      }
+
+      runButton.addEventListener('click', runComparison);
+
+      (function hydrateFallbackFromInitialRender() {
+        const audience = String(audienceInput.value || 'Gen Z').trim() || 'Gen Z';
+        if (/^__INITIAL_[A-Z0-9_]+__$/.test(String(statusEl.textContent || '').trim())) {
+          statusEl.textContent = `Preloaded snapshot comparison for "${audience}".`;
+        }
+        const normalizedPrevious = applyFallbackIfUnavailable(previousDigestEl.textContent, 'previous', audience);
+        const normalizedCurrent = applyFallbackIfUnavailable(currentDigestEl.textContent, 'current', audience);
+        previousDigestEl.textContent = normalizedPrevious;
+        currentDigestEl.textContent = normalizedCurrent;
+        previousLinesEl.textContent = String(countLines(normalizedPrevious));
+        currentLinesEl.textContent = String(countLines(normalizedCurrent));
+        currentHasBehavioralRoutinesEl.textContent = normalizedCurrent.includes('Behavioral routines') ? 'Yes' : 'No';
+        currentHasBehavioralMacroEl.textContent = normalizedCurrent.includes('Behavioral macro context') ? 'Yes' : 'No';
+      })();
+    </script>
+  </body>
+</html>

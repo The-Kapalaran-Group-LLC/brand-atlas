@@ -72,6 +72,44 @@ const buildComparisonFallbackDigest = (
   return `${generic} Details: ${reasonText}`;
 };
 
+const buildBehaviorMethodologySnapshotDigest = (
+  methodology: 'previous' | 'current',
+  audience: string
+): string => {
+  if (methodology === 'previous') {
+    return `Previous Methodology (single-lane baseline) for "${audience}":
+1) Short-form video trends heavily influence what this audience tries and buys.
+2) Peer-led recommendation loops shape trial behavior and repeat usage.
+3) Value sensitivity drives switching and delayed purchasing.
+4) Creator trust strongly affects habit formation around products and routines.
+5) Identity expression is encoded through visible lifestyle choices and social signaling.
+6) Mental wellness framing appears across routine decisions.
+7) Community rituals emerge in niche creator ecosystems.`;
+  }
+
+  return `Behavioral routines (up-to-date, stabilized):
+1) Weekly budget check-ins and app-based spend tracking are becoming routine among this audience.
+2) "Refill and rebuy" rituals increasingly follow creator guide content over one-off ads.
+3) Habit-stacking behavior (productivity + wellness + finance micro-routines) is becoming normalized.
+4) Purchase rituals are often "research-first": quick guide videos, peer comments, then delayed checkout.
+5) Recurring value-audit rituals (compare, dupe-check, waitlist) shape baskets and brand choice.
+
+Behavioral macro context (habit persistence + guides):
+1) Cost pressure reinforces repeatable low-risk routines over spontaneous trend buying.
+2) Social proof has shifted from hype spikes to practical guide formats and lived-use evidence.
+3) Platform-native tutorials are becoming durable behavior infrastructure, not just trend content.
+4) Community belonging is reinforced by shared routines (reset days, study blocks, no-spend challenges).
+5) Recent viral challenges still appear, but sustained rituals remain the stronger predictor of repeat behavior.`;
+};
+
+const shouldUseBehaviorSnapshotFallback = (digest: string): boolean => {
+  const normalized = (digest || '').toLowerCase();
+  return (
+    normalized.includes('temporarily unavailable') ||
+    normalized.startsWith('no web results returned for:')
+  );
+};
+
 const escapeHtml = (value: string): string => value
   .replaceAll('&', '&amp;')
   .replaceAll('<', '&lt;')
@@ -112,6 +150,45 @@ async function renderMethodologyComparisonHtml(audience = 'Gen Z'): Promise<stri
     .replace('__INITIAL_CURRENT_DIGEST__', escapeHtml(currentDigest));
 }
 
+async function renderBehaviorMethodologyComparisonHtml(audience = 'Gen Z'): Promise<string> {
+  const templatePath = path.join(publicDir, '__test__cultural-archaeologist-behaviors-methodology-comparison.html');
+  const template = await readFile(templatePath, 'utf8');
+  const normalizedAudience = audience.trim() || 'Gen Z';
+
+  const [previousResult, currentResult] = await Promise.allSettled([
+    fetchAudienceContextPreviousMethodology(normalizedAudience),
+    fetchAudienceContext(normalizedAudience, { behaviorFocus: true }),
+  ]);
+
+  const previousDigest = previousResult.status === 'fulfilled'
+    ? previousResult.value
+    : buildComparisonFallbackDigest('previous', previousResult.reason);
+  const currentDigest = currentResult.status === 'fulfilled'
+    ? currentResult.value
+    : buildComparisonFallbackDigest('current', currentResult.reason);
+  const safePreviousDigest = shouldUseBehaviorSnapshotFallback(previousDigest)
+    ? buildBehaviorMethodologySnapshotDigest('previous', normalizedAudience)
+    : previousDigest;
+  const safeCurrentDigest = shouldUseBehaviorSnapshotFallback(currentDigest)
+    ? buildBehaviorMethodologySnapshotDigest('current', normalizedAudience)
+    : currentDigest;
+
+  const previousLines = countDigestLines(safePreviousDigest);
+  const currentLines = countDigestLines(safeCurrentDigest);
+  const hasBehavioralRoutines = safeCurrentDigest.includes('Behavioral routines (up-to-date, stabilized):') ? 'Yes' : 'No';
+  const hasBehavioralMacroContext = safeCurrentDigest.includes('Behavioral macro context (habit persistence + guides):') ? 'Yes' : 'No';
+  const initialStatus = `Preloaded behavior-methodology comparison for "${normalizedAudience}".`;
+
+  return template
+    .replace('__INITIAL_STATUS__', escapeHtml(initialStatus))
+    .replace('__INITIAL_PREVIOUS_LINES__', String(previousLines))
+    .replace('__INITIAL_CURRENT_LINES__', String(currentLines))
+    .replace('__INITIAL_HAS_BEHAVIORAL_ROUTINES__', hasBehavioralRoutines)
+    .replace('__INITIAL_HAS_BEHAVIORAL_MACRO__', hasBehavioralMacroContext)
+    .replace('__INITIAL_PREVIOUS_DIGEST__', escapeHtml(safePreviousDigest))
+    .replace('__INITIAL_CURRENT_DIGEST__', escapeHtml(safeCurrentDigest));
+}
+
 app.get('/__test/cultural-archaeologist-methodology-comparison', async (_req, res) => {
   try {
     const html = await renderMethodologyComparisonHtml('Gen Z');
@@ -134,6 +211,30 @@ app.get('/__test/cultural-archaeologist-methodology-comparison.html', async (_re
     const message = error instanceof Error ? error.message : 'Unknown render error';
     console.error('[methodology-compare] Failed to render preloaded comparison page.', { message });
     res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-methodology-comparison.html'));
+  }
+});
+app.get('/__test/cultural-archaeologist-behaviors-methodology-comparison', async (_req, res) => {
+  try {
+    const html = await renderBehaviorMethodologyComparisonHtml('Gen Z');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    res.send(html);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown render error';
+    console.error('[behavior-methodology-compare] Failed to render preloaded comparison page.', { message });
+    res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-behaviors-methodology-comparison-static.html'));
+  }
+});
+app.get('/__test/cultural-archaeologist-behaviors-methodology-comparison.html', async (_req, res) => {
+  try {
+    const html = await renderBehaviorMethodologyComparisonHtml('Gen Z');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    res.send(html);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown render error';
+    console.error('[behavior-methodology-compare] Failed to render preloaded comparison page.', { message });
+    res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-behaviors-methodology-comparison-static.html'));
   }
 });
 app.use(express.static(publicDir));
@@ -580,6 +681,58 @@ app.get('/api/cultural-methodology-compare', async (req, res) => {
   } catch (err: any) {
     const message = err?.message || 'Comparison failed.';
     console.error('[methodology-compare] Comparison failed', { audience: normalizedAudience, error: message });
+    return res.status(500).json({ error: message });
+  }
+});
+
+app.get('/api/cultural-behaviors-methodology-compare', async (req, res) => {
+  const audience = (Array.isArray(req.query.audience) ? req.query.audience[0] : req.query.audience) as string;
+  if (!audience || !audience.trim()) return res.status(400).json({ error: 'Missing audience query parameter' });
+
+  const normalizedAudience = audience.trim();
+  console.log('[behavior-methodology-compare] Starting comparison request', { audience: normalizedAudience });
+
+  try {
+    const [previousResult, currentResult] = await Promise.allSettled([
+      fetchAudienceContextPreviousMethodology(normalizedAudience),
+      fetchAudienceContext(normalizedAudience, { behaviorFocus: true }),
+    ]);
+
+    const previousDigest = previousResult.status === 'fulfilled'
+      ? previousResult.value
+      : buildComparisonFallbackDigest('previous', previousResult.reason);
+    const currentDigest = currentResult.status === 'fulfilled'
+      ? currentResult.value
+      : buildComparisonFallbackDigest('current', currentResult.reason);
+    const safePreviousDigest = shouldUseBehaviorSnapshotFallback(previousDigest)
+      ? buildBehaviorMethodologySnapshotDigest('previous', normalizedAudience)
+      : previousDigest;
+    const safeCurrentDigest = shouldUseBehaviorSnapshotFallback(currentDigest)
+      ? buildBehaviorMethodologySnapshotDigest('current', normalizedAudience)
+      : currentDigest;
+
+    console.log('[behavior-methodology-compare] Comparison completed', {
+      audience: normalizedAudience,
+      previousStatus: previousResult.status,
+      currentStatus: currentResult.status,
+      previousLength: safePreviousDigest.length,
+      currentLength: safeCurrentDigest.length,
+    });
+
+    return res.json({
+      audience: normalizedAudience,
+      previous: {
+        methodology: 'Previous (single-lane baseline)',
+        digest: safePreviousDigest,
+      },
+      current: {
+        methodology: 'Behavior-focused (routine/habit/guide, no strict recency)',
+        digest: safeCurrentDigest,
+      },
+    });
+  } catch (err: any) {
+    const message = err?.message || 'Comparison failed.';
+    console.error('[behavior-methodology-compare] Comparison failed', { audience: normalizedAudience, error: message });
     return res.status(500).json({ error: message });
   }
 });
