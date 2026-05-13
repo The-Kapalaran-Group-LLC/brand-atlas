@@ -3489,6 +3489,42 @@ function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], on
   };
 
   const renderInsightText = (text: string) => {
+    if (title === 'Contradictions') {
+      const normalized = text
+        .replace(/\s+(What they do:)/gi, '\n\n$1')
+        .replace(/\s+(Tension:)/gi, '\n\n$1');
+
+      const paragraphs = normalized
+        .split(/\n{2,}/)
+        .map((segment) => segment.trim())
+        .filter(Boolean);
+
+      if (paragraphs.length > 1) {
+        return paragraphs.map((paragraph, idx) => (
+          <React.Fragment key={`contradiction-line-${idx}`}>
+            {(() => {
+              const labelMatch = paragraph.match(/^(What they say:|What they do:|Tension:)\s*/i);
+              if (!labelMatch) return paragraph;
+              const label = labelMatch[1];
+              const body = paragraph.slice(labelMatch[0].length).trimStart();
+              return (
+                <>
+                  <strong>{label}</strong>
+                  {body ? ` ${body}` : ''}
+                </>
+              );
+            })()}
+            {idx < paragraphs.length - 1 ? (
+              <>
+                <br />
+                <br />
+              </>
+            ) : null}
+          </React.Fragment>
+        ));
+      }
+    }
+
     if (title !== 'Tone') return text;
 
     const match = text.match(/archetype spectrum:\s*/i);
@@ -3562,7 +3598,7 @@ function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], on
                       {showDocumentInsights && item.isFromDocument && <FileText className={`w-4 h-4 ${isHighlighted ? 'text-indigo-600' : 'text-emerald-500'}`} />}
                     </span>
                   )}
-                  <span className="flex-1 pr-8">
+                  <span className={`flex-1 pr-8 ${title === 'Contradictions' ? 'whitespace-pre-line' : ''}`}>
                     {renderInsightText(cleanText)}
                     {labels.map((label) => (
                       <span key={`${index}-${label}`} className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}>

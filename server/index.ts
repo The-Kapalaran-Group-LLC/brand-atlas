@@ -302,6 +302,16 @@ app.get('/__test/cultural-archaeologist-language-methodology-comparison.html', a
     res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-language-methodology-comparison.html'));
   }
 });
+app.get('/__test/cultural-archaeologist-contradictions-methodology-comparison', (_req, res) => {
+  console.log('[contradictions-methodology-compare] Serving preloaded static comparison page for Gen Z.');
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-contradictions-methodology-comparison-static.html'));
+});
+app.get('/__test/cultural-archaeologist-contradictions-methodology-comparison.html', (_req, res) => {
+  console.log('[contradictions-methodology-compare] Serving preloaded static comparison page for Gen Z (.html route).');
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-contradictions-methodology-comparison-static.html'));
+});
 app.use(express.static(publicDir));
 
 const IMAGE_CACHE_TTL_MS = 15 * 60 * 1000;

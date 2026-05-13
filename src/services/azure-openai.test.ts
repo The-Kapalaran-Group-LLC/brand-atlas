@@ -11,6 +11,7 @@ import {
   evaluateQualityGateDecision,
   extractUrlsFromEvidenceDigest,
   formatDevilsAdvocateLens,
+  formatContradictionNarrative,
   getDeploymentCandidatesFromEnv,
   isTransientOpenAIRequestError,
   normalizeMatrixTerminology,
@@ -50,6 +51,32 @@ describe('formatDevilsAdvocateLens', () => {
     });
 
     expect(result).toBe('Alternative interpretation not available.');
+  });
+});
+
+describe('formatContradictionNarrative', () => {
+  it('converts dataset-style phrasing into what-they-say/what-they-do format', () => {
+    const result = formatContradictionNarrative(
+      'Dataset A says they prefer peer networks over institutions, but Dataset B shows they increasingly seek community around shared practices; the tension is that anti-institution belonging is becoming ritualized.'
+    );
+
+    expect(result).toContain('What they say:');
+    expect(result).toContain('\n\nWhat they do:');
+    expect(result).toContain('What they do:');
+    expect(result).toContain('\n\nTension:');
+    expect(result).toContain('Tension:');
+    expect(result).not.toContain('Dataset A');
+    expect(result).not.toContain('Dataset B');
+  });
+
+  it('normalizes belief/behavior/tension blocks to the user-facing format', () => {
+    const result = formatContradictionNarrative(
+      'Belief (Card 2): They want transparency.\nBehavior (Card 5): They still reward urgency drops.\nTension: Values and purchase behavior diverge.'
+    );
+
+    expect(result).toBe(
+      'What they say: They want transparency.\n\nWhat they do: They still reward urgency drops.\n\nTension: Values and purchase behavior diverge.'
+    );
   });
 });
 
@@ -164,6 +191,19 @@ describe('category role block prompts', () => {
     expect(block).toContain('habit');
     expect(block).toContain('guide');
     expect(block).toContain('not most recent');
+  });
+
+  it('uses a cultural critic cross-reference brief for contradictions', () => {
+    const block = buildCategoryRoleBlock('contradictions');
+
+    expect(block).toContain('Cultural Critic');
+    expect(block).toContain('Temporal need: up-to-date but not most recent');
+    expect(block).toContain('Dataset A');
+    expect(block).toContain('Dataset B');
+    expect(block).toContain('stated intent');
+    expect(block).toContain('actual behavior over the last year');
+    expect(block).toContain("Evidence Type");
+    expect(block).toContain('Extract 6-10');
   });
 });
 

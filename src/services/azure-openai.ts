@@ -35,6 +35,59 @@ export function logDetailedError(error: unknown, context?: string) {
     }
   }
 }
+
+const CONTRADICTION_SUFFIX_METADATA_PATTERN = /\s*(?:known|inferred|speculative)[\w\s-]*confidence[\w\s-]*(?:emerging|peaking|declining)[\w\s/-]*$/i;
+
+const cleanContradictionSegment = (value: string): string => value
+  .replace(/\bDataset\s*[AB]\b\s*[:\-]?\s*/gi, '')
+  .replace(CONTRADICTION_SUFFIX_METADATA_PATTERN, '')
+  .replace(/\s{2,}/g, ' ')
+  .replace(/^[;,\s]+|[;,\s]+$/g, '')
+  .trim();
+
+export function formatContradictionNarrative(text: string): string {
+  const raw = String(text || '').trim();
+  if (!raw) return 'What they say: Stated intent unavailable.\n\nWhat they do: Behavioral signal unavailable.\n\nTension: Additional evidence needed.';
+
+  const normalized = raw
+    .replace(/\bDataset\s*A\s*(says|shows|indicates)?\b/gi, 'What they say')
+    .replace(/\bDataset\s*B\s*(says|shows|indicates)?\b/gi, 'What they do')
+    .replace(/\r\n/g, '\n');
+
+  const sayMatch = normalized.match(/what they say\s*:\s*([\s\S]*?)(?:\n|what they do\s*:|tension\s*:|$)/i)
+    || normalized.match(/belief(?:s)?(?:\s*\(.*?\))?\s*:\s*([\s\S]*?)(?:\n|behavior(?:s|al)?(?:\s*\(.*?\))?\s*:|what they do\s*:|tension\s*:|$)/i);
+  const doMatch = normalized.match(/what they do\s*:\s*([\s\S]*?)(?:\n|tension\s*:|$)/i)
+    || normalized.match(/behavior(?:s|al)?(?:\s*\(.*?\))?\s*:\s*([\s\S]*?)(?:\n|tension\s*:|$)/i);
+  const tensionMatch = normalized.match(/tension\s*:\s*([\s\S]*?)$/i)
+    || normalized.match(/the tension is that\s*([\s\S]*?)$/i);
+
+  let whatTheySay = cleanContradictionSegment(sayMatch?.[1] || '');
+  let whatTheyDo = cleanContradictionSegment(doMatch?.[1] || '');
+  let tension = cleanContradictionSegment(tensionMatch?.[1] || '');
+
+  if (!whatTheySay || !whatTheyDo) {
+    const splitMatch = normalized.match(/^([\s\S]*?)\b(?:but|however|while|yet)\b([\s\S]*?)(?:;\s*(?:the\s+)?tension\s+is\s+that\s*([\s\S]*))?$/i);
+    if (splitMatch) {
+      whatTheySay = whatTheySay || cleanContradictionSegment(splitMatch[1] || '');
+      whatTheyDo = whatTheyDo || cleanContradictionSegment(splitMatch[2] || '');
+      tension = tension || cleanContradictionSegment(splitMatch[3] || '');
+    }
+  }
+
+  if (!whatTheySay) whatTheySay = 'Stated intent unavailable.';
+  if (!whatTheyDo) whatTheyDo = cleanContradictionSegment(normalized) || 'Behavioral signal unavailable.';
+  if (!tension) tension = 'Gap between stated intent and sustained behavior.';
+
+  return `What they say: ${whatTheySay}\n\nWhat they do: ${whatTheyDo}\n\nTension: ${tension}`;
+}
+
+function normalizeContradictionItems(items: MatrixItem[]): MatrixItem[] {
+  return (items || []).map((item) => ({
+    ...item,
+    text: formatContradictionNarrative(item.text),
+  }));
+}
+
 import { AzureOpenAI } from "openai";
 import type {
   ChatCompletion,
@@ -2675,6 +2728,8 @@ type CulturalMatrixGenerationContext = {
   behaviorEvidenceDigest?: string;
   allowedEvidenceUrlList: string;
   rawSignals: z.infer<typeof CulturalRawSignalsSchema>;
+  stabilizedBeliefsForContradictions?: MatrixItem[];
+  stabilizedBehaviorsForContradictions?: MatrixItem[];
 };
 
 const CulturalMatrixCategoryResultSchema = z.object({
@@ -2765,6 +2820,26 @@ Behavior mandate:
 - Balance the final results with what they do consistently and what they do recently.`;
   }
 
+  if (category === 'contradictions') {
+    return `
+Role:
+You are a Cultural Critic.
+
+Contradictions mandate:
+- Temporal need: up-to-date but not most recent.
+- Use Dataset A (Card 2: what this audience says they believe) and Dataset B (Card 5: how this audience actually behaves).
+- Contrast established, stated intent against sustained actual behavior over the last year to find hypocrisies and tensions.
+- Explicitly cross-reference Dataset A and Dataset B in every contradiction so outputs are not generated from thin air.
+- Double-check dataset integrity before producing contradictions.
+- Extract 6-10 Contradictions or emerging tensions.
+- Include an "Evidence Type" marker in each contradiction text (for example: [KNOWN], [INFERRED], [SPECULATIVE]).
+- Final output text must use this exact narrative structure:
+  "What they say: ..."
+  "What they do: ..."
+  "Tension: ..."
+- Do NOT mention "Dataset A" or "Dataset B" in the final user-facing contradiction text.`;
+  }
+
   return '';
 }
 
@@ -2799,7 +2874,28 @@ async function generateMatrixCategoryItems(
   const categoryRoleBlock = buildCategoryRoleBlock(category);
   const categoryEvidenceDigest = category === 'behaviors' && context.behaviorEvidenceDigest
     ? context.behaviorEvidenceDigest
+    : category === 'contradictions' && context.behaviorEvidenceDigest
+      ? `${context.evidenceDigest}\n\nBehavior-focused stabilized evidence digest:\n${context.behaviorEvidenceDigest}`
     : context.evidenceDigest;
+  const contradictionsDatasetABlock = category === 'contradictions'
+    ? `
+Internal reference input A (Card 2: Stated beliefs, stabilized; do not quote label):
+${JSON.stringify(
+  (context.stabilizedBeliefsForContradictions && context.stabilizedBeliefsForContradictions.length > 0
+    ? context.stabilizedBeliefsForContradictions
+    : (context.rawSignals.beliefs || []).map((text) => ({ text }))),
+  null,
+  2
+)}
+
+Internal reference input B (Card 5: Behavioral data, stabilized; do not quote label):
+${JSON.stringify(
+  (context.stabilizedBehaviorsForContradictions && context.stabilizedBehaviorsForContradictions.length > 0
+    ? context.stabilizedBehaviorsForContradictions
+    : (context.rawSignals.behaviors || []).map((text) => ({ text }))),
+  null,
+  2
+)}` : '';
   const prompt = `Generate only the ${category.toUpperCase()} matrix category for audience "${context.audience}"${contextStr}.${topicStr}${generationStr}${sourcesTypeStr}
 
 Category definition:
@@ -2814,6 +2910,8 @@ ${JSON.stringify(context.rawSignals)}
 
 Evidence digest (quality and date weighted):
 ${categoryEvidenceDigest}
+
+${contradictionsDatasetABlock}
 
 Allowed source URLs from Evidence Digest (exact strings only):
 ${context.allowedEvidenceUrlList}
@@ -2870,7 +2968,8 @@ async function generateBehaviors(context: CulturalMatrixGenerationContext): Prom
 }
 
 async function generateContradictions(context: CulturalMatrixGenerationContext): Promise<MatrixItem[]> {
-  return generateMatrixCategoryItems(context, 'contradictions');
+  const items = await generateMatrixCategoryItems(context, 'contradictions');
+  return normalizeContradictionItems(items);
 }
 
 async function generateCommunity(context: CulturalMatrixGenerationContext): Promise<MatrixItem[]> {
@@ -3129,10 +3228,25 @@ export async function generateCulturalMatrix(
     tone: generateTone(generationContext),
     language: generateLanguage(generationContext),
     behaviors: generateBehaviors(generationContext),
-    contradictions: generateContradictions(generationContext),
+    contradictions: Promise.resolve([]),
     community: generateCommunity(generationContext),
     influencers: generateInfluencers(generationContext),
   });
+  let contradictionItems: MatrixItem[] = [];
+  try {
+    contradictionItems = await generateContradictions({
+      ...generationContext,
+      stabilizedBeliefsForContradictions: categoryResults.beliefs,
+      stabilizedBehaviorsForContradictions: categoryResults.behaviors,
+    });
+    console.log('[cultural-matrix] Contradictions generated from stabilized beliefs/behaviors cross-reference.', {
+      beliefCount: categoryResults.beliefs.length,
+      behaviorCount: categoryResults.behaviors.length,
+      contradictionCount: contradictionItems.length,
+    });
+  } catch (error) {
+    logDetailedError(error, '[cultural-matrix] Contradictions generation failed after stabilized cross-reference; applying empty-array fallback.');
+  }
 
   const meta = await generateCulturalMatrixMeta(generationContext).catch((error) => {
     logDetailedError(error, '[cultural-matrix] Metadata generation failed; applying safe defaults.');
@@ -3159,7 +3273,7 @@ export async function generateCulturalMatrix(
     tone: categoryResults.tone,
     language: categoryResults.language,
     behaviors: categoryResults.behaviors,
-    contradictions: categoryResults.contradictions,
+    contradictions: contradictionItems,
     community: categoryResults.community,
     influencers: categoryResults.influencers,
     vocabulary: meta.vocabulary,
