@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <title>Cultural Archaeologist Component Methodology</title>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --text: #0f172a;
+        --muted: #475569;
+        --border: #e2e8f0;
+        --accent: #0f766e;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top right, #ccfbf1 0%, var(--bg) 45%);
+        color: var(--text);
+      }
+      .container { max-width: 1080px; margin: 0 auto; padding: 24px; }
+      .hero, .section {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 8px 24px rgba(2, 6, 23, 0.04);
+      }
+      .hero { margin-bottom: 16px; }
+      .grid {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      }
+      h1 { margin: 0 0 8px; font-size: 24px; }
+      h2 { margin: 0 0 8px; font-size: 18px; color: var(--accent); }
+      p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+      ul { margin: 10px 0 0; padding-left: 18px; }
+      li { margin: 6px 0; font-size: 14px; line-height: 1.45; color: #1f2937; }
+      .tag {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid #99f6e4;
+        background: #ecfeff;
+        color: #155e75;
+        font-size: 12px;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container" data-testid="components-methodology-page">
+      <section class="hero">
+        <h1>Cultural Archaeologist: Component Methodology</h1>
+        <p>Hidden one-page reference for the current methodology used across all eight Cultural Archaeologist components.</p>
+        <span class="tag">Audience baseline used in QA pages: Gen Z</span>
+      </section>
+
+      <section class="grid">
+        <article class="section" data-testid="methodology-moments">
+          <h2>Moments</h2>
+          <ul>
+            <li>Deliver 6-10 insights balancing breaking shifts (last 7 days) with structural macro forces.</li>
+            <li>Prioritize hard macro signals over soft speculation.</li>
+            <li>Only layer psychology when directly tied to macro context.</li>
+          </ul>
+        </article>
+
+        <article class="section" data-testid="methodology-beliefs">
+          <h2>Beliefs</h2>
+          <ul>
+            <li>Deliver 6-10 stabilized values/perceptions from highly corroborated multi-month evidence.</li>
+            <li>Ignore fleeting daily controversies and reaction spikes.</li>
+            <li>Optionally include a recent topic only when explicitly labeled as recent.</li>
+          </ul>
+        </article>
+
+        <article class="section" data-testid="methodology-tone">
+          <h2>Tone</h2>
+          <ul>
+            <li>Deliver 6-10 sustained emotional-baseline insights using lexical sentiment patterns.</li>
+            <li>Use the same stabilized digest standard as Beliefs.</li>
+            <li>Map each insight to an archetype spectrum (for example: Stable vs Reactive).</li>
+          </ul>
+        </article>
+
+        <article class="section" data-testid="methodology-language">
+          <h2>Language</h2>
+          <ul>
+            <li>Capture how the audience communicates through vernacular, symbols, and code.</li>
+            <li>Prioritize current usage with practical copywriter relevance.</li>
+            <li>Flag known/inferred/speculative language confidence where needed.</li>
+          </ul>
+        </article>
+
+        <article class="section" data-testid="methodology-behaviors">
+          <h2>Behaviors</h2>
+          <ul>
+            <li>Deliver 6-10 behavior insights with an up-to-date (not most-recent-only) lens.</li>
+            <li>Balance consistent rituals/habits with recent fads/challenges.</li>
+            <li>Weight repeatable actions over one-off virality.</li>
+          </ul>
+        </article>
+
+        <article class="section" data-testid="methodology-contradictions">
+          <h2>Contradictions</h2>
+          <ul>
+            <li>Deliver 6-10 tensions by cross-referencing Beliefs (what they say) and Behaviors (what they do).</li>
+            <li>Use exact narrative structure: What they say / What they do / Tension.</li>
+            <li>Include evidence-type framing and avoid uncoupled speculation.</li>
+          </ul>
+        </article>
+
+        <article class="section" data-testid="methodology-community">
+          <h2>Community</h2>
+          <ul>
+            <li>Deliver 6-10 identity anchors using a barbell mix.</li>
+            <li>Include foundational long-standing hubs and breakout micro-communities from ~last 30 days.</li>
+            <li>If exact names are uncertain, fallback to platform location (Reddit, Discord, Substack).</li>
+          </ul>
+        </article>
+
+        <article class="section" data-testid="methodology-influencers">
+          <h2>Influencers</h2>
+          <ul>
+            <li>Deliver 6-10 influencers with a barbell mix: 3-4 legacy authorities + 3-4 breakout micro-creators.</li>
+            <li>Evaluate via Resonance (growth speed), Conversion (niche fit), and Penetration (visibility).</li>
+            <li>If Social Blade is integrated, query both Top Followers and Highest 30-Day Growth.</li>
+            <li>If naming certainty is weak, explicitly say so and do not invent names.</li>
+          </ul>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

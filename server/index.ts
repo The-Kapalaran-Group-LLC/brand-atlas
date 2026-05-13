@@ -516,6 +516,14 @@ app.get('/__test/cultural-archaeologist-influencers-methodology-comparison.html'
     res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-influencers-methodology-comparison-static.html'));
   }
 });
+app.get('/__test/cultural-archaeologist-components-methodology', (_req, res) => {
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-components-methodology.html'));
+});
+app.get('/__test/cultural-archaeologist-components-methodology.html', (_req, res) => {
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-components-methodology.html'));
+});
 app.get('/__test/cultural-archaeologist-contradictions-methodology-comparison', (_req, res) => {
   console.log('[contradictions-methodology-compare] Serving preloaded static comparison page for Gen Z.');
   res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
