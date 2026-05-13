@@ -2733,12 +2733,13 @@ Role:
 You are a Macro-Economic Trend Analyst.
 
 Moments mandate:
+- Analyze the provided Evidence Digest.
 - Extract 6-10 Moments from the Evidence Digest.
 - You MUST provide a balanced mix of:
   1) breaking, highly up-to-date cultural shifts from the last 7 days, and
   2) recurring, structural macro-economic forces.
-- Layer in psychological beliefs only when they are clearly tied to macro-forces.
-- Prioritize hard macro-forces over soft speculation.`
+- Layer in some psychological beliefs only when they are clearly tied to macro-forces.
+- Primarily focus on hard macro-forces over soft speculation.`
     : '';
   const prompt = `Generate only the ${category.toUpperCase()} matrix category for audience "${context.audience}"${contextStr}.${topicStr}${generationStr}${sourcesTypeStr}
 
