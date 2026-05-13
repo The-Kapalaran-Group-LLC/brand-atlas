@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cultural Archaeologist Methodology Comparison</title>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --text: #111827;
+        --muted: #6b7280;
+        --border: #e5e7eb;
+        --accent: #0f766e;
+        --accent-soft: #d1fae5;
+        --danger: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top right, #ccfbf1 0%, var(--bg) 45%);
+        color: var(--text);
+      }
+      .container {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 8px 24px rgba(2, 6, 23, 0.04);
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      input {
+        flex: 1;
+        min-width: 240px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        font-size: 14px;
+      }
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 16px;
+        font-weight: 600;
+        color: #ffffff;
+        background: var(--accent);
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .status {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .status.error { color: var(--danger); font-weight: 600; }
+      .summary-grid {
+        margin-top: 16px;
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      }
+      .stat {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px;
+        background: #f9fafb;
+      }
+      .stat .label {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .stat .value {
+        font-size: 18px;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+      .results {
+        margin-top: 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 16px;
+      }
+      h1 { margin: 0 0 8px 0; font-size: 24px; }
+      h2 { margin: 0 0 6px 0; font-size: 18px; }
+      .pill {
+        display: inline-block;
+        margin-bottom: 8px;
+        background: var(--accent-soft);
+        color: #115e59;
+        border: 1px solid #99f6e4;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      pre {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        background: #f8fafc;
+        max-height: 540px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      code {
+        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <section class="panel">
+        <h1>Cultural Archaeologist Methodology Comparison</h1>
+        <p class="status">Compare previous and current evidence-digest methodologies side-by-side.</p>
+        <div class="controls">
+          <input id="audienceInput" data-testid="methodology-audience-input" value="Gen Z" placeholder="Audience (example: Gen Z)" />
+          <button id="runButton" data-testid="methodology-run-button">Re-Run Comparison</button>
+        </div>
+        <p id="status" class="status" data-testid="methodology-status">__INITIAL_STATUS__</p>
+        <div class="summary-grid">
+          <div class="stat" data-testid="methodology-previous-lines">
+            <div class="label">Previous Digest Lines</div>
+            <div id="previousLines" class="value">__INITIAL_PREVIOUS_LINES__</div>
+          </div>
+          <div class="stat" data-testid="methodology-current-lines">
+            <div class="label">Current Digest Lines</div>
+            <div id="currentLines" class="value">__INITIAL_CURRENT_LINES__</div>
+          </div>
+          <div class="stat" data-testid="methodology-current-breaking">
+            <div class="label">Current Digest: Breaking Section</div>
+            <div id="currentHasBreaking" class="value">__INITIAL_HAS_BREAKING__</div>
+          </div>
+          <div class="stat" data-testid="methodology-current-structural">
+            <div class="label">Current Digest: Structural Section</div>
+            <div id="currentHasStructural" class="value">__INITIAL_HAS_STRUCTURAL__</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="results">
+        <article class="panel" data-testid="methodology-previous-panel">
+          <span class="pill">Previous</span>
+          <h2>Single-Lane Baseline</h2>
+          <p class="status">Legacy format with one broad query.</p>
+          <pre id="previousDigest" data-testid="methodology-previous-digest">__INITIAL_PREVIOUS_DIGEST__</pre>
+        </article>
+
+        <article class="panel" data-testid="methodology-current-panel">
+          <span class="pill">Current</span>
+          <h2>Dual-Lane Macro Method</h2>
+          <p class="status">Breaking (`Day`) + structural macro (`Year` + annual report/macro trend).</p>
+          <pre id="currentDigest" data-testid="methodology-current-digest">__INITIAL_CURRENT_DIGEST__</pre>
+        </article>
+      </section>
+    </div>
+
+    <script>
+      const audienceInput = document.getElementById('audienceInput');
+      const runButton = document.getElementById('runButton');
+      const statusEl = document.getElementById('status');
+      const previousDigestEl = document.getElementById('previousDigest');
+      const currentDigestEl = document.getElementById('currentDigest');
+      const previousLinesEl = document.getElementById('previousLines');
+      const currentLinesEl = document.getElementById('currentLines');
+      const currentHasBreakingEl = document.getElementById('currentHasBreaking');
+      const currentHasStructuralEl = document.getElementById('currentHasStructural');
+
+      function hasTemplatePlaceholders() {
+        const values = [
+          statusEl.textContent,
+          previousDigestEl.textContent,
+          currentDigestEl.textContent,
+          previousLinesEl.textContent,
+          currentLinesEl.textContent,
+          currentHasBreakingEl.textContent,
+          currentHasStructuralEl.textContent,
+        ].join(' ');
+        return values.includes('__INITIAL_');
+      }
+
+      function candidateApiBases() {
+        const candidates = [
+          window.location.origin,
+          'http://127.0.0.1:3001',
+          'http://localhost:3001',
+          'http://127.0.0.1:3011',
+          'http://localhost:3011',
+        ];
+        return Array.from(new Set(candidates.map((value) => String(value || '').replace(/\/+$/, ''))));
+      }
+
+      async function fetchComparisonPayload(audience) {
+        const bases = candidateApiBases();
+        let lastError = 'No working API base found.';
+
+        for (const base of bases) {
+          const endpoint = `${base}/api/cultural-methodology-compare?audience=${encodeURIComponent(audience)}`;
+          try {
+            console.log('[methodology-comparison-page] Trying comparison endpoint.', { endpoint });
+            const response = await fetch(endpoint);
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              lastError = payload.error || `Request failed with status ${response.status}.`;
+              continue;
+            }
+            return { payload, base };
+          } catch (error) {
+            lastError = error instanceof Error ? error.message : 'Unknown fetch error';
+          }
+        }
+
+        throw new Error(lastError);
+      }
+
+      function countLines(value) {
+        return String(value || '')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean).length;
+      }
+
+      async function runComparison() {
+        const audience = String(audienceInput.value || '').trim();
+        if (!audience) {
+          statusEl.textContent = 'Audience is required.';
+          statusEl.className = 'status error';
+          return;
+        }
+
+        runButton.disabled = true;
+        statusEl.className = 'status';
+        statusEl.textContent = `Running comparison for "${audience}"...`;
+        console.log('[methodology-comparison-page] Starting comparison run.', { audience });
+
+        try {
+          const { payload, base } = await fetchComparisonPayload(audience);
+          console.log('[methodology-comparison-page] Comparison payload received.', { base });
+
+          const previousDigest = String(payload?.previous?.digest || 'No previous digest returned.');
+          const currentDigest = String(payload?.current?.digest || 'No current digest returned.');
+
+          previousDigestEl.textContent = previousDigest;
+          currentDigestEl.textContent = currentDigest;
+
+          const previousLines = countLines(previousDigest);
+          const currentLines = countLines(currentDigest);
+          const hasBreaking = currentDigest.includes('Breaking (last 24h):');
+          const hasStructural = currentDigest.includes('Structural (annual + macro):');
+
+          previousLinesEl.textContent = String(previousLines);
+          currentLinesEl.textContent = String(currentLines);
+          currentHasBreakingEl.textContent = hasBreaking ? 'Yes' : 'No';
+          currentHasStructuralEl.textContent = hasStructural ? 'Yes' : 'No';
+
+          statusEl.textContent = `Comparison complete for "${audience}".`;
+          statusEl.className = 'status';
+          console.log('[methodology-comparison-page] Comparison complete.', {
+            audience,
+            previousLines,
+            currentLines,
+            hasBreaking,
+            hasStructural,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          statusEl.textContent = message;
+          statusEl.className = 'status error';
+          console.error('[methodology-comparison-page] Comparison failed.', { audience, message });
+        } finally {
+          runButton.disabled = false;
+        }
+      }
+
+      runButton.addEventListener('click', runComparison);
+      window.addEventListener('load', () => {
+        if (hasTemplatePlaceholders()) {
+          statusEl.className = 'status';
+          statusEl.textContent = 'Loading precomputed comparison results...';
+          runComparison();
+        }
+      });
+    </script>
+  </body>
+</html>

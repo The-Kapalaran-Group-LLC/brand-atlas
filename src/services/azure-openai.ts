@@ -2690,7 +2690,7 @@ const CulturalMatrixMetaSchema = z.object({
 
 const CULTURAL_CATEGORY_PROMPT_LABELS: Record<CulturalMatrixCategoryKey, string> = {
   moments: 'MOMENTS: Context of the time. What external forces are shaping behaviour right now? (Current events, social climate, trends)',
-  beliefs: 'BELIEFS: What they believe and what external forces shape behavior right now. (Beliefs, values, myths, perceptions)',
+  beliefs: 'BELIEFS: Core values and perceptions, emphasizing stabilized consensus over fleeting controversy.',
   tone: 'TONE: What they feel and how they feel that is unique. (Attitude, emotions, personality, outlook)',
   language: 'LANGUAGE: How they communicate. (Vernacular, symbols, codes, visuals)',
   behaviors: 'BEHAVIORS: How they act/interact and what rituals carry meaning. (Actions, customs, rituals, ceremonies)',
@@ -2740,6 +2740,17 @@ Moments mandate:
   2) recurring, structural macro-economic forces.
 - Layer in some psychological beliefs only when they are clearly tied to macro-forces.
 - Primarily focus on hard macro-forces over soft speculation.`
+    : category === 'beliefs'
+      ? `
+Role:
+You are a Digital Anthropologist.
+
+Beliefs mandate:
+- Analyze the raw, unfiltered Reddit discussion verbatim from the source data and evidence context.
+- Extract 6-10 BELIEFS (core values and perceptions).
+- Focus on stabilized, highly-corroborated consensus from the past several months.
+- Ignore fleeting daily controversies or highly recent outrage.
+- When applicable, include at least 1 recent topic and explicitly mark it as "Recent".`
     : '';
   const prompt = `Generate only the ${category.toUpperCase()} matrix category for audience "${context.audience}"${contextStr}.${topicStr}${generationStr}${sourcesTypeStr}
 
@@ -2994,7 +3005,7 @@ export async function generateCulturalMatrix(
     
     Categorize the insights into:
     - MOMENTS: Context of the time. What external forces are shaping behaviour right now? (Current events, Social climate, Trends)
-    - BELIEFS: What they believe. What external forces are shaping behaviour right now? (Beliefs, Values, Myths, Perceptions)
+    - BELIEFS: Core values and perceptions anchored in stabilized consensus from the past several months, not daily outrage. Include at least 1 "Recent" topic when applicable.
     - TONE: What they feel and how they feel that is unique (Attitude, Emotions, Personality, Outlook)
     - LANGUAGE: How they communicate (Vernacular, Symbols, Codes, Visuals)
     - BEHAVIORS: How they act/interact. What signals, symbols, or rituals carry meaning? (Actions, Customs, Rituals, Ceremonies)

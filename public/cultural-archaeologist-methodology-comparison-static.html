@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cultural Archaeologist Methodology Comparison (Static)</title>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --text: #111827;
+        --muted: #6b7280;
+        --border: #e5e7eb;
+        --accent: #0f766e;
+        --accent-soft: #d1fae5;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top right, #ccfbf1 0%, var(--bg) 45%);
+        color: var(--text);
+      }
+      .container {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 8px 24px rgba(2, 6, 23, 0.04);
+      }
+      .summary-grid {
+        margin-top: 16px;
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      }
+      .stat {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px;
+        background: #f9fafb;
+      }
+      .stat .label {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .stat .value {
+        font-size: 18px;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+      .results {
+        margin-top: 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 16px;
+      }
+      h1 { margin: 0 0 8px 0; font-size: 24px; }
+      h2 { margin: 0 0 6px 0; font-size: 18px; }
+      .status {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .pill {
+        display: inline-block;
+        margin-bottom: 8px;
+        background: var(--accent-soft);
+        color: #115e59;
+        border: 1px solid #99f6e4;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      pre {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        background: #f8fafc;
+        max-height: 540px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      code {
+        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <section class="panel">
+        <h1>Cultural Archaeologist Methodology Comparison</h1>
+        <p class="status">Static comparison snapshot for <strong>Audience: Gen Z</strong> (pre-populated).</p>
+        <div class="summary-grid">
+          <div class="stat">
+            <div class="label">Audience</div>
+            <div class="value">Gen Z</div>
+          </div>
+          <div class="stat">
+            <div class="label">Previous Digest Lines</div>
+            <div class="value">7</div>
+          </div>
+          <div class="stat">
+            <div class="label">Current Digest Lines</div>
+            <div class="value">12</div>
+          </div>
+          <div class="stat">
+            <div class="label">Current Includes Breaking + Structural</div>
+            <div class="value">Yes</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="results">
+        <article class="panel">
+          <span class="pill">Previous</span>
+          <h2>Single-Lane Baseline</h2>
+          <p class="status">Legacy format using one broad lane of evidence.</p>
+          <pre>Audience: Gen Z
+Methodology: Previous (single-lane baseline)
+
+1) Short-form video platforms continue to dominate daily attention and trend discovery.
+2) AI use among students and early-career workers is rising for productivity and experimentation.
+3) Cost-of-living pressure is shaping purchase timing, brand switching, and value sensitivity.
+4) Community belonging is often built through niche creator ecosystems and fandom spaces.
+5) Trust in institutions remains mixed, with stronger reliance on peers and transparent creators.
+6) Identity expression is increasingly visual and memetic across social channels.
+7) Mental wellness framing appears frequently in lifestyle and work-life discussions.</pre>
+        </article>
+
+        <article class="panel">
+          <span class="pill">Current</span>
+          <h2>Dual-Lane Macro Method</h2>
+          <p class="status">Current format with separated <code>Breaking (Day)</code> and <code>Structural (Year+)</code> lanes.</p>
+          <pre>Audience: Gen Z
+Methodology: Current (breaking + structural macro lanes)
+
+Breaking (last 24h):
+1) AI assistants are being discussed less as novelty and more as default workflow tooling.
+2) Viral discourse continues to reward practical "how I used this today" examples over abstract AI hype.
+3) Back-to-school / early-career content spikes show increased interest in skill-stacking and portfolio-building.
+4) Creator-led explainers are outperforming brand-led thought leadership in perceived usefulness.
+
+Structural (annual + macro):
+1) Economic pressure has normalized "value-first" behavior: delayed purchases, dupe culture, and selective premium spend.
+2) Identity is increasingly performed through participatory formats (remix, stitch, duet, template trends).
+3) Trust formation continues to shift from institutional messaging toward peer proof and lived-experience narratives.
+4) Mental wellness language has moved from niche discourse to a default framing in productivity and lifestyle talk.
+5) Community legitimacy is granted by consistency, transparency, and shared constraints (not just aesthetics).
+6) Platform-native communication compresses tone: concise, referential, and symbol-heavy language dominates.
+7) Long-horizon implication: brands that show practical utility + cultural fluency outperform purely aspirational positioning.
+8) Long-horizon implication: audiences reward systems that reduce uncertainty and cognitive load, especially in volatile cycles.</pre>
+        </article>
+      </section>
+    </div>
+  </body>
+</html>

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchAudienceContext } from './grounding';
+import { fetchAudienceContext, fetchAudienceContextPreviousMethodology } from './grounding';
 
 describe('fetchAudienceContext', () => {
   const originalKey = process.env.BING_SEARCH_KEY;
@@ -133,6 +133,7 @@ describe('fetchAudienceContext', () => {
   });
 
   it('uses Google Custom Search when Google credentials are configured', async () => {
+    delete process.env.BING_SEARCH_KEY;
     process.env.GOOGLE_SEARCH_API_KEY = 'google-test-key';
     process.env.GOOGLE_SEARCH_ENGINE_ID = 'google-test-engine';
 
@@ -169,6 +170,44 @@ describe('fetchAudienceContext', () => {
     expect(context).toContain('Structural macro signal from Google source.');
   });
 
+  it('prefers Bing when both Bing and Google credentials are present', async () => {
+    process.env.BING_SEARCH_KEY = 'bing-test-key';
+    process.env.GOOGLE_SEARCH_API_KEY = 'google-test-key';
+    process.env.GOOGLE_SEARCH_ENGINE_ID = 'google-test-engine';
+
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          webPages: {
+            value: [{ snippet: 'Bing breaking signal for Gen Z.' }],
+          },
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          webPages: {
+            value: [{ snippet: 'Bing structural macro signal for Gen Z.' }],
+          },
+        }),
+      } as Response);
+
+    const context = await fetchAudienceContext('Gen Z');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstUrl = new URL(fetchMock.mock.calls[0][0] as string);
+    const secondUrl = new URL(fetchMock.mock.calls[1][0] as string);
+
+    expect(firstUrl.origin + firstUrl.pathname).toBe('https://api.bing.microsoft.com/v7.0/search');
+    expect(secondUrl.origin + secondUrl.pathname).toBe('https://api.bing.microsoft.com/v7.0/search');
+    expect(context).toContain('Bing breaking signal for Gen Z.');
+    expect(context).toContain('Bing structural macro signal for Gen Z.');
+  });
+
   it('returns explicit no-results context when all lanes succeed with empty payloads', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce({
@@ -185,5 +224,31 @@ describe('fetchAudienceContext', () => {
     const context = await fetchAudienceContext('Nilay Patel Gen Z AI');
 
     expect(context).toContain('No web results returned for: "Nilay Patel Gen Z AI".');
+  });
+
+  it('supports previous methodology with a single baseline lane', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          webPages: {
+            value: [
+              { snippet: 'Baseline signal about Gen Z spending pressure and creator income volatility.' },
+            ],
+          },
+        }),
+      } as Response);
+
+    const context = await fetchAudienceContextPreviousMethodology('Gen Z');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const firstUrl = new URL(fetchMock.mock.calls[0][0] as string);
+
+    expect(firstUrl.searchParams.get('q')).toBe('Gen Z');
+    expect(firstUrl.searchParams.get('freshness')).toBeNull();
+    expect(context).toContain('Previous Methodology (single-lane baseline):');
+    expect(context).toContain('Baseline signal about Gen Z spending pressure and creator income volatility.');
   });
 });

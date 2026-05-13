@@ -4,8 +4,9 @@ import { createClient } from '@supabase/supabase-js';
 // Removed nodemailer and googleapis (no email/Google Sheets)
 import dotenv from 'dotenv';
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { fetchAudienceContext } from '../lib/grounding.js';
+import { fetchAudienceContext, fetchAudienceContextWithGptSearch } from '../lib/grounding.js';
 import { fetchSubredditQuotes } from '../lib/fetchSubredditQuotes.js';
 import { processImageForUI, type ProcessedImageResult } from './image-processing';
 import {
@@ -36,6 +37,98 @@ app.get('/design-excavator-comparison', (_req, res) => {
 });
 app.get('/design-excavator-comparison.html', (_req, res) => {
   res.sendFile(path.join(publicDir, 'design-excavator-comparison.html'));
+});
+
+const countDigestLines = (value: string): number => value
+  .split('\n')
+  .map((line) => line.trim())
+  .filter(Boolean).length;
+
+const buildComparisonFallbackDigest = (
+  methodology: 'previous' | 'current',
+  reason: unknown
+): string => {
+  const reasonText = String((reason as any)?.message || reason || '').trim();
+  const label = methodology === 'previous' ? 'Previous methodology' : 'Current methodology';
+  const generic = `${label} evidence is temporarily unavailable.`;
+  if (!reasonText) return generic;
+
+  // Never leak provider-specific failures in UI payloads.
+  const blockedPatterns = [
+    'google custom search',
+    'bing web search',
+    'custom search json api',
+    'ocp-apim-subscription-key',
+  ];
+  const normalized = reasonText.toLowerCase();
+  if (blockedPatterns.some((pattern) => normalized.includes(pattern))) {
+    return generic;
+  }
+
+  return `${generic} Details: ${reasonText}`;
+};
+
+const escapeHtml = (value: string): string => value
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#39;');
+
+async function renderMethodologyComparisonHtml(audience = 'Gen Z'): Promise<string> {
+  const templatePath = path.join(publicDir, 'cultural-archaeologist-methodology-comparison.html');
+  const template = await readFile(templatePath, 'utf8');
+  const normalizedAudience = audience.trim() || 'Gen Z';
+
+  const [previousResult, currentResult] = await Promise.allSettled([
+    fetchAudienceContextWithGptSearch(normalizedAudience, 'previous'),
+    fetchAudienceContextWithGptSearch(normalizedAudience, 'current'),
+  ]);
+
+  const previousDigest = previousResult.status === 'fulfilled'
+    ? previousResult.value
+    : buildComparisonFallbackDigest('previous', previousResult.reason);
+  const currentDigest = currentResult.status === 'fulfilled'
+    ? currentResult.value
+    : buildComparisonFallbackDigest('current', currentResult.reason);
+
+  const previousLines = countDigestLines(previousDigest);
+  const currentLines = countDigestLines(currentDigest);
+  const hasBreaking = currentDigest.includes('Breaking (last 24h):') ? 'Yes' : 'No';
+  const hasStructural = currentDigest.includes('Structural (annual + macro):') ? 'Yes' : 'No';
+  const initialStatus = `Preloaded comparison for "${normalizedAudience}".`;
+
+  return template
+    .replace('__INITIAL_STATUS__', escapeHtml(initialStatus))
+    .replace('__INITIAL_PREVIOUS_LINES__', String(previousLines))
+    .replace('__INITIAL_CURRENT_LINES__', String(currentLines))
+    .replace('__INITIAL_HAS_BREAKING__', hasBreaking)
+    .replace('__INITIAL_HAS_STRUCTURAL__', hasStructural)
+    .replace('__INITIAL_PREVIOUS_DIGEST__', escapeHtml(previousDigest))
+    .replace('__INITIAL_CURRENT_DIGEST__', escapeHtml(currentDigest));
+}
+
+app.get('/cultural-archaeologist-methodology-comparison', async (_req, res) => {
+  try {
+    const html = await renderMethodologyComparisonHtml('Gen Z');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown render error';
+    console.error('[methodology-compare] Failed to render preloaded comparison page.', { message });
+    res.sendFile(path.join(publicDir, 'cultural-archaeologist-methodology-comparison.html'));
+  }
+});
+app.get('/cultural-archaeologist-methodology-comparison.html', async (_req, res) => {
+  try {
+    const html = await renderMethodologyComparisonHtml('Gen Z');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown render error';
+    console.error('[methodology-compare] Failed to render preloaded comparison page.', { message });
+    res.sendFile(path.join(publicDir, 'cultural-archaeologist-methodology-comparison.html'));
+  }
 });
 app.use(express.static(publicDir));
 
@@ -435,6 +528,52 @@ app.get('/api/search', async (req, res) => {
     res.json({ context });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/cultural-methodology-compare', async (req, res) => {
+  const audience = (Array.isArray(req.query.audience) ? req.query.audience[0] : req.query.audience) as string;
+  if (!audience || !audience.trim()) return res.status(400).json({ error: 'Missing audience query parameter' });
+
+  const normalizedAudience = audience.trim();
+  console.log('[methodology-compare] Starting comparison request', { audience: normalizedAudience });
+
+  try {
+    const [previousResult, currentResult] = await Promise.allSettled([
+      fetchAudienceContextWithGptSearch(normalizedAudience, 'previous'),
+      fetchAudienceContextWithGptSearch(normalizedAudience, 'current'),
+    ]);
+
+    const previousDigest = previousResult.status === 'fulfilled'
+      ? previousResult.value
+      : buildComparisonFallbackDigest('previous', previousResult.reason);
+    const currentDigest = currentResult.status === 'fulfilled'
+      ? currentResult.value
+      : buildComparisonFallbackDigest('current', currentResult.reason);
+
+    console.log('[methodology-compare] Comparison completed', {
+      audience: normalizedAudience,
+      previousStatus: previousResult.status,
+      currentStatus: currentResult.status,
+      previousLength: previousDigest.length,
+      currentLength: currentDigest.length,
+    });
+
+    return res.json({
+      audience: normalizedAudience,
+      previous: {
+        methodology: 'Previous (single-lane baseline)',
+        digest: previousDigest,
+      },
+      current: {
+        methodology: 'Current (breaking + structural macro lanes)',
+        digest: currentDigest,
+      },
+    });
+  } catch (err: any) {
+    const message = err?.message || 'Comparison failed.';
+    console.error('[methodology-compare] Comparison failed', { audience: normalizedAudience, error: message });
+    return res.status(500).json({ error: message });
   }
 });
 

@@ -1940,6 +1940,22 @@ export default function CulturalArchaeologist() {
                   </ul>
                 </button>
               </div>
+              <div className="mt-6">
+                <button
+                  data-testid="open-methodology-comparison-button"
+                  onClick={() => {
+                    const targetPath = '/cultural-archaeologist-methodology-comparison-static.html';
+                    console.log('[CulturalArchaeologist] Opening methodology comparison page.', { targetPath, audience: 'Gen Z' });
+                    if (typeof window !== 'undefined') {
+                      window.open(targetPath, '_blank', 'noopener,noreferrer');
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-500/40 focus:ring-offset-2"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Compare Methodologies (Gen Z)
+                </button>
+              </div>
             </div>
           </motion.section>
         )}
@@ -1977,6 +1993,19 @@ export default function CulturalArchaeologist() {
                 <span className="align-super ml-3 inline-block px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold tracking-wide border border-indigo-200">
                   Beta
                 </span>
+              </button>
+              <button
+                data-testid="open-methodology-comparison-inline-button"
+                onClick={() => {
+                  const targetPath = '/cultural-archaeologist-methodology-comparison-static.html';
+                  console.log('[CulturalArchaeologist] Opening methodology comparison page from research view.', { targetPath, audience: 'Gen Z' });
+                  if (typeof window !== 'undefined') {
+                    window.open(targetPath, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+                className="inline-flex h-10 items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+              >
+                <ExternalLink className="w-4 h-4" /> Methodology Compare
               </button>
               <button
                 onClick={handleReset}
@@ -3191,7 +3220,7 @@ export default function CulturalArchaeologist() {
                       <div className="relative flex items-center">
                         <Info className="w-3 h-3 text-zinc-400 cursor-default" />
                         <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
-                          How the observation is being gathered. Known = directly observed fact. Inferred = pattern drawn from signals. Speculative = forward-looking or unverified hypothesis.
+                          How the observation is being gathered. Known = directly observed fact. Inferred = pattern drawn from signals or repeated behavior/language. Speculative = forward-looking or unverified hypothesis.
                           <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
                         </div>
                       </div>

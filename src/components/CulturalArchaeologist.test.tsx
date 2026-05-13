@@ -376,4 +376,11 @@ describe('CulturalArchaeologist', () => {
     expect(within(sentenceTwo).getByText(/^inferred$/i)).toBeInTheDocument();
     expect(within(sentenceTwo).queryByText(/^known$/i)).not.toBeInTheDocument();
   });
+
+  it('shows methodology comparison launcher in the research view navigation', async () => {
+    render(<CulturalArchaeologist />);
+
+    expect(await screen.findByTestId('open-methodology-comparison-inline-button')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /methodology compare/i })).toBeInTheDocument();
+  });
 });

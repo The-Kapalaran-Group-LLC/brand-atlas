@@ -1,3 +1,5 @@
+import { AzureOpenAI } from 'openai';
+
 const BING_SEARCH_ENDPOINT = 'https://api.bing.microsoft.com/v7.0/search';
 const GOOGLE_SEARCH_ENDPOINT = 'https://www.googleapis.com/customsearch/v1';
 const DEFAULT_RESULT_COUNT = 5;
@@ -18,6 +20,7 @@ type BingSearchResponse = {
 
 type BingSearchFreshness = 'Day' | 'Year';
 type SearchProvider = 'google' | 'bing';
+type GptMethodology = 'previous' | 'current';
 
 type GoogleSearchResult = {
   title?: string;
@@ -31,6 +34,49 @@ type GoogleSearchResponse = {
 
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
+}
+
+function getAzureClientForGrounding(): AzureOpenAI {
+  const apiKey = process.env.AZURE_OPENAI_API_KEY?.trim();
+  const endpoint = process.env.AZURE_OPENAI_ENDPOINT?.trim();
+  const apiVersion = process.env.AZURE_OPENAI_API_VERSION?.trim() || '2024-02-15-preview';
+
+  if (!apiKey || !endpoint) {
+    throw new Error('Missing Azure OpenAI configuration for GPT grounding. Required: AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT.');
+  }
+
+  return new AzureOpenAI({
+    apiKey,
+    endpoint,
+    apiVersion,
+  });
+}
+
+function getAzureGroundingDeploymentName(): string {
+  return (
+    process.env.AZURE_OPENAI_PRIMARY_DEPLOYMENT_NAME?.trim() ||
+    process.env.AZURE_OPENAI_DEPLOYMENT_NAME?.trim() ||
+    'gpt-4o'
+  );
+}
+
+function extractCompletionText(content: unknown): string {
+  if (typeof content === 'string') return content.trim();
+  if (!Array.isArray(content)) return '';
+
+  return content
+    .map((part) => {
+      if (!part || typeof part !== 'object') return '';
+      if ('type' in part && (part as { type?: string }).type === 'text') {
+        return String((part as { text?: unknown }).text || '');
+      }
+      if ('text' in part) {
+        return String((part as { text?: unknown }).text || '');
+      }
+      return '';
+    })
+    .join('')
+    .trim();
 }
 
 function getRequiredSearchKey(): string {
@@ -49,6 +95,11 @@ function getGoogleSearchConfig(): { key: string; engineId: string } | null {
 }
 
 function resolveSearchProvider(): SearchProvider {
+  // Prefer Bing when available so stale/unauthorized Google CSE credentials
+  // do not block grounding in environments where both are configured.
+  if (hasBingSearchKey()) {
+    return 'bing';
+  }
   if (getGoogleSearchConfig()) {
     return 'google';
   }
@@ -305,4 +356,104 @@ export async function fetchAudienceContext(audience: string): Promise<string> {
   });
 
   return digestSections.join('\n\n');
+}
+
+export async function fetchAudienceContextPreviousMethodology(audience: string): Promise<string> {
+  const normalizedAudience = normalizeWhitespace(audience || '');
+  if (!normalizedAudience) {
+    throw new Error('Audience is required to fetch grounding context.');
+  }
+
+  const provider = resolveSearchProvider();
+  const fetcher = provider === 'google' ? fetchGoogle : fetchBing;
+  console.log('[grounding] Previous methodology provider selected', { provider });
+
+  let baselineResult = await Promise.allSettled([fetcher(normalizedAudience)]);
+
+  if (provider === 'google' && baselineResult[0].status === 'rejected') {
+    const message = String(baselineResult[0].reason?.message || '');
+    if (isGoogleCustomSearchAccessError(message) && hasBingSearchKey()) {
+      console.warn('[grounding] Previous methodology Google unavailable; retrying with Bing fallback.', { reason: message });
+      baselineResult = await Promise.allSettled([fetchBing(normalizedAudience)]);
+    }
+  }
+
+  const [result] = baselineResult;
+  if (result.status === 'rejected') {
+    throw new Error(String(result.reason?.message || 'Search API error.'));
+  }
+
+  if (!result.value.length) {
+    return `No web results returned for: "${normalizedAudience}".`;
+  }
+
+  console.log('[grounding] Previous methodology context composed', {
+    audience: normalizedAudience,
+    snippets: result.value.length,
+  });
+
+  return `Previous Methodology (single-lane baseline):\n${result.value.join('\n\n')}`;
+}
+
+export async function fetchAudienceContextWithGptSearch(audience: string, methodology: GptMethodology): Promise<string> {
+  const normalizedAudience = normalizeWhitespace(audience || '');
+  if (!normalizedAudience) {
+    throw new Error('Audience is required to fetch GPT grounding context.');
+  }
+
+  const client = getAzureClientForGrounding();
+  const deployment = getAzureGroundingDeploymentName();
+
+  const methodologyLabel = methodology === 'current'
+    ? 'current dual-lane macro methodology'
+    : 'previous single-lane baseline methodology';
+
+  console.log('[grounding] GPT grounding request start', {
+    audience: normalizedAudience,
+    methodology,
+    methodologyLabel,
+    deployment,
+  });
+
+  const systemPrompt = [
+    'You are a macro-economic trend analyst generating an evidence digest.',
+    'Use concise, factual language and avoid marketing filler.',
+    'Do not invent URLs. If specific sourcing is uncertain, explicitly state uncertainty.',
+    'Prioritize macro-economic forces and culturally relevant behavior implications.',
+  ].join(' ');
+
+  const userPrompt = methodology === 'current'
+    ? `Audience: "${normalizedAudience}".
+Generate an evidence digest for the current dual-lane methodology.
+Return plain text with exactly these two headers:
+Breaking (last 24h):
+Structural (annual + macro):
+Under each header provide 3-6 concise evidence lines.`
+    : `Audience: "${normalizedAudience}".
+Generate an evidence digest for the previous single-lane baseline methodology.
+Return plain text with exactly this header:
+Previous Methodology (single-lane baseline):
+Then provide 6-10 concise evidence lines.`;
+
+  const completion = await client.chat.completions.create({
+    model: deployment,
+    temperature: 0.2,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+  });
+
+  const text = extractCompletionText(completion.choices?.[0]?.message?.content);
+  if (!text) {
+    throw new Error('GPT grounding returned empty content.');
+  }
+
+  console.log('[grounding] GPT grounding request success', {
+    audience: normalizedAudience,
+    methodology,
+    chars: text.length,
+  });
+
+  return text;
 }

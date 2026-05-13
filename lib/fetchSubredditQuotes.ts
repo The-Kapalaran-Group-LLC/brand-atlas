@@ -18,6 +18,8 @@ type RedditListingResponse = {
   };
 };
 
+type RedditTopWindow = 'year' | 'month';
+
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
@@ -67,14 +69,22 @@ function assertValidSubredditName(subreddit: string): string {
   return trimmed;
 }
 
-async function fetchHotPosts(subreddit: string, limit: number): Promise<RedditPostData[]> {
+async function fetchTopPosts(subreddit: string, limit: number, window: RedditTopWindow): Promise<RedditPostData[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REDDIT_TIMEOUT_MS);
 
   try {
-    const url = new URL(`/r/${subreddit}/hot.json`, REDDIT_BASE_URL);
+    const url = new URL(`/r/${subreddit}/top.json`, REDDIT_BASE_URL);
     url.searchParams.set('limit', String(limit));
+    url.searchParams.set('t', window);
     url.searchParams.set('raw_json', '1');
+
+    console.log('[reddit-scraper] Fetching stabilized subreddit top posts.', {
+      subreddit,
+      limit,
+      window,
+      endpoint: url.toString(),
+    });
 
     const response = await fetch(url, {
       method: 'GET',
@@ -108,8 +118,20 @@ async function fetchHotPosts(subreddit: string, limit: number): Promise<RedditPo
 export async function fetchSubredditQuotes(subredditName: string, limit = DEFAULT_POST_LIMIT): Promise<string[]> {
   const subreddit = assertValidSubredditName(subredditName);
   const cappedLimit = Number.isFinite(limit) ? Math.max(1, Math.min(Math.floor(limit), DEFAULT_POST_LIMIT)) : DEFAULT_POST_LIMIT;
+  const windows: RedditTopWindow[] = ['year', 'month'];
+  let posts: RedditPostData[] = [];
 
-  const posts = await fetchHotPosts(subreddit, cappedLimit);
+  for (const window of windows) {
+    posts = await fetchTopPosts(subreddit, cappedLimit, window);
+    if (posts.length > 0) {
+      console.log('[reddit-scraper] Using subreddit top posts window.', {
+        subreddit,
+        window,
+        fetchedPosts: posts.length,
+      });
+      break;
+    }
+  }
 
   return posts
     .map(toPostQuote)
