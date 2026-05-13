@@ -506,6 +506,7 @@ export default function CulturalArchaeologist() {
   const [highlightedInsights, setHighlightedInsights] = useState<string[]>([]);
   
   const [deepDiveInsight, setDeepDiveInsight] = useState<MatrixItem | null>(null);
+  const [deepDiveCategory, setDeepDiveCategory] = useState<string | null>(null);
   const [deepDiveResult, setDeepDiveResult] = useState<DeepDiveReport | null>(null);
   const [isDeepDiveLoading, setIsDeepDiveLoading] = useState(false);
   const [isVocabularyOpen, setIsVocabularyOpen] = useState(false);
@@ -1324,9 +1325,10 @@ export default function CulturalArchaeologist() {
     }
   };
 
-  const handleDeepDive = async (item: MatrixItem) => {
+  const handleDeepDive = async (item: MatrixItem, category: string) => {
     if (!matrixMeta) return;
     setDeepDiveInsight(item);
+    setDeepDiveCategory(category);
     if (item.deepDive) {
       setDeepDiveResult(item.deepDive);
       return;
@@ -1340,6 +1342,7 @@ export default function CulturalArchaeologist() {
     } catch (err) {
       setToast("Failed to generate deep dive. Please try again.");
       setDeepDiveInsight(null);
+      setDeepDiveCategory(null);
     } finally {
       setIsDeepDiveLoading(false);
     }
@@ -2038,7 +2041,12 @@ export default function CulturalArchaeologist() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 sm:p-6"
-              onClick={(e) => { if (e.target === e.currentTarget) setDeepDiveInsight(null); }}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setDeepDiveInsight(null);
+                  setDeepDiveCategory(null);
+                }
+              }}
             >
               <motion.div
                 drag
@@ -2052,7 +2060,10 @@ export default function CulturalArchaeologist() {
                 className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full shadow-2xl relative max-h-[90vh] overflow-y-auto"
               >
                 <button 
-                  onClick={() => setDeepDiveInsight(null)}
+                  onClick={() => {
+                    setDeepDiveInsight(null);
+                    setDeepDiveCategory(null);
+                  }}
                   className="absolute top-6 right-6 p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 rounded-full transition-colors z-10"
                 >
                   <X className="w-5 h-5" />
@@ -2073,18 +2084,23 @@ export default function CulturalArchaeologist() {
                   </div>
                   
                   {!isDeepDiveLoading && deepDiveResult && (
-                    <div className="flex flex-col items-start md:items-end gap-2 text-right">
+                    <div className="flex flex-col items-start gap-2">
                       <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-100 text-xs font-medium text-zinc-700 border border-zinc-200">
                         <Calendar className="w-3.5 h-3.5 text-zinc-500" />
                         Originated: {deepDiveResult.originationDate}
                       </div>
-                      <div className="inline-flex items-start gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 text-xs font-medium text-emerald-800 border border-emerald-100 max-w-xs text-left">
-                        <Activity className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                        <span>{deepDiveResult.relevance}</span>
-                      </div>
                     </div>
                   )}
                 </div>
+
+                {!isDeepDiveLoading && deepDiveResult && (
+                  <div className="w-full mb-6">
+                    <div className="flex items-start gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 text-xs font-medium text-emerald-800 border border-emerald-100 w-full text-left">
+                      <Activity className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <span>{deepDiveResult.relevance}</span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="bg-zinc-50 rounded-xl p-5 mb-8 border border-zinc-100">
                   <h4 className="font-bold text-zinc-900 mb-2">Selected Insight</h4>
@@ -2097,6 +2113,16 @@ export default function CulturalArchaeologist() {
                     ))}
                   </p>
                 </div>
+
+                {deepDiveCategory === 'Influencers' && (
+                  <div className="bg-rose-50 rounded-xl p-4 mb-8 border border-rose-100" data-testid="influencer-score-definitions">
+                    <h4 className="font-bold text-zinc-900 mb-2">Influencer Scores</h4>
+                    <p className="text-zinc-700 text-sm mb-2"><strong>Scores:</strong> Resonance: high. Conversion: high. Penetration: medium.</p>
+                    <p className="text-zinc-700 text-sm"><strong>Resonance:</strong> how quickly the creator is gaining momentum and attention.</p>
+                    <p className="text-zinc-700 text-sm"><strong>Conversion:</strong> how tightly the creator fits this audience niche and can drive action.</p>
+                    <p className="text-zinc-700 text-sm"><strong>Penetration:</strong> how broadly visible the creator is across relevant channels.</p>
+                  </div>
+                )}
 
                 {isDeepDiveLoading ? (
                   <div className="flex flex-col items-center justify-center py-12">
@@ -3456,7 +3482,7 @@ export default function CulturalArchaeologist() {
   );
 }
 
-function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], onDeepDive, onOpenVocabularyExtractor, showDocumentInsights = false }: { title: string; subtext: string; items: MatrixItem[]; delay: number; highlightedInsights?: string[]; onDeepDive?: (item: MatrixItem) => void; onOpenVocabularyExtractor?: () => void; showDocumentInsights?: boolean }) {
+function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], onDeepDive, onOpenVocabularyExtractor, showDocumentInsights = false }: { title: string; subtext: string; items: MatrixItem[]; delay: number; highlightedInsights?: string[]; onDeepDive?: (item: MatrixItem, category: string) => void; onOpenVocabularyExtractor?: () => void; showDocumentInsights?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const INITIAL_SHOW = 3;
   const cardTestId = `matrix-card-${title.toLowerCase().replace(/\s+/g, '-')}`;
@@ -3621,7 +3647,7 @@ function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], on
                   </span>
                   {onDeepDive && (
                     <button
-                      onClick={() => onDeepDive(item)}
+                      onClick={() => onDeepDive(item, title)}
                       className={`absolute right-2 top-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all no-print ${
                         item.deepDive 
                           ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100 opacity-100' 

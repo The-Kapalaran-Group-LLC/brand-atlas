@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <title>Cultural Archaeologist Influencers Methodology Comparison</title>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --text: #111827;
+        --muted: #6b7280;
+        --border: #e5e7eb;
+        --accent: #be123c;
+        --accent-soft: #ffe4e6;
+        --danger: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top right, #ffe4e6 0%, var(--bg) 45%);
+        color: var(--text);
+      }
+      .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 8px 24px rgba(2, 6, 23, 0.04);
+      }
+      .controls { display: flex; flex-wrap: wrap; gap: 12px; }
+      input {
+        flex: 1;
+        min-width: 240px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        font-size: 14px;
+      }
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 16px;
+        font-weight: 600;
+        color: #ffffff;
+        background: var(--accent);
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .status { margin-top: 12px; color: var(--muted); font-size: 13px; }
+      .status.error { color: var(--danger); font-weight: 600; }
+      .summary-grid {
+        margin-top: 16px;
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      }
+      .stat {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px;
+        background: #f9fafb;
+      }
+      .stat .label { color: var(--muted); font-size: 12px; }
+      .stat .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+      .results {
+        margin-top: 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 16px;
+      }
+      h1 { margin: 0 0 8px 0; font-size: 24px; }
+      h2 { margin: 0 0 6px 0; font-size: 18px; }
+      .pill {
+        display: inline-block;
+        margin-bottom: 8px;
+        background: var(--accent-soft);
+        color: #9f1239;
+        border: 1px solid #fecdd3;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      pre {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        background: #f8fafc;
+        max-height: 540px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      code { font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <section class="panel">
+        <h1>Cultural Archaeologist Influencers Methodology Comparison</h1>
+        <p class="status">
+          Hidden QA page comparing the previous influencer methodology against the new barbell influencer strategy methodology.
+        </p>
+        <div class="controls">
+          <input id="audienceInput" data-testid="influencer-methodology-audience-input" value="Gen Z" placeholder="Audience (example: Gen Z)" />
+          <button id="runButton" data-testid="influencer-methodology-run-button">Re-Run Comparison</button>
+        </div>
+        <p id="status" class="status" data-testid="influencer-methodology-status">__INITIAL_STATUS__</p>
+        <div class="summary-grid">
+          <div class="stat" data-testid="influencer-methodology-previous-lines">
+            <div class="label">Previous Digest Lines</div>
+            <div id="previousLines" class="value">__INITIAL_PREVIOUS_LINES__</div>
+          </div>
+          <div class="stat" data-testid="influencer-methodology-current-lines">
+            <div class="label">Current Digest Lines</div>
+            <div id="currentLines" class="value">__INITIAL_CURRENT_LINES__</div>
+          </div>
+          <div class="stat" data-testid="influencer-methodology-has-barbell">
+            <div class="label">Includes Barbell Mix</div>
+            <div id="currentHasBarbell" class="value">__INITIAL_HAS_BARBELL__</div>
+          </div>
+          <div class="stat" data-testid="influencer-methodology-has-social-blade">
+            <div class="label">Includes Social Blade Dual Query</div>
+            <div id="currentHasSocialBlade" class="value">__INITIAL_HAS_SOCIAL_BLADE__</div>
+          </div>
+          <div class="stat" data-testid="influencer-methodology-has-hallucination-note">
+            <div class="label">Includes Hallucination-Risk Rule</div>
+            <div id="currentHasHallucinationRule" class="value">__INITIAL_HAS_HALLUCINATION_RULE__</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="results">
+        <article class="panel" data-testid="influencer-methodology-previous-panel">
+          <span class="pill">Previous</span>
+          <h2>Single-Lane Influencer Baseline</h2>
+          <p class="status">General influencer summary without explicit legacy-vs-breakout balancing or naming-risk protocol.</p>
+          <pre id="previousDigest" data-testid="influencer-methodology-previous-digest">__INITIAL_PREVIOUS_DIGEST__</pre>
+        </article>
+
+        <article class="panel" data-testid="influencer-methodology-current-panel">
+          <span class="pill">Current</span>
+          <h2>Barbell Influencer Strategist Method</h2>
+          <p class="status">Combines <code>legacy authorities</code> + <code>high-velocity micro-creators</code> with explicit naming-risk transparency.</p>
+          <pre id="currentDigest" data-testid="influencer-methodology-current-digest">__INITIAL_CURRENT_DIGEST__</pre>
+        </article>
+      </section>
+    </div>
+
+    <script>
+      const audienceInput = document.getElementById('audienceInput');
+      const runButton = document.getElementById('runButton');
+      const statusEl = document.getElementById('status');
+      const previousDigestEl = document.getElementById('previousDigest');
+      const currentDigestEl = document.getElementById('currentDigest');
+      const previousLinesEl = document.getElementById('previousLines');
+      const currentLinesEl = document.getElementById('currentLines');
+      const currentHasBarbellEl = document.getElementById('currentHasBarbell');
+      const currentHasSocialBladeEl = document.getElementById('currentHasSocialBlade');
+      const currentHasHallucinationRuleEl = document.getElementById('currentHasHallucinationRule');
+
+      function candidateApiBases() {
+        const candidates = [
+          window.location.origin,
+          'http://127.0.0.1:3001',
+          'http://localhost:3001',
+          'http://127.0.0.1:3011',
+          'http://localhost:3011',
+        ];
+        return Array.from(new Set(candidates.map((value) => String(value || '').replace(/\/+$/, ''))));
+      }
+
+      function countLines(value) {
+        return String(value || '')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean).length;
+      }
+
+      function snapshotDigest(kind, audience) {
+        if (kind === 'previous') {
+          return `Previous Influencer Methodology (single-lane baseline) for "${audience}":
+1) Influence mapping emphasizes highly visible creator names and broad follower counts.
+2) Legacy authority voices are included, but without explicit balancing against rising creators.
+3) Fast-moving breakout creators are intermittently captured and often underweighted.
+4) Conversion context is generalized rather than niche-fit specific.
+5) Audience penetration is inferred from visibility but not scored with a framework.
+6) Naming confidence issues are not always surfaced explicitly in outputs.`;
+        }
+
+        return `Influencer Barbell Methodology (legacy + high-velocity) for "${audience}":
+Established legacy authorities (long-standing):
+1) Include 3-4 durable category voices with sustained cross-platform authority.
+2) Prioritize proven educators/analysts with multi-year audience trust and repeat conversion impact.
+3) Validate penetration with broad discoverability and recurring citation in category conversations.
+
+Breakout micro-creators (high-velocity now):
+1) Include 3-4 rapidly rising niche creators with strong 30-day momentum.
+2) Prioritize creators whose audience overlap is tightly aligned to ${audience} subculture interests.
+3) Surface high-signal breakout creators even if their total follower base is still comparatively small.
+
+Social Blade integration rule:
+If Social Blade is integrated, run both "Top Followers" and "Highest 30-Day Growth" queries.
+
+Hallucination-risk safeguard:
+If the system is struggling to identify or assign a current breakout name, explicitly say so and avoid inventing names.`;
+      }
+
+      function normalizeDigest(value, kind, audience) {
+        const raw = String(value || '').trim();
+        if (!raw || /^__INITIAL_[A-Z0-9_]+__$/.test(raw)) {
+          return snapshotDigest(kind, audience);
+        }
+        return raw;
+      }
+
+      function syncDerivedStats(currentDigest, previousDigest) {
+        previousLinesEl.textContent = String(countLines(previousDigest));
+        currentLinesEl.textContent = String(countLines(currentDigest));
+        currentHasBarbellEl.textContent = /barbell|legacy.*micro-creators|micro-creators.*legacy/i.test(currentDigest) ? 'Yes' : 'No';
+        currentHasSocialBladeEl.textContent = /social blade|top followers|highest 30-day growth/i.test(currentDigest) ? 'Yes' : 'No';
+        currentHasHallucinationRuleEl.textContent = /struggling to identify|avoid inventing names|hallucination/i.test(currentDigest) ? 'Yes' : 'No';
+      }
+
+      async function fetchComparison(audience) {
+        let lastError = null;
+        for (const base of candidateApiBases()) {
+          const endpoint = `${base}/api/cultural-influencers-methodology-compare?audience=${encodeURIComponent(audience)}`;
+          try {
+            console.log('[influencer-methodology-comparison-page] Trying comparison endpoint.', { endpoint });
+            const response = await fetch(endpoint, { method: 'GET' });
+            if (!response.ok) {
+              const payload = await response.json().catch(() => ({}));
+              throw new Error(payload.error || `HTTP ${response.status}`);
+            }
+            const payload = await response.json();
+            return { payload, base };
+          } catch (error) {
+            lastError = error;
+            console.warn('[influencer-methodology-comparison-page] Endpoint failed; trying next base.', {
+              endpoint,
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+
+        throw lastError || new Error('Unable to reach influencer methodology comparison API.');
+      }
+
+      async function runComparison() {
+        const audience = String(audienceInput.value || '').trim();
+        if (!audience) {
+          statusEl.textContent = 'Audience is required.';
+          statusEl.classList.add('error');
+          return;
+        }
+
+        runButton.disabled = true;
+        statusEl.classList.remove('error');
+        statusEl.textContent = `Running influencer-methodology comparison for "${audience}"...`;
+        console.log('[influencer-methodology-comparison-page] Starting comparison run.', { audience });
+
+        try {
+          const { payload, base } = await fetchComparison(audience);
+          console.log('[influencer-methodology-comparison-page] Comparison payload received.', { base });
+
+          const previousDigest = normalizeDigest(payload?.previous?.digest, 'previous', audience);
+          const currentDigest = normalizeDigest(payload?.current?.digest, 'current', audience);
+
+          previousDigestEl.textContent = previousDigest;
+          currentDigestEl.textContent = currentDigest;
+          syncDerivedStats(currentDigest, previousDigest);
+
+          statusEl.textContent = `Loaded influencer barbell comparison for "${audience}".`;
+          console.log('[influencer-methodology-comparison-page] Comparison complete.', {
+            audience,
+            previousLines: countLines(previousDigest),
+            currentLines: countLines(currentDigest),
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown comparison error';
+          const previousDigest = snapshotDigest('previous', audience);
+          const currentDigest = snapshotDigest('current', audience);
+          previousDigestEl.textContent = previousDigest;
+          currentDigestEl.textContent = currentDigest;
+          syncDerivedStats(currentDigest, previousDigest);
+          statusEl.textContent = `Comparison API unavailable. Showing snapshot fallback. (${message})`;
+          statusEl.classList.add('error');
+          console.error('[influencer-methodology-comparison-page] Comparison failed.', { audience, message });
+        } finally {
+          runButton.disabled = false;
+        }
+      }
+
+      runButton.addEventListener('click', runComparison);
+
+      const initialAudience = String(audienceInput.value || 'Gen Z').trim() || 'Gen Z';
+      const preloadedPrevious = normalizeDigest(previousDigestEl.textContent, 'previous', initialAudience);
+      const preloadedCurrent = normalizeDigest(currentDigestEl.textContent, 'current', initialAudience);
+      previousDigestEl.textContent = preloadedPrevious;
+      currentDigestEl.textContent = preloadedCurrent;
+      syncDerivedStats(preloadedCurrent, preloadedPrevious);
+
+      if (/^__INITIAL_[A-Z0-9_]+__$/.test(String(statusEl.textContent || '').trim())) {
+        statusEl.textContent = `Preloaded influencer-methodology comparison for "${initialAudience}".`;
+      }
+    </script>
+  </body>
+</html>

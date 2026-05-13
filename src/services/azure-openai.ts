@@ -1397,28 +1397,25 @@ export function formatDevilsAdvocateLens(devil: z.infer<typeof DevilsAdvocateSch
 
 function summarizeDevilsAdvocateLens(devil: z.infer<typeof DevilsAdvocateSchema>): string {
   const full = formatDevilsAdvocateLens(devil);
-  if (full.length <= 320) return full;
+  if (full.length <= 160) return full;
 
-  const sentenceBreak = full.slice(0, 320).match(/^(.+?[.!?])\s/);
+  const sentenceBreak = full.slice(0, 160).match(/^(.+?[.!?])\s/);
   if (sentenceBreak?.[1]) return sentenceBreak[1].trim();
 
-  return `${full.slice(0, 317).trim()}...`;
+  return `${full.slice(0, 157).trim()}...`;
 }
 
 function buildDevilsAdvocateBackgroundWriteup(devil: z.infer<typeof DevilsAdvocateSchema>): string {
-  const counter = devil.counterArgument?.replace(/\s+/g, ' ').trim();
+  const summary = summarizeDevilsAdvocateLens(devil);
   const weaknesses = (devil.keyWeaknesses || [])
     .map((item) => item.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
-  const consolidated = devil.consolidatedSummary?.replace(/\s+/g, ' ').trim();
 
-  const sections = [
-    counter ? `Counter-argument: ${counter}` : '',
-    weaknesses.length > 0 ? `Key weaknesses: ${weaknesses.join(' | ')}` : '',
-    consolidated ? `Consolidated summary: ${consolidated}` : '',
-  ].filter(Boolean);
-
-  return sections.join('\n');
+  const primaryWeakness = weaknesses[0] || '';
+  if (summary && primaryWeakness) return `Counterpoint: ${summary}\nRisk check: ${primaryWeakness}`;
+  if (summary) return `Counterpoint: ${summary}`;
+  if (primaryWeakness) return `Risk check: ${primaryWeakness}`;
+  return 'Counterpoint unavailable.';
 }
 
 function normalizeHttpsUrl(rawUrl?: string | null): string | null {
@@ -2853,6 +2850,28 @@ Community mandate:
   2) highly up-to-date, rapidly emerging micro-communities (fast-growing private channels, rising individual voice) from roughly the last 30 days.
 - Use Bing/Reddit-informed evidence to balance foundational hubs with breakout micro-communities.
 - Even if you have difficulty verifying the exact name/topic of a micro-community, fallback to identify the location of the community (for example: Reddit, Discord, Substack).`;
+  }
+
+  if (category === 'influencers') {
+    return `
+Role:
+You are an Influencer Marketing Strategist.
+
+Influencer mandate:
+- Review the provided evidence.
+- Temporal need: range of highly up-to-date to longer standing.
+- Extract 6-10 Influencers.
+- You MUST provide a "barbell" mix:
+  1) 3-4 established, legacy authorities, and
+  2) 3-4 breakout, high-velocity micro-creators making waves right now.
+- Evaluate each influencer using this framework:
+  1) Resonance (growth speed),
+  2) Conversion (niche fit), and
+  3) Penetration (visibility).
+- If a Social Blade integration is available, query both:
+  1) "Top Followers" (long standing), and
+  2) "Highest 30-Day Growth" (up-to-date).
+- Hallucination risk is high for current breakout names. If you are struggling to identify or assign a name, say so explicitly and avoid inventing names.`;
   }
 
   return '';

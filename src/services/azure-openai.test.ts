@@ -220,6 +220,22 @@ describe('category role block prompts', () => {
     expect(block).toContain('Discord');
     expect(block).toContain('Substack');
   });
+
+  it('uses an influencer strategist barbell brief with legacy authorities and breakout creators', () => {
+    const block = buildCategoryRoleBlock('influencers');
+
+    expect(block).toContain('Influencer Marketing Strategist');
+    expect(block).toContain('Extract 6-10');
+    expect(block).toContain('barbell');
+    expect(block).toContain('established, legacy authorities');
+    expect(block).toContain('breakout, high-velocity micro-creators');
+    expect(block).toContain('Resonance');
+    expect(block).toContain('Conversion');
+    expect(block).toContain('Penetration');
+    expect(block).toContain('Top Followers');
+    expect(block).toContain('Highest 30-Day Growth');
+    expect(block).toContain('struggling to identify or assign a name');
+  });
 });
 
 describe('matrix question search topic builder', () => {

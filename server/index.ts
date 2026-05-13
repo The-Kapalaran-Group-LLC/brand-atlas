@@ -153,6 +153,51 @@ const shouldUseCommunitySnapshotFallback = (digest: string): boolean => {
   );
 };
 
+const buildInfluencerMethodologySnapshotDigest = (
+  methodology: 'previous' | 'current',
+  audience: string
+): string => {
+  if (methodology === 'previous') {
+    return `Previous Influencer Methodology (single-lane baseline) for "${audience}":
+1) Influence mapping emphasizes highly visible creator names and broad follower counts.
+2) Legacy authority voices are included, but without explicit balancing against rising creators.
+3) Fast-moving breakout creators are intermittently captured and often underweighted.
+4) Conversion context is generalized rather than niche-fit specific.
+5) Audience penetration is inferred from visibility but not scored with a framework.
+6) Naming confidence issues are not always surfaced explicitly in outputs.`;
+  }
+
+  return `Influencer Barbell Methodology (legacy + high-velocity) for "${audience}":
+Established legacy authorities (long-standing):
+1) Include 3-4 durable category voices with sustained cross-platform authority.
+2) Prioritize proven educators/analysts with multi-year audience trust and repeat conversion impact.
+3) Validate penetration with broad discoverability and recurring citation in category conversations.
+
+Breakout micro-creators (high-velocity now):
+1) Include 3-4 rapidly rising niche creators with strong 30-day momentum.
+2) Prioritize creators whose audience overlap is tightly aligned to ${audience} subculture interests.
+3) Surface high-signal breakout creators even if their total follower base is still comparatively small.
+
+Framework scoring requirement:
+1) Resonance = growth speed.
+2) Conversion = niche fit.
+3) Penetration = visibility.
+
+Social Blade integration rule:
+If Social Blade is integrated, run both "Top Followers" and "Highest 30-Day Growth" queries.
+
+Hallucination-risk safeguard:
+If the system is struggling to identify or assign a current breakout name, explicitly say so and avoid inventing names.`;
+};
+
+const shouldUseInfluencerSnapshotFallback = (digest: string): boolean => {
+  const normalized = (digest || '').toLowerCase();
+  return (
+    normalized.includes('temporarily unavailable') ||
+    normalized.startsWith('no web results returned for:')
+  );
+};
+
 const escapeHtml = (value: string): string => value
   .replaceAll('&', '&amp;')
   .replaceAll('<', '&lt;')
@@ -310,6 +355,47 @@ async function renderCommunityMethodologyComparisonHtml(audience = 'Gen Z'): Pro
     .replace('__INITIAL_CURRENT_DIGEST__', escapeHtml(safeCurrentDigest));
 }
 
+async function renderInfluencerMethodologyComparisonHtml(audience = 'Gen Z'): Promise<string> {
+  const templatePath = path.join(publicDir, '__test__cultural-archaeologist-influencers-methodology-comparison.html');
+  const template = await readFile(templatePath, 'utf8');
+  const normalizedAudience = audience.trim() || 'Gen Z';
+
+  const [previousResult, currentResult] = await Promise.allSettled([
+    fetchAudienceContextPreviousMethodology(normalizedAudience),
+    fetchAudienceContext(normalizedAudience),
+  ]);
+
+  const previousDigest = previousResult.status === 'fulfilled'
+    ? previousResult.value
+    : buildComparisonFallbackDigest('previous', previousResult.reason);
+  const currentDigest = currentResult.status === 'fulfilled'
+    ? currentResult.value
+    : buildComparisonFallbackDigest('current', currentResult.reason);
+  const safePreviousDigest = shouldUseInfluencerSnapshotFallback(previousDigest)
+    ? buildInfluencerMethodologySnapshotDigest('previous', normalizedAudience)
+    : previousDigest;
+  const safeCurrentDigest = shouldUseInfluencerSnapshotFallback(currentDigest)
+    ? buildInfluencerMethodologySnapshotDigest('current', normalizedAudience)
+    : currentDigest;
+
+  const previousLines = countDigestLines(safePreviousDigest);
+  const currentLines = countDigestLines(safeCurrentDigest);
+  const hasBarbell = /barbell|legacy.*micro-creators|micro-creators.*legacy/i.test(safeCurrentDigest);
+  const hasSocialBlade = /social blade|top followers|highest 30-day growth/i.test(safeCurrentDigest);
+  const hasHallucinationRule = /struggling to identify|avoid inventing names|hallucination/i.test(safeCurrentDigest);
+  const initialStatus = `Preloaded influencer-methodology comparison for "${normalizedAudience}".`;
+
+  return template
+    .replace('__INITIAL_STATUS__', escapeHtml(initialStatus))
+    .replace('__INITIAL_PREVIOUS_LINES__', String(previousLines))
+    .replace('__INITIAL_CURRENT_LINES__', String(currentLines))
+    .replace('__INITIAL_HAS_BARBELL__', hasBarbell ? 'Yes' : 'No')
+    .replace('__INITIAL_HAS_SOCIAL_BLADE__', hasSocialBlade ? 'Yes' : 'No')
+    .replace('__INITIAL_HAS_HALLUCINATION_RULE__', hasHallucinationRule ? 'Yes' : 'No')
+    .replace('__INITIAL_PREVIOUS_DIGEST__', escapeHtml(safePreviousDigest))
+    .replace('__INITIAL_CURRENT_DIGEST__', escapeHtml(safeCurrentDigest));
+}
+
 app.get('/__test/cultural-archaeologist-methodology-comparison', async (_req, res) => {
   try {
     const html = await renderMethodologyComparisonHtml('Gen Z');
@@ -404,6 +490,30 @@ app.get('/__test/cultural-archaeologist-community-methodology-comparison.html', 
     const message = error instanceof Error ? error.message : 'Unknown render error';
     console.error('[community-methodology-compare] Failed to render preloaded comparison page.', { message });
     res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-community-methodology-comparison-static.html'));
+  }
+});
+app.get('/__test/cultural-archaeologist-influencers-methodology-comparison', async (_req, res) => {
+  try {
+    const html = await renderInfluencerMethodologyComparisonHtml('Gen Z');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    res.send(html);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown render error';
+    console.error('[influencer-methodology-compare] Failed to render preloaded comparison page.', { message });
+    res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-influencers-methodology-comparison-static.html'));
+  }
+});
+app.get('/__test/cultural-archaeologist-influencers-methodology-comparison.html', async (_req, res) => {
+  try {
+    const html = await renderInfluencerMethodologyComparisonHtml('Gen Z');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    res.send(html);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown render error';
+    console.error('[influencer-methodology-compare] Failed to render preloaded comparison page.', { message });
+    res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-influencers-methodology-comparison-static.html'));
   }
 });
 app.get('/__test/cultural-archaeologist-contradictions-methodology-comparison', (_req, res) => {
@@ -998,6 +1108,58 @@ app.get('/api/cultural-community-methodology-compare', async (req, res) => {
   } catch (err: any) {
     const message = err?.message || 'Comparison failed.';
     console.error('[community-methodology-compare] Comparison failed.', { audience: normalizedAudience, error: message });
+    return res.status(500).json({ error: message });
+  }
+});
+
+app.get('/api/cultural-influencers-methodology-compare', async (req, res) => {
+  const audience = (Array.isArray(req.query.audience) ? req.query.audience[0] : req.query.audience) as string;
+  if (!audience || !audience.trim()) return res.status(400).json({ error: 'Missing audience query parameter' });
+
+  const normalizedAudience = audience.trim();
+  console.log('[influencer-methodology-compare] Starting comparison request.', { audience: normalizedAudience });
+
+  try {
+    const [previousResult, currentResult] = await Promise.allSettled([
+      fetchAudienceContextPreviousMethodology(normalizedAudience),
+      fetchAudienceContext(normalizedAudience),
+    ]);
+
+    const previousDigest = previousResult.status === 'fulfilled'
+      ? previousResult.value
+      : buildComparisonFallbackDigest('previous', previousResult.reason);
+    const currentDigest = currentResult.status === 'fulfilled'
+      ? currentResult.value
+      : buildComparisonFallbackDigest('current', currentResult.reason);
+    const safePreviousDigest = shouldUseInfluencerSnapshotFallback(previousDigest)
+      ? buildInfluencerMethodologySnapshotDigest('previous', normalizedAudience)
+      : previousDigest;
+    const safeCurrentDigest = shouldUseInfluencerSnapshotFallback(currentDigest)
+      ? buildInfluencerMethodologySnapshotDigest('current', normalizedAudience)
+      : currentDigest;
+
+    console.log('[influencer-methodology-compare] Comparison completed.', {
+      audience: normalizedAudience,
+      previousStatus: previousResult.status,
+      currentStatus: currentResult.status,
+      previousLength: safePreviousDigest.length,
+      currentLength: safeCurrentDigest.length,
+    });
+
+    return res.json({
+      audience: normalizedAudience,
+      previous: {
+        methodology: 'Previous Influencer Methodology (single-lane baseline)',
+        digest: safePreviousDigest,
+      },
+      current: {
+        methodology: 'Current Influencer Methodology (barbell: legacy authorities + breakout micro-creators)',
+        digest: safeCurrentDigest,
+      },
+    });
+  } catch (err: any) {
+    const message = err?.message || 'Comparison failed.';
+    console.error('[influencer-methodology-compare] Comparison failed.', { audience: normalizedAudience, error: message });
     return res.status(500).json({ error: message });
   }
 });
