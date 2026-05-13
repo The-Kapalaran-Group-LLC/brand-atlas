@@ -1940,22 +1940,6 @@ export default function CulturalArchaeologist() {
                   </ul>
                 </button>
               </div>
-              <div className="mt-6">
-                <button
-                  data-testid="open-methodology-comparison-button"
-                  onClick={() => {
-                    const targetPath = '/cultural-archaeologist-methodology-comparison-static.html';
-                    console.log('[CulturalArchaeologist] Opening methodology comparison page.', { targetPath, audience: 'Gen Z' });
-                    if (typeof window !== 'undefined') {
-                      window.open(targetPath, '_blank', 'noopener,noreferrer');
-                    }
-                  }}
-                  className="inline-flex items-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-500/40 focus:ring-offset-2"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Compare Methodologies (Gen Z)
-                </button>
-              </div>
             </div>
           </motion.section>
         )}
