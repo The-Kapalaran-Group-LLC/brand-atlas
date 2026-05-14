@@ -1250,7 +1250,7 @@ export default function BrandNavigator() {
             onPointerCancel={handleSplashHoldEnd}
           >
             <div className="absolute inset-0 z-0">
-              <SplashGrid />
+              <SplashGrid sizeMultiplier={1.25} />
             </div>
             
             <motion.div 
@@ -1294,7 +1294,7 @@ export default function BrandNavigator() {
         <div className="absolute top-[20%] -right-[10%] w-[50%] h-[50%] rounded-full bg-cyan-200/20 blur-[120px]" />
         <div className="absolute -bottom-[10%] left-[20%] w-[60%] h-[60%] rounded-full bg-fuchsia-200/20 blur-[120px]" />
       </div>
-      
+
       <main className={`relative z-10 flex-1 w-full max-w-6xl mx-auto px-6 ${activeExperience === null ? 'py-6 md:py-10' : 'py-16 md:py-24'}`}>
         {activeExperience === null && (
           <motion.section
