@@ -210,6 +210,40 @@ describe('BrandDeepDivePage', () => {
     expect(await screen.findByText('Typography Comparison')).toBeInTheDocument();
   });
 
+  it('uses a dynamic masonry-style layout for compare cards', async () => {
+    generateBrandDeepDive.mockResolvedValueOnce({
+      ...sampleReport,
+      brandProfiles: [
+        ...sampleReport.brandProfiles,
+        {
+          ...sampleReport.brandProfiles[0],
+          brandName: 'Byredo',
+          website: 'https://www.byredo.com',
+          sources: [{ title: 'Byredo', url: 'https://www.byredo.com' }],
+        },
+      ],
+    });
+
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /add brand/i }));
+    fireEvent.change(screen.getByPlaceholderText('Brand 2 Name'), {
+      target: { value: 'Byredo' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    const compareTab = await screen.findByRole('button', { name: /^compare$/i });
+    fireEvent.click(compareTab);
+
+    const compareLayout = await screen.findByTestId('design-excavator-compare-cards-layout');
+    expect(compareLayout.className).toContain('columns-1');
+    expect(compareLayout.className).toContain('lg:columns-2');
+    expect(compareLayout.className).not.toContain('grid-cols-1');
+  });
+
   it('hides the Compare tab when only one brand is entered', async () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 

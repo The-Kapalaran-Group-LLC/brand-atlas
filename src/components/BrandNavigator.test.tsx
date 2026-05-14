@@ -290,7 +290,8 @@ describe('BrandNavigator', () => {
     expect(missionSection.className).toContain('self-start');
 
     const sectionsLayout = screen.getByTestId('brand-result-sections-layout');
-    expect(sectionsLayout.className).toContain('lg:grid-cols-2');
+    expect(sectionsLayout.className).toContain('lg:columns-2');
+    expect(sectionsLayout.className).not.toContain('lg:grid-cols-2');
   });
 
   it('renders inferred labels as Cultural Archaeologist-style chips in brand audience fields', async () => {
@@ -556,6 +557,10 @@ describe('BrandNavigator', () => {
     expect(screen.queryByText('Strength five')).not.toBeInTheDocument();
 
     const showAllBtn = screen.getByRole('button', { name: /show all 6 items/i });
+    expect(showAllBtn.className).toContain('text-sm');
+    expect(showAllBtn.className).toContain('text-indigo-600');
+    const showAllChevron = showAllBtn.querySelector('svg');
+    expect(showAllChevron?.className.baseVal ?? '').toContain('w-4 h-4');
     fireEvent.click(showAllBtn);
 
     expect(await screen.findByText('Strength five')).toBeInTheDocument();

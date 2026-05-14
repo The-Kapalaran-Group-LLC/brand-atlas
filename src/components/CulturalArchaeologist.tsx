@@ -2459,14 +2459,17 @@ export default function CulturalArchaeologist() {
               </div>
               
               <div className="relative flex flex-col w-full self-start" ref={brandDropdownRef}>
-                <div className="relative flex items-center w-full h-14 bg-white border border-zinc-200 rounded-2xl text-zinc-900 focus-within:outline-none focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all shadow-sm text-sm">
-                  <Tag className="absolute left-4 top-4 w-5 h-5 text-zinc-400" />
-                  <div className="w-full h-full pl-12 pr-12 py-0 flex items-center gap-2 flex-nowrap overflow-x-auto">
+                <div className="relative flex items-start w-full min-h-14 bg-white border border-zinc-200 rounded-2xl text-zinc-900 focus-within:outline-none focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all shadow-sm text-sm">
+                  <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                  <div
+                    data-testid="cultural-brands-input-shell"
+                    className={`w-full min-h-14 pl-12 pr-12 py-2 flex gap-2 flex-wrap ${normalizedBrands.length > 0 ? 'items-start' : 'items-center'}`}
+                  >
                     {normalizedBrands.map((brandChip, chipIndex) => (
                       <span
                         key={`${brandChip}-${chipIndex}`}
                         data-testid={`cultural-brand-chip-${chipIndex}`}
-                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-100 text-zinc-800 border border-zinc-200 px-3 py-1 text-xs font-medium"
+                        className="inline-flex max-w-full items-start gap-1 rounded-full bg-zinc-100 text-zinc-800 border border-zinc-200 px-3 py-1 text-xs font-medium whitespace-normal break-words"
                       >
                         {brandChip}
                         <button
@@ -2502,7 +2505,7 @@ export default function CulturalArchaeologist() {
                         }
                       }}
                       placeholder={normalizedBrands.length > 0 ? 'Add more brands or category' : 'Brands or Category (Optional)'}
-                      className="flex-1 min-w-[140px] h-full py-0 bg-transparent text-zinc-900 placeholder-zinc-400 focus:outline-none"
+                      className={`flex-1 min-w-[140px] bg-transparent text-zinc-900 placeholder-zinc-400 focus:outline-none ${normalizedBrands.length > 0 ? 'py-1' : 'h-10'}`}
                       disabled={isLoading}
                     />
                   </div>
@@ -3345,7 +3348,10 @@ export default function CulturalArchaeologist() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+              <div
+                data-testid="matrix-cards-layout"
+                className="columns-1 md:columns-2 lg:columns-3 gap-6"
+              >
                 <MatrixCard title="Moments" subtext="External forces shaping their behavior" items={displayMatrix?.moments || []} delay={0.1} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
                 <MatrixCard title="Beliefs" subtext="Values they’re operating from" items={displayMatrix?.beliefs || []} delay={0.2} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
                 <MatrixCard title="Tone" subtext="What & how they feel" items={displayMatrix?.tone || []} delay={0.3} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
@@ -3579,7 +3585,7 @@ function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], on
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay }}
       data-testid={cardTestId}
-      className="bg-white p-6 rounded-3xl border border-zinc-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-shadow duration-300 break-inside-avoid print-break-inside-avoid w-full"
+      className="inline-block w-full mb-6 bg-white p-6 rounded-3xl border border-zinc-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-shadow duration-300 break-inside-avoid print-break-inside-avoid"
     >
       <div className="mb-1 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider">{title}</h3>

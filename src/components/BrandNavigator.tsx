@@ -3155,9 +3155,9 @@ function BrandResultCard({
 
       <div
         data-testid="brand-result-sections-layout"
-        className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-sm text-zinc-700"
+        className="columns-1 lg:columns-2 gap-6 text-sm text-zinc-700"
       >
-        <BrandCriteriaSection title="High-level summary" sectionKey="highLevelSummary" highlighted={highlightedSections.includes('highLevelSummary')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} className="lg:col-span-2">
+        <BrandCriteriaSection title="High-level summary" sectionKey="highLevelSummary" highlighted={highlightedSections.includes('highLevelSummary')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth>
           <BrandResultRichText value={brandResult.highLevelSummary} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
@@ -3165,7 +3165,7 @@ function BrandResultCard({
           <BrandResultRichText value={brandResult.brandMission} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Brand positioning" sectionKey="brandPositioning" highlighted={highlightedSections.includes('brandPositioning')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} className="lg:col-span-2">
+        <BrandCriteriaSection title="Brand positioning" sectionKey="brandPositioning" highlighted={highlightedSections.includes('brandPositioning')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth>
           <div className="space-y-2">
             <BrandResultLabeledBulletList label="Taglines" items={positioning.taglines || []} inferredEvidenceUrl={inferredEvidenceUrl} />
             <BrandResultLabeledBulletList label="Key messages and claims" items={positioning.keyMessagesAndClaims || []} inferredEvidenceUrl={inferredEvidenceUrl} />
@@ -3186,7 +3186,7 @@ function BrandResultCard({
           <BrandResultBulletList items={brandResult.potentialThreatsWeaknesses || []} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Target audiences" sectionKey="targetAudiences" highlighted={highlightedSections.includes('targetAudiences')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} className="lg:col-span-2">
+        <BrandCriteriaSection title="Target audiences" sectionKey="targetAudiences" highlighted={highlightedSections.includes('targetAudiences')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
             {(brandResult.targetAudiences || []).map((aud, audIndex) => (
               <TargetAudienceCard
@@ -3228,7 +3228,7 @@ function BrandResultCard({
           </div>
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Recent news" sectionKey="recentNews" highlighted={highlightedSections.includes('recentNews')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} className="lg:col-span-2">
+        <BrandCriteriaSection title="Recent news" sectionKey="recentNews" highlighted={highlightedSections.includes('recentNews')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth>
           <ul className="space-y-1">
             {displayNewsItems.length > 0 ? (
               displayNewsItems.map((item, idx) => (
@@ -3313,6 +3313,7 @@ function BrandCriteriaSection({
   canCompareAcrossBrands = false,
   onRequestCompareAcrossBrands,
   className = '',
+  fullWidth = false,
   children,
 }: {
   title: string;
@@ -3321,6 +3322,7 @@ function BrandCriteriaSection({
   canCompareAcrossBrands?: boolean;
   onRequestCompareAcrossBrands?: (event: React.MouseEvent<HTMLElement>, section: BrandResultSectionKey) => void;
   className?: string;
+  fullWidth?: boolean;
   children: React.ReactNode;
 }) {
   const sectionTestId = `brand-result-section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
@@ -3328,11 +3330,12 @@ function BrandCriteriaSection({
   return (
     <div
       data-testid={sectionTestId}
+      style={fullWidth ? { columnSpan: 'all' } : undefined}
       onClick={(event) => {
         if (!compareEnabled || !sectionKey || !onRequestCompareAcrossBrands) return;
         onRequestCompareAcrossBrands(event, sectionKey);
       }}
-      className={`rounded-2xl border bg-zinc-50/80 p-6 shadow-[0_1px_6px_-3px_rgba(0,0,0,0.08)] h-fit self-start ${highlighted ? 'border-indigo-300 ring-2 ring-indigo-200/70' : 'border-zinc-200'} ${compareEnabled ? 'cursor-pointer hover:border-zinc-300' : ''} ${className}`.trim()}
+      className={`inline-block w-full mb-6 break-inside-avoid rounded-2xl border bg-zinc-50/80 p-6 shadow-[0_1px_6px_-3px_rgba(0,0,0,0.08)] h-fit self-start ${highlighted ? 'border-indigo-300 ring-2 ring-indigo-200/70' : 'border-zinc-200'} ${compareEnabled ? 'cursor-pointer hover:border-zinc-300' : ''} ${className}`.trim()}
     >
       <h4 className="text-sm font-semibold text-zinc-900 mb-3 uppercase tracking-wider inline-flex items-center gap-3">
         <span>{title}</span>
@@ -3398,7 +3401,7 @@ function BrandResultBulletList({ items, inferredEvidenceUrl }: { items: string[]
         <button
           type="button"
           onClick={() => setIsExpanded((prev) => !prev)}
-          className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+          className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
         >
           <span>
             {isExpanded ? `Show less (${INITIAL_SHOW}/${normalizedItems.length})` : `Show all ${normalizedItems.length} items`}

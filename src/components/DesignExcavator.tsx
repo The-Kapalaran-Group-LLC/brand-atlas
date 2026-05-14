@@ -1118,9 +1118,12 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       };
 
       return (
-        <section className="lg:col-span-2 bg-white rounded-3xl border border-zinc-200 p-6 space-y-4">
+        <section className="bg-white rounded-3xl border border-zinc-200 p-6 space-y-4">
           <h3 className="text-lg font-semibold text-zinc-900">{titleMap[compareElement]}</h3>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div
+            data-testid="design-excavator-compare-cards-layout"
+            className="columns-1 lg:columns-2 gap-4"
+          >
             {report.brandProfiles.map((profile) => {
               const colors =
                 compareElement === 'primaryColors'
@@ -1130,7 +1133,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                     : profile.colorPalette.neutrals;
 
               return (
-                <div key={`${profile.brandName}-${compareElement}`} className="rounded-2xl border border-zinc-200 p-4">
+                <div key={`${profile.brandName}-${compareElement}`} className="inline-block w-full mb-4 break-inside-avoid rounded-2xl border border-zinc-200 p-4">
                   <p className="text-sm font-semibold text-zinc-900 mb-3">{profile.brandName}</p>
                   {colors.length > 0 ? (
                     <ul className="space-y-2">{colors.map(renderColorSwatch)}</ul>
@@ -1147,11 +1150,14 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
     if (compareElement === 'typography') {
       return (
-        <section className="lg:col-span-2 bg-white rounded-3xl border border-zinc-200 p-6 space-y-4">
+        <section className="bg-white rounded-3xl border border-zinc-200 p-6 space-y-4">
           <h3 className="text-lg font-semibold text-zinc-900">Typography Comparison</h3>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div
+            data-testid="design-excavator-compare-cards-layout"
+            className="columns-1 lg:columns-2 gap-4"
+          >
             {report.brandProfiles.map((profile) => (
-              <div key={`${profile.brandName}-typography`} className="rounded-2xl border border-zinc-200 p-4">
+              <div key={`${profile.brandName}-typography`} className="inline-block w-full mb-4 break-inside-avoid rounded-2xl border border-zinc-200 p-4">
                 <p className="text-sm font-semibold text-zinc-900 mb-2">{profile.brandName}</p>
                 <p className="text-sm text-zinc-700 mb-1"><span className="font-medium">Families:</span> {profile.typography.fontFamilies.join(', ') || 'Not provided'}</p>
                 <p className="text-sm text-zinc-700"><span className="font-medium">H1:</span> {profile.typography.hierarchy.h1}</p>
@@ -1165,11 +1171,14 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     }
 
     return (
-      <section className="lg:col-span-2 bg-white rounded-3xl border border-zinc-200 p-6 space-y-4">
+      <section className="bg-white rounded-3xl border border-zinc-200 p-6 space-y-4">
         <h3 className="text-lg font-semibold text-zinc-900">Imagery Style Comparison</h3>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div
+          data-testid="design-excavator-compare-cards-layout"
+          className="columns-1 lg:columns-2 gap-4"
+        >
           {report.brandProfiles.map((profile) => (
-            <div key={`${profile.brandName}-imagery`} className="rounded-2xl border border-zinc-200 p-4">
+            <div key={`${profile.brandName}-imagery`} className="inline-block w-full mb-4 break-inside-avoid rounded-2xl border border-zinc-200 p-4">
               <p className="text-sm font-semibold text-zinc-900 mb-2">{profile.brandName}</p>
               {profile.supportingVisualElements.imageryStyle.length > 0 ? (
                 <ul className="space-y-1">
@@ -2489,8 +2498,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
             {/* ── Compare Tab ── */}
             {resultTab === 'compare' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="lg:col-span-2 flex flex-wrap gap-2 mb-2">
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2 mb-2">
                   {[
                     { key: 'primaryColors', label: 'Primary Colors', icon: <Palette className="w-3.5 h-3.5" /> },
                     { key: 'accentColors', label: 'Accent Colors', icon: <Palette className="w-3.5 h-3.5" /> },

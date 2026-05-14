@@ -271,6 +271,53 @@ describe('CulturalArchaeologist', () => {
     expect(screen.getByText('Women and non-binary skew')).toBeInTheDocument();
   });
 
+  it('uses dynamic masonry-style layout for matrix cards so expanded cards can reflow without row gaps', async () => {
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    const layout = await screen.findByTestId('matrix-cards-layout');
+    expect(layout.className).toContain('columns-1');
+    expect(layout.className).toContain('md:columns-2');
+    expect(layout.className).toContain('lg:columns-3');
+    expect(layout.className).not.toContain('grid-cols-1');
+  });
+
+  it('uses a wrapping brand chip input shell like Brand Navigator', () => {
+    render(<CulturalArchaeologist />);
+
+    const shell = screen.getByTestId('cultural-brands-input-shell');
+    expect(shell.className).toContain('flex-wrap');
+    expect(shell.className).toContain('min-h-14');
+  });
+
+  it('uses the same show-all button text/icon size and color as Brand Navigator', async () => {
+    generateCulturalMatrix.mockResolvedValueOnce({
+      ...mockMatrix,
+      moments: [
+        { text: '[KNOWN] First signal', isHighlyUnique: false, sourceType: 'Mainstream', confidenceLevel: 'high' as const, trendLifecycle: 'peaking' as const },
+        { text: '[KNOWN] Second signal', isHighlyUnique: false, sourceType: 'Mainstream', confidenceLevel: 'high' as const, trendLifecycle: 'peaking' as const },
+        { text: '[KNOWN] Third signal', isHighlyUnique: false, sourceType: 'Mainstream', confidenceLevel: 'high' as const, trendLifecycle: 'peaking' as const },
+        { text: '[KNOWN] Fourth signal', isHighlyUnique: false, sourceType: 'Mainstream', confidenceLevel: 'high' as const, trendLifecycle: 'peaking' as const },
+        { text: '[KNOWN] Fifth signal', isHighlyUnique: false, sourceType: 'Mainstream', confidenceLevel: 'high' as const, trendLifecycle: 'peaking' as const },
+      ],
+    });
+
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    const showAllBtn = await screen.findByRole('button', { name: /show all 5 items/i });
+    expect(showAllBtn.className).toContain('text-sm');
+    expect(showAllBtn.className).toContain('text-indigo-600');
+    const showAllChevron = showAllBtn.querySelector('svg');
+    expect(showAllChevron?.className.baseVal ?? '').toContain('w-4 h-4');
+  });
+
   it('keeps demographics visible when result filters narrow or remove visible insights', async () => {
     generateCulturalMatrix.mockResolvedValueOnce({
       ...mockMatrix,
