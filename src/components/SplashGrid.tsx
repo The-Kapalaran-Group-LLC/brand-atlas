@@ -5,6 +5,7 @@ import {
   getRenderStride,
   getStripeClusterDensity,
 } from './splashGlobePerf';
+import { buildBrandLogoMarkers, type BrandLogoMarker } from './splashBrandLogos';
 
 type GlobePoint = {
   x: number;
@@ -13,6 +14,14 @@ type GlobePoint = {
   lat: number;
   lon: number;
   variant: number;
+};
+
+type GlobeLogoPoint = GlobePoint & {
+  brand: string;
+  continent: string;
+  monogram: string;
+  wordmark: string;
+  styleVariant: number;
 };
 
 type GeoJsonFeature = {
@@ -282,6 +291,7 @@ export function SplashGrid({
     const countryOutlineLines: GlobeOutlineLine[] = [];
     const countryFillPoints: GlobePoint[] = [];
     const oceanPoints: GlobePoint[] = [];
+    const logoPoints: GlobeLogoPoint[] = [];
 
     const resize = () => {
       const dprCap = qualityMode === 'fast' ? 1.25 : 2;
@@ -750,6 +760,26 @@ export function SplashGrid({
       }
 
       generationReady = true;
+      const sourceForLogos = countryFillPoints.length > 0 ? countryFillPoints : continentFillPoints;
+      const logoCandidatePoints = sourceForLogos.map((point) => ({
+        lat: point.lat,
+        lon: point.lon,
+        variant: point.variant,
+        continentIndex: getContinentIndex(point.lat, point.lon),
+      }));
+      const brandLogoMarkers: BrandLogoMarker[] = buildBrandLogoMarkers(logoCandidatePoints);
+      logoPoints.length = 0;
+      for (const marker of brandLogoMarkers) {
+        const cartesian = toCartesian(marker.lat, marker.lon, marker.styleVariant);
+        logoPoints.push({
+          ...cartesian,
+          brand: marker.brand,
+          continent: marker.continent,
+          monogram: marker.monogram,
+          wordmark: marker.wordmark,
+          styleVariant: marker.styleVariant,
+        });
+      }
       console.log('[SplashGlobe] points generated', {
         quality,
         continentOutlineLines: continentOutlineLines.length,
@@ -757,6 +787,7 @@ export function SplashGrid({
         countryOutlineLines: countryOutlineLines.length,
         countryFill: countryFillPoints.length,
         ocean: oceanPoints.length,
+        logos: logoPoints.length,
       });
     };
 
@@ -916,6 +947,107 @@ export function SplashGrid({
       }
     };
 
+    const drawRoundedRect = (
+      x: number,
+      y: number,
+      widthValue: number,
+      heightValue: number,
+      radiusValue: number,
+    ) => {
+      const radius = Math.min(radiusValue, widthValue * 0.5, heightValue * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + widthValue - radius, y);
+      ctx.quadraticCurveTo(x + widthValue, y, x + widthValue, y + radius);
+      ctx.lineTo(x + widthValue, y + heightValue - radius);
+      ctx.quadraticCurveTo(x + widthValue, y + heightValue, x + widthValue - radius, y + heightValue);
+      ctx.lineTo(x + radius, y + heightValue);
+      ctx.quadraticCurveTo(x, y + heightValue, x, y + heightValue - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    };
+
+    const drawBrandLogos = (
+      sourceLogos: GlobeLogoPoint[],
+      cx: number,
+      cy: number,
+      cosY: number,
+      sinY: number,
+      cosX: number,
+      sinX: number,
+      globeScale: number,
+    ) => {
+      const placements: Array<{ x: number; y: number; w: number; h: number }> = [];
+
+      for (let i = 0; i < sourceLogos.length; i += 1) {
+        const point = sourceLogos[i];
+        const x1 = point.x * cosY + point.z * sinY;
+        const z1 = -point.x * sinY + point.z * cosY;
+        const y2 = point.y * cosX - z1 * sinX;
+        const z2 = point.y * sinX + z1 * cosX;
+        if (z2 < -GLOBE_RADIUS * 0.03) continue;
+
+        const projection = DEPTH / (DEPTH - z2);
+        const px = cx + x1 * projection * globeScale;
+        const py = cy - y2 * projection * globeScale;
+        const depthAlpha = clamp((z2 + GLOBE_RADIUS) / (GLOBE_RADIUS * 2), 0, 1);
+        const badgeHeight = clamp(12 * projection * globeScale, 8.5, 16);
+        const emblemSize = badgeHeight - 3.5;
+        const wordmarkWidth = clamp(point.wordmark.length * 5.2, 32, 80);
+        const badgeWidth = emblemSize + wordmarkWidth + 8;
+        const left = px - badgeWidth * 0.5;
+        const top = py - badgeHeight * 0.5;
+
+        const overlaps = placements.some((placed) => (
+          left < placed.x + placed.w + 2
+          && left + badgeWidth + 2 > placed.x
+          && top < placed.y + placed.h + 2
+          && top + badgeHeight + 2 > placed.y
+        ));
+        if (overlaps) continue;
+
+        placements.push({ x: left, y: top, w: badgeWidth, h: badgeHeight });
+
+        const colorT = (point.styleVariant % 7) / 6;
+        const gradient = ctx.createLinearGradient(left, top, left + badgeWidth, top + badgeHeight);
+        gradient.addColorStop(0, gradientColorAt(clamp(colorT * 0.75, 0, 1), 1.2));
+        gradient.addColorStop(1, gradientColorAt(clamp(0.55 + colorT * 0.45, 0, 1), 0.86));
+
+        ctx.globalAlpha = clamp(0.52 + depthAlpha * 0.65, 0.42, 0.96);
+        drawRoundedRect(left, top, badgeWidth, badgeHeight, badgeHeight * 0.42);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        ctx.globalAlpha = clamp(0.46 + depthAlpha * 0.48, 0.4, 0.95);
+        drawRoundedRect(left, top, badgeWidth, badgeHeight, badgeHeight * 0.42);
+        ctx.strokeStyle = gradientColorAt(clamp(0.4 + colorT * 0.3, 0, 1), 1.24);
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+
+        const emblemLeft = left + 2.2;
+        const emblemTop = top + 1.75;
+        ctx.globalAlpha = clamp(0.58 + depthAlpha * 0.56, 0.48, 1);
+        drawRoundedRect(emblemLeft, emblemTop, emblemSize, emblemSize, emblemSize * 0.36);
+        ctx.fillStyle = gradientColorAt(clamp(0.2 + colorT * 0.5, 0, 1), 1.12);
+        ctx.fill();
+
+        ctx.globalAlpha = clamp(0.72 + depthAlpha * 0.28, 0.7, 1);
+        ctx.fillStyle = 'rgb(236 239 255)';
+        ctx.font = `${Math.max(7.2, emblemSize * 0.45)}px ui-sans-serif, system-ui, -apple-system, Segoe UI`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(point.monogram, emblemLeft + emblemSize * 0.5, emblemTop + emblemSize * 0.54);
+
+        ctx.globalAlpha = clamp(0.68 + depthAlpha * 0.34, 0.6, 1);
+        ctx.fillStyle = 'rgb(237 240 255)';
+        ctx.font = `${Math.max(6.2, badgeHeight * 0.44)}px ui-sans-serif, system-ui, -apple-system, Segoe UI`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(point.wordmark, emblemLeft + emblemSize + 3.2, top + badgeHeight * 0.54);
+      }
+    };
+
     const getLayout = () => {
       const perspectiveMax = DEPTH / (DEPTH - GLOBE_RADIUS);
       const projectedRadiusMax = GLOBE_RADIUS * perspectiveMax;
@@ -1015,6 +1147,16 @@ export function SplashGrid({
         'continentOutline',
         globeScale,
         continentOutlineStride,
+      );
+      drawBrandLogos(
+        logoPoints,
+        cx,
+        cy,
+        cosY,
+        sinY,
+        cosX,
+        sinX,
+        globeScale,
       );
 
       ctx.globalAlpha = 1;

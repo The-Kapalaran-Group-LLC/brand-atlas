@@ -53,6 +53,7 @@ import { normalizeAppError } from '../services/api-errors';
 import { logger } from '../services/logger';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
 import { RecentResultsLibrary } from './RecentResultsLibrary';
+import MenuPage, { type MenuPageCard } from './MenuPage';
 import {
   APP_RECENT_RESULTS_MODES,
   saveRecentResult,
@@ -1268,6 +1269,30 @@ export default function BrandNavigator() {
     );
   }
 
+  const menuPageCards: MenuPageCard[] = [
+    {
+      id: 'brand-navigator',
+      title: 'Brand Navigator',
+      description: 'Get up-to-speed with a brand or survey an entire competitive landscape.',
+      bullets: ['Brand audits', 'Competitive landscape analysis', 'Opportunity space identification', 'Creative briefs', 'Pitches'],
+      icon: <CompassRoseIcon className="w-4 h-4" />,
+      onClick: () => setActiveExperience('research'),
+      bulletsMarginClassName: 'mt-3',
+    },
+    {
+      id: 'design-excavator',
+      title: 'Design Excavator',
+      description: 'Compare design systems across brands: logos, colors, typography, visual cues.',
+      bullets: ['Competitive research', 'Branding strategy development', 'Visual identity exploration', 'Creative briefs', 'Pitches'],
+      icon: <Palette className="w-4 h-4" />,
+      onClick: () => navigateToHashRoute('design-excavator'),
+      badgeText: 'Beta',
+      badgeClassName:
+        'align-super ml-3 inline-block px-2 py-1.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold tracking-wide border border-indigo-200',
+      bulletsMarginClassName: 'mt-3',
+    },
+  ];
+
   return (
     <div className="min-h-screen relative flex flex-col bg-[#FAFAFA] text-zinc-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 overflow-hidden">
       <AnimatePresence>
@@ -1323,8 +1348,8 @@ export default function BrandNavigator() {
             transition={{ duration: 0.6, ease: 'easeOut' }}
             className="fixed inset-0 z-[1] pointer-events-none overflow-hidden"
           >
-            <div className="absolute inset-0 translate-y-[20px]">
-              <SplashGrid qualityMode="fast" startLongitude={-74.006} />
+            <div className="absolute inset-x-0 top-[64px] -bottom-[64px]">
+              <SplashGrid sizeMultiplier={1.25} qualityMode="fast" startLongitude={-74.006} />
             </div>
           </motion.div>
         )}
@@ -1339,70 +1364,12 @@ export default function BrandNavigator() {
 
       <main className={`relative z-10 flex-1 w-full max-w-6xl mx-auto px-6 ${activeExperience === null ? 'py-6 md:py-10' : 'py-16 md:py-24'}`}>
         {activeExperience === null && (
-          <motion.section
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45 }}
-            className="max-w-3xl mx-auto text-center min-h-[78vh] flex flex-col"
-          >
-            <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-3 mx-auto">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <h1 className="text-lg md:text-xl font-semibold tracking-tight text-zinc-950 mb-4 select-none">
-              Brand <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">Atlas</span>
-            </h1>
-            <div className="flex-1 flex flex-col justify-center">
-              <h2 className="text-[1.91rem] md:text-[2.55rem] font-semibold tracking-tight text-zinc-900 mb-3">
-                Choose Your Research Experience
-              </h2>
-              <p className="subheader-copy text-zinc-700 mb-10 text-lg md:text-xl font-medium">
-                Start with a cultural deep dive or jump into a visual identity analysis.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                <button
-                  onClick={() => setActiveExperience('research')}
-                  className="text-left bg-white/90 border border-zinc-200/80 border-[1px] rounded-3xl p-6 hover:border-zinc-300 hover:shadow-sm transition-all h-full flex flex-col justify-start main-box-hover"
-                >
-                  <div className="inline-flex items-center gap-2 text-zinc-800 font-semibold mb-2 text-lg md:text-xl items-start">
-                    <CompassRoseIcon className="w-4 h-4" /> Brand Navigator
-                  </div>
-                  <p className="subheader-copy text-base text-zinc-500">
-                    Get up-to-speed with a brand or survey an entire competitive landscape.
-                  </p>
-                  <ul className="mt-3 space-y-1">
-                    {['Brand audits', 'Competitive landscape analysis', 'Opportunity space identification', 'Creative briefs', 'Pitches'].map((item) => (
-                      <li key={item} className="flex items-center gap-2 text-sm text-zinc-500">
-                        <span className="w-1 h-1 rounded-full bg-zinc-500 flex-shrink-0" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </button>
-                <button
-                  onClick={() => navigateToHashRoute('design-excavator')}
-                  className="text-left bg-white/90 border border-zinc-200/80 border-[1px] rounded-3xl p-6 hover:border-zinc-300 hover:shadow-sm transition-all h-full flex flex-col justify-start main-box-hover"
-                >
-                  <div className="inline-flex items-center gap-2 text-zinc-800 font-semibold mb-2 text-lg md:text-xl items-start">
-                    <Palette className="w-4 h-4" /> Design Excavator
-                    <span className="align-super ml-3 inline-block px-2 py-1.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold tracking-wide border border-indigo-200">
-                      Beta
-                    </span>
-                  </div>
-                  <p className="subheader-copy text-base text-zinc-500">
-                    Compare design systems across brands: logos, colors, typography, visual cues.
-                  </p>
-                  <ul className="mt-3 space-y-1">
-                    {['Competitive research', 'Branding strategy development', 'Visual identity exploration', 'Creative briefs', 'Pitches'].map((item) => (
-                      <li key={item} className="flex items-center gap-2 text-sm text-zinc-500">
-                        <span className="w-1 h-1 rounded-full bg-zinc-500 flex-shrink-0" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </button>
-              </div>
-            </div>
-          </motion.section>
+          <MenuPage
+            subtitle="Start with a cultural deep dive or jump into a visual identity analysis."
+            sectionClassName="max-w-3xl"
+            cardsGridClassName="grid grid-cols-1 md:grid-cols-2 gap-8 items-start"
+            cards={menuPageCards}
+          />
         )}
 
         {(activeExperience === 'brand' || hasOpenedBrand) && (
@@ -2351,8 +2318,12 @@ export default function BrandNavigator() {
         {!showSplash && <FeedbackChatWidget />}
       </main>
 
-      <footer className="relative z-10 py-6 text-center no-print">
-        <p className="copyright-copy text-[10px] text-zinc-400 mt-1">© 2026 Brand Atlas by The Kapalaran Group LLC | All rights reserved | <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-zinc-500">Privacy Policy</a></p>
+      <footer
+        className={`relative z-10 text-center no-print ${
+          !showSplash && activeExperience === null ? 'pt-5 pb-6' : 'py-6'
+        }`}
+      >
+        <p className="copyright-copy text-[10px] text-zinc-400 mt-0">© 2026 Brand Atlas by The Kapalaran Group LLC | All rights reserved | <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-zinc-500">Privacy Policy</a></p>
       </footer>
     </div>
   );
