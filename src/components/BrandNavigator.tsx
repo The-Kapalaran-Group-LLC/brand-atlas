@@ -29,7 +29,12 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { BrandResearchMatrix, UploadedFile } from '../services/azure-openai';
-import { askBrandNavigatorQuestion, generateBrandResearchMatrix, suggestBrands } from '../services/azure-openai';
+import {
+  askBrandNavigatorQuestion,
+  generateBrandResearchMatrix,
+  suggestBrandWebsite,
+  suggestBrands,
+} from '../services/azure-openai';
 import { navigateToHashRoute, navigateToHomeDashboard } from '../services/navigation';
 import { isBrandNavigatorRoute } from '../services/navigation-routes';
 import { normalizeExternalHttpUrl, toSafeExternalHref } from '../services/external-links';
@@ -54,6 +59,7 @@ import { logger } from '../services/logger';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
 import { RecentResultsLibrary } from './RecentResultsLibrary';
 import MenuPage, { type MenuPageCard } from './MenuPage';
+import { SourceLinkRow } from './SourceLinkRow';
 import {
   APP_RECENT_RESULTS_MODES,
   saveRecentResult,
@@ -246,6 +252,9 @@ const buildBrandNavigatorCustomName = (
   return `BN|${brandSegment}|${audienceSegment}|${topicSegment}|${timestamp}`;
 };
 
+const normalizeBrandLookupKey = (brandName: string): string =>
+  (brandName || '').trim().toLowerCase();
+
 const EMPTY_BRAND_RESEARCH_MATRIX: BrandResearchMatrix = {
   analysisObjective: '',
   ecosystemMethod: '',
@@ -299,6 +308,9 @@ export default function BrandNavigator() {
   const [isDetecting, setIsDetecting] = useState(false);
   const [brandSuggestions, setBrandSuggestions] = useState<string[]>([]);
   const [isSuggestingBrands, setIsSuggestingBrands] = useState(false);
+  const [resolvedBrandWebsites, setResolvedBrandWebsites] = useState<Record<string, string>>({});
+  const [resolvingBrandWebsiteKeys, setResolvingBrandWebsiteKeys] = useState<string[]>([]);
+  const websiteLookupTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   
   const [selectedGenerations, setSelectedGenerations] = useState<string[]>([]);
   const [isGenerationDropdownOpen, setIsGenerationDropdownOpen] = useState(false);
@@ -341,6 +353,11 @@ export default function BrandNavigator() {
   const [webHighlights, setWebHighlights] = useState<string[]>([]);
   const normalizedBrands = useMemo(() => normalizeBrandTokens(selectedBrands), [selectedBrands]);
   const brandInputQuery = brandInput.trim();
+  const activeBrandLookupKeys = useMemo(
+    () => normalizedBrands.map((brandName) => normalizeBrandLookupKey(brandName)).filter(Boolean),
+    [normalizedBrands]
+  );
+  const activeBrandLookupKeysRef = useRef<Set<string>>(new Set());
   const [isResearchControlsMinimized, setIsResearchControlsMinimized] = useState(false);
   const [recentResultsRefreshNonce, setRecentResultsRefreshNonce] = useState(0);
 
@@ -580,11 +597,19 @@ export default function BrandNavigator() {
   }, [toast]);
 
   useEffect(() => {
+    activeBrandLookupKeysRef.current = new Set(activeBrandLookupKeys);
+  }, [activeBrandLookupKeys]);
+
+  useEffect(() => {
     return () => {
       Object.values(deleteTimeouts.current).forEach((timeoutId) => {
         clearTimeout(timeoutId as ReturnType<typeof setTimeout>);
       });
       deleteTimeouts.current = {};
+      Object.values(websiteLookupTimersRef.current).forEach((timeoutId) => {
+        clearTimeout(timeoutId as ReturnType<typeof setTimeout>);
+      });
+      websiteLookupTimersRef.current = {};
     };
   }, []);
 
@@ -737,6 +762,87 @@ export default function BrandNavigator() {
     };
   }, [brandInput, visibleSavedMatrices, suggestionsRetryNonce]);
 
+  useEffect(() => {
+    const activeKeys = new Set(activeBrandLookupKeys);
+    const activeBrandPairs = normalizedBrands.map((brandName) => ({
+      brandName,
+      lookupKey: normalizeBrandLookupKey(brandName),
+    }));
+    console.log('[BrandNavigator] Reconciling background homepage lookups.', {
+      activeBrands: normalizedBrands,
+      activeBrandLookupKeys,
+      resolvedCount: Object.keys(resolvedBrandWebsites).length,
+      resolvingCount: resolvingBrandWebsiteKeys.length,
+    });
+
+    Object.keys(websiteLookupTimersRef.current).forEach((lookupKey) => {
+      if (!activeKeys.has(lookupKey)) {
+        console.log('[BrandNavigator] Clearing stale homepage lookup timer.', { lookupKey });
+        clearTimeout(websiteLookupTimersRef.current[lookupKey]);
+        delete websiteLookupTimersRef.current[lookupKey];
+      }
+    });
+
+    setResolvedBrandWebsites((prev) => {
+      const entries = Object.entries(prev).filter(([lookupKey]) => activeKeys.has(lookupKey));
+      if (entries.length === Object.keys(prev).length) {
+        return prev;
+      }
+      const next = Object.fromEntries(entries);
+      console.log('[BrandNavigator] Dropped stale homepage resolutions.', {
+        previousCount: Object.keys(prev).length,
+        nextCount: Object.keys(next).length,
+      });
+      return next;
+    });
+
+    setResolvingBrandWebsiteKeys((prev) => prev.filter((lookupKey) => activeKeys.has(lookupKey)));
+
+    activeBrandPairs.forEach(({ brandName, lookupKey }) => {
+      if (!lookupKey || brandName.length < 2) {
+        return;
+      }
+      if (resolvedBrandWebsites[lookupKey]) {
+        return;
+      }
+      if (websiteLookupTimersRef.current[lookupKey]) {
+        return;
+      }
+
+      setResolvingBrandWebsiteKeys((prev) => (prev.includes(lookupKey) ? prev : [...prev, lookupKey]));
+      console.log('[BrandNavigator] Scheduling homepage lookup.', { brandName, lookupKey });
+      websiteLookupTimersRef.current[lookupKey] = setTimeout(async () => {
+        try {
+          console.log('[BrandNavigator] Starting homepage lookup.', { brandName, lookupKey });
+          const suggestedWebsite = await suggestBrandWebsite(brandName);
+          console.log('[BrandNavigator] Homepage lookup completed.', { brandName, lookupKey, suggestedWebsite });
+          if (!suggestedWebsite) {
+            return;
+          }
+          if (!activeBrandLookupKeysRef.current.has(lookupKey)) {
+            console.log('[BrandNavigator] Skipping stale homepage lookup result.', { brandName, lookupKey, suggestedWebsite });
+            return;
+          }
+          setResolvedBrandWebsites((prev) => ({
+            ...prev,
+            [lookupKey]: suggestedWebsite,
+          }));
+        } finally {
+          setResolvingBrandWebsiteKeys((prev) => prev.filter((item) => item !== lookupKey));
+          clearTimeout(websiteLookupTimersRef.current[lookupKey]);
+          delete websiteLookupTimersRef.current[lookupKey];
+        }
+      }, 700);
+    });
+
+    return () => {
+      Object.keys(websiteLookupTimersRef.current).forEach((lookupKey) => {
+        clearTimeout(websiteLookupTimersRef.current[lookupKey]);
+        delete websiteLookupTimersRef.current[lookupKey];
+      });
+    };
+  }, [activeBrandLookupKeys, normalizedBrands, resolvedBrandWebsites, resolvingBrandWebsiteKeys.length]);
+
   const handleReset = () => {
     setSelectedBrands([]);
     setBrandInput('');
@@ -759,6 +865,12 @@ export default function BrandNavigator() {
     setWebHighlights([]);
     setIsResearchControlsMinimized(false);
     setShowValidation(false);
+    setResolvedBrandWebsites({});
+    setResolvingBrandWebsiteKeys([]);
+    Object.keys(websiteLookupTimersRef.current).forEach((lookupKey) => {
+      clearTimeout(websiteLookupTimersRef.current[lookupKey]);
+      delete websiteLookupTimersRef.current[lookupKey];
+    });
   };
 
   const handleAskBrandQuestion = async () => {
@@ -803,7 +915,7 @@ export default function BrandNavigator() {
     const brandsForGenerate = brandNamesForGenerate
       .map((name) => ({
         name: (name || '').trim(),
-        website: '',
+        website: resolvedBrandWebsites[normalizeBrandLookupKey(name)] || '',
       }))
       .filter((brand) => brand.name.length > 0)
       .slice(0, 6);
@@ -1515,9 +1627,34 @@ export default function BrandNavigator() {
                       <span
                         key={`${brandChip}-${chipIndex}`}
                         data-testid={`brand-chip-${chipIndex}`}
-                        className="inline-flex max-w-full items-start gap-1 rounded-full bg-zinc-100 text-zinc-800 border border-zinc-200 px-3 py-1 text-xs font-medium whitespace-normal break-words"
+                        title={(() => {
+                          const lookupKey = normalizeBrandLookupKey(brandChip);
+                          if (resolvedBrandWebsites[lookupKey]) {
+                            return `Verified website: ${resolvedBrandWebsites[lookupKey]}`;
+                          }
+                          if (resolvingBrandWebsiteKeys.includes(lookupKey)) {
+                            return 'Verifying official homepage...';
+                          }
+                          return 'Homepage lookup pending';
+                        })()}
+                        className="group relative inline-flex max-w-full items-start gap-1 rounded-full bg-zinc-100 text-zinc-800 border border-zinc-200 px-3 py-1 text-xs font-medium whitespace-normal break-words"
                       >
                         {brandChip}
+                        <span
+                          data-testid={`brand-chip-website-${chipIndex}`}
+                          className="pointer-events-none absolute left-1/2 top-full z-30 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] text-zinc-600 shadow-md group-hover:block"
+                        >
+                          {(() => {
+                            const lookupKey = normalizeBrandLookupKey(brandChip);
+                            if (resolvedBrandWebsites[lookupKey]) {
+                              return resolvedBrandWebsites[lookupKey];
+                            }
+                            if (resolvingBrandWebsiteKeys.includes(lookupKey)) {
+                              return 'Verifying homepage...';
+                            }
+                            return 'Homepage unavailable';
+                          })()}
+                        </span>
                         <button
                           type="button"
                           onClick={() => removeBrandChip(brandChip)}
@@ -2214,17 +2351,12 @@ export default function BrandNavigator() {
                   </h3>
                   <ul className="space-y-3">
                     {matrix.sources.map((source, idx) => (
-                      <li key={idx} className="text-sm">
-                        <a 
-                          href={toSafeExternalHref(source.url)} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-indigo-600 hover:text-indigo-800 hover:underline flex items-start gap-2"
-                        >
-                          <span className="text-zinc-400 mt-0.5">[{idx + 1}]</span>
-                          <span>{source.title}</span>
-                        </a>
-                      </li>
+                      <SourceLinkRow
+                        key={`${source.url}-${idx}`}
+                        index={idx}
+                        title={source.title}
+                        url={source.url}
+                      />
                     ))}
                   </ul>
                 </motion.div>
@@ -2642,6 +2774,45 @@ const sanitizeSocialChannels = (
   return sanitized;
 };
 
+const sanitizeSourceLinks = (
+  sources: Array<{ title?: string; url?: string }> | undefined,
+  context: { scope: 'global' | 'brand'; brandName?: string }
+): Array<{ title: string; url: string }> => {
+  const sanitized: Array<{ title: string; url: string }> = [];
+  const seen = new Set<string>();
+
+  (sources || []).forEach((source, index) => {
+    const safeUrl = normalizeExternalHttpUrl(source?.url);
+    const title = (source?.title || '').trim() || 'Source';
+
+    if (!safeUrl) {
+      logger.debug('[BrandNavigator] Dropping source with invalid external URL.', {
+        scope: context.scope,
+        brandName: context.brandName || null,
+        title,
+        rawUrl: source?.url,
+        index,
+      });
+      return;
+    }
+
+    const dedupeKey = safeUrl.toLowerCase();
+    if (seen.has(dedupeKey)) {
+      logger.debug('[BrandNavigator] Skipping duplicate source URL.', {
+        scope: context.scope,
+        brandName: context.brandName || null,
+        safeUrl,
+      });
+      return;
+    }
+
+    seen.add(dedupeKey);
+    sanitized.push({ title, url: safeUrl });
+  });
+
+  return sanitized;
+};
+
 const parseHeadlineFromNewsItem = (
   newsItem: string | {
     headline?: string | null;
@@ -2755,22 +2926,36 @@ const sanitizeBrandResearchMatrix = (rawMatrix: BrandResearchMatrix): BrandResea
   const sanitizedResults = (rawMatrix.results || []).map((result, index) => {
     const brandName = result.brandName || `Brand ${index + 1}`;
     const sanitizedChannels = sanitizeSocialChannels(result.socialMediaChannels, brandName);
+    const sanitizedSources = sanitizeSourceLinks(result.sources, { scope: 'brand', brandName });
 
     logger.debug('[BrandNavigator] Sanitized social channels while loading results.', {
       brandName,
       beforeCount: (result.socialMediaChannels || []).length,
       afterCount: sanitizedChannels.length,
     });
+    logger.debug('[BrandNavigator] Sanitized brand sources while loading results.', {
+      brandName,
+      beforeCount: (result.sources || []).length,
+      afterCount: sanitizedSources.length,
+    });
 
     return {
       ...result,
       socialMediaChannels: sanitizedChannels,
+      sources: sanitizedSources,
     };
+  });
+
+  const sanitizedGlobalSources = sanitizeSourceLinks(rawMatrix.sources, { scope: 'global' });
+  logger.debug('[BrandNavigator] Sanitized global sources while loading results.', {
+    beforeCount: (rawMatrix.sources || []).length,
+    afterCount: sanitizedGlobalSources.length,
   });
 
   return {
     ...rawMatrix,
     results: sanitizedResults,
+    sources: sanitizedGlobalSources,
   };
 };
 

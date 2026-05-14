@@ -4,6 +4,8 @@ import {
   clearRecentResults,
   getRecentResults,
   MAX_RECENT_RESULTS,
+  replaceRecentResults,
+  removeRecentResult,
   saveRecentResult,
 } from './recent-results-storage';
 
@@ -111,11 +113,49 @@ describe('recent-results-storage', () => {
     expect(getRecentResults<MockResult>(APP_RECENT_RESULTS_MODES.DESIGN_EXCAVATOR)).toHaveLength(1);
   });
 
+  it('removes an individual recent result by id', () => {
+    saveRecentResult(APP_RECENT_RESULTS_MODES.BRAND_NAVIGATOR, {
+      id: 'brand-1',
+      title: 'Brand One',
+      description: 'Brand result',
+    });
+    saveRecentResult(APP_RECENT_RESULTS_MODES.BRAND_NAVIGATOR, {
+      id: 'brand-2',
+      title: 'Brand Two',
+      description: 'Brand result',
+    });
+
+    const next = removeRecentResult(APP_RECENT_RESULTS_MODES.BRAND_NAVIGATOR, 'brand-1');
+
+    expect(next).toHaveLength(1);
+    expect(next[0]?.id).toBe('brand-2');
+    expect(getRecentResults<MockResult>(APP_RECENT_RESULTS_MODES.BRAND_NAVIGATOR)).toHaveLength(1);
+    expect(getRecentResults<MockResult>(APP_RECENT_RESULTS_MODES.BRAND_NAVIGATOR)[0]?.id).toBe('brand-2');
+  });
+
   it('returns empty array if stored JSON is invalid', () => {
     const parseSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     localStorage.setItem(APP_RECENT_RESULTS_MODES.BRAND_NAVIGATOR, '{invalid_json');
 
     expect(getRecentResults<MockResult>(APP_RECENT_RESULTS_MODES.BRAND_NAVIGATOR)).toEqual([]);
     expect(parseSpy).toHaveBeenCalled();
+  });
+
+  it('replaces recent results while preserving provided order', () => {
+    saveRecentResult(APP_RECENT_RESULTS_MODES.BRAND_NAVIGATOR, {
+      id: 'older',
+      title: 'Older',
+      description: 'Older item',
+    });
+
+    const replaced = replaceRecentResults<MockResult>(APP_RECENT_RESULTS_MODES.BRAND_NAVIGATOR, [
+      { id: 'first', title: 'First', description: 'First item' },
+      { id: 'second', title: 'Second', description: 'Second item' },
+    ]);
+
+    expect(replaced).toHaveLength(2);
+    expect(replaced[0]?.id).toBe('first');
+    expect(replaced[1]?.id).toBe('second');
+    expect(getRecentResults<MockResult>(APP_RECENT_RESULTS_MODES.BRAND_NAVIGATOR)[0]?.id).toBe('first');
   });
 });

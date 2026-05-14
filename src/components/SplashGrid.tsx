@@ -19,8 +19,10 @@ type GlobePoint = {
 type GlobeLogoPoint = GlobePoint & {
   brand: string;
   continent: string;
+  logoUrl: string;
+  logoDomain: string;
+  ticker: string;
   monogram: string;
-  wordmark: string;
   styleVariant: number;
 };
 
@@ -100,6 +102,10 @@ const getContinentIndex = (lat: number, lon: number): number => {
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const smoothstep = (edge0: number, edge1: number, value: number): number => {
+  const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+};
 
 const gradientColorAt = (t: number, brightness = 1): string => {
   const safeT = clamp(t, 0, 1);
@@ -292,6 +298,7 @@ export function SplashGrid({
     const countryFillPoints: GlobePoint[] = [];
     const oceanPoints: GlobePoint[] = [];
     const logoPoints: GlobeLogoPoint[] = [];
+    const logoImageCache = new Map<string, HTMLImageElement | null>();
 
     const resize = () => {
       const dprCap = qualityMode === 'fast' ? 1.25 : 2;
@@ -768,6 +775,24 @@ export function SplashGrid({
         continentIndex: getContinentIndex(point.lat, point.lon),
       }));
       const brandLogoMarkers: BrandLogoMarker[] = buildBrandLogoMarkers(logoCandidatePoints);
+      for (const marker of brandLogoMarkers) {
+        if (logoImageCache.has(marker.logoUrl)) continue;
+        const image = new Image();
+        image.crossOrigin = 'anonymous';
+        image.referrerPolicy = 'no-referrer';
+        image.decoding = 'async';
+        image.loading = 'eager';
+        image.src = marker.logoUrl;
+        image.onload = () => {
+          logoImageCache.set(marker.logoUrl, image);
+          console.log('[SplashGlobe] logo loaded', { brand: marker.brand, domain: marker.logoDomain });
+        };
+        image.onerror = () => {
+          logoImageCache.set(marker.logoUrl, null);
+          console.log('[SplashGlobe] logo failed to load', { brand: marker.brand, domain: marker.logoDomain });
+        };
+        logoImageCache.set(marker.logoUrl, image);
+      }
       logoPoints.length = 0;
       for (const marker of brandLogoMarkers) {
         const cartesian = toCartesian(marker.lat, marker.lon, marker.styleVariant);
@@ -775,8 +800,10 @@ export function SplashGrid({
           ...cartesian,
           brand: marker.brand,
           continent: marker.continent,
+          logoUrl: marker.logoUrl,
+          logoDomain: marker.logoDomain,
+          ticker: marker.ticker,
           monogram: marker.monogram,
-          wordmark: marker.wordmark,
           styleVariant: marker.styleVariant,
         });
       }
@@ -833,46 +860,61 @@ export function SplashGrid({
       globeScale: number,
       stride: number,
     ) => {
-      const rotateAndProjectPoint = (point: GlobePoint, minVisibleZ: number) => {
+      const rotateAndProjectPoint = (point: GlobePoint) => {
         const x1 = point.x * cosY + point.z * sinY;
         const z1 = -point.x * sinY + point.z * cosY;
         const y2 = point.y * cosX - z1 * sinX;
         const z2 = point.y * sinX + z1 * cosX;
-        if (z2 < minVisibleZ) return null;
+        if (z2 < -GLOBE_RADIUS * 0.999) return null;
         const scale = DEPTH / (DEPTH - z2);
         return { x: x1, y: y2, z: z2, scale };
       };
 
-      for (let i = 0; i < sourcePoints.length; i += stride) {
-        const point = sourcePoints[i];
-        const projected = rotateAndProjectPoint(point, -GLOBE_RADIUS * 0.98);
-        if (!projected) continue;
+      for (const hemisphere of ['back', 'front'] as const) {
+        const hemisphereStride = hemisphere === 'back'
+          ? Math.max(1, Math.floor(stride * 0.52))
+          : stride;
+        for (let i = 0; i < sourcePoints.length; i += hemisphereStride) {
+          const point = sourcePoints[i];
+          const projected = rotateAndProjectPoint(point);
+          if (!projected) continue;
+          if (hemisphere === 'front' && projected.z < 0) continue;
+          if (hemisphere === 'back' && projected.z >= 0) continue;
 
-        const depthAlpha = Math.max(
-          0.08,
-          Math.min(0.96, (projected.z + GLOBE_RADIUS) / (GLOBE_RADIUS * 2) + 0.22),
-        );
-        const sizeBase = mode === 'ocean' ? 0.9 : (mode === 'continentFill' ? 1.32 : mode === 'countryFill' ? 1.46 : 1.02);
-        const size = Math.max(0.52, sizeBase * projected.scale) * globeScale;
-        const dotDiameter = size * 0.5;
-        const dotRadius = Math.max(mode === 'ocean' ? 0.34 : 0.45, dotDiameter * 0.5);
+          const depthAlpha = Math.max(
+            0.08,
+            Math.min(0.96, (projected.z + GLOBE_RADIUS) / (GLOBE_RADIUS * 2) + 0.22),
+          );
+          const sizeBase = mode === 'ocean' ? 0.9 : (mode === 'continentFill' ? 1.32 : mode === 'countryFill' ? 1.46 : 1.02);
+          const size = Math.max(0.52, sizeBase * projected.scale) * globeScale;
+          const dotDiameter = size * 0.5;
+          const dotRadius = Math.max(mode === 'ocean' ? 0.34 : 0.45, dotDiameter * 0.5);
 
-        if (mode === 'ocean') ctx.globalAlpha = Math.min(1, depthAlpha * 0.34);
-        else if (mode === 'continentFill') ctx.globalAlpha = Math.min(1, depthAlpha * 1.0);
-        else if (mode === 'countryFill') ctx.globalAlpha = Math.min(1, depthAlpha * 1.12);
-        else if (mode === 'countryOutline') ctx.globalAlpha = Math.min(1, depthAlpha * 0.92);
-        else ctx.globalAlpha = Math.min(1, depthAlpha * 1.04);
+          const frontAlphaBase = mode === 'ocean'
+            ? depthAlpha * 0.34
+            : mode === 'continentFill'
+              ? depthAlpha * 1.0
+              : mode === 'countryFill'
+                ? depthAlpha * 1.12
+                : mode === 'countryOutline'
+                  ? depthAlpha * 0.92
+                  : depthAlpha * 1.04;
+          const hemisphereAlpha = hemisphere === 'back'
+            ? Math.min(1, frontAlphaBase * (mode === 'ocean' ? 0.56 : mode === 'continentFill' ? 0.36 : 0.3))
+            : Math.min(1, frontAlphaBase);
+          ctx.globalAlpha = hemisphereAlpha;
 
-        ctx.fillStyle = colorForMode(mode, point, projected.x, projected.y, projected.z);
-        const px = cx + projected.x * projected.scale * globeScale;
-        const py = cy - projected.y * projected.scale * globeScale;
-        if (dotRadius <= 0.95) {
-          const side = dotRadius * 1.7;
-          ctx.fillRect(px - side * 0.5, py - side * 0.5, side, side);
-        } else {
-          ctx.beginPath();
-          ctx.arc(px, py, dotRadius, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.fillStyle = colorForMode(mode, point, projected.x, projected.y, projected.z);
+          const px = cx + projected.x * projected.scale * globeScale;
+          const py = cy - projected.y * projected.scale * globeScale;
+          if (dotRadius <= 0.95) {
+            const side = dotRadius * 1.7;
+            ctx.fillRect(px - side * 0.5, py - side * 0.5, side, side);
+          } else {
+            ctx.beginPath();
+            ctx.arc(px, py, dotRadius, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
     };
@@ -968,6 +1010,16 @@ export function SplashGrid({
       ctx.closePath();
     };
 
+    const drawOceanSphere = (cx: number, cy: number, globeScale: number) => {
+      const radius = GLOBE_RADIUS * globeScale * 1.005;
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      // Neutral base avoids blue shadowing while still preventing white holes.
+      ctx.fillStyle = 'rgba(247, 247, 250, 0.95)';
+      ctx.fill();
+    };
+
     const drawBrandLogos = (
       sourceLogos: GlobeLogoPoint[],
       cx: number,
@@ -978,7 +1030,13 @@ export function SplashGrid({
       sinX: number,
       globeScale: number,
     ) => {
-      const placements: Array<{ x: number; y: number; w: number; h: number }> = [];
+      const projectedLogos: Array<{
+        point: GlobeLogoPoint;
+        x: number;
+        y: number;
+        z: number;
+        scale: number;
+      }> = [];
 
       for (let i = 0; i < sourceLogos.length; i += 1) {
         const point = sourceLogos[i];
@@ -986,65 +1044,93 @@ export function SplashGrid({
         const z1 = -point.x * sinY + point.z * cosY;
         const y2 = point.y * cosX - z1 * sinX;
         const z2 = point.y * sinX + z1 * cosX;
-        if (z2 < -GLOBE_RADIUS * 0.03) continue;
+        if (z2 < -GLOBE_RADIUS * 0.5) continue;
 
         const projection = DEPTH / (DEPTH - z2);
         const px = cx + x1 * projection * globeScale;
         const py = cy - y2 * projection * globeScale;
-        const depthAlpha = clamp((z2 + GLOBE_RADIUS) / (GLOBE_RADIUS * 2), 0, 1);
-        const badgeHeight = clamp(12 * projection * globeScale, 8.5, 16);
-        const emblemSize = badgeHeight - 3.5;
-        const wordmarkWidth = clamp(point.wordmark.length * 5.2, 32, 80);
-        const badgeWidth = emblemSize + wordmarkWidth + 8;
-        const left = px - badgeWidth * 0.5;
-        const top = py - badgeHeight * 0.5;
+        projectedLogos.push({ point, x: px, y: py, z: z2, scale: projection });
+      }
 
-        const overlaps = placements.some((placed) => (
-          left < placed.x + placed.w + 2
-          && left + badgeWidth + 2 > placed.x
-          && top < placed.y + placed.h + 2
-          && top + badgeHeight + 2 > placed.y
-        ));
-        if (overlaps) continue;
+      projectedLogos.sort((a, b) => a.z - b.z);
 
-        placements.push({ x: left, y: top, w: badgeWidth, h: badgeHeight });
+      for (const projectedLogo of projectedLogos) {
+        const point = projectedLogo.point;
+        const depthAlpha = clamp((projectedLogo.z + GLOBE_RADIUS) / (GLOBE_RADIUS * 2), 0, 1);
+        const zNorm = projectedLogo.z / GLOBE_RADIUS;
+        // Fade logos smoothly through the horizon so they don't pop on/off.
+        const horizonFade = smoothstep(-0.2, 0.16, zNorm);
+        const backFade = smoothstep(-0.5, -0.22, zNorm) * 0.2;
+        const visibility = clamp(horizonFade + backFade, 0, 1);
+        if (visibility <= 0.01) continue;
+
+        const tileSize = clamp(16 * projectedLogo.scale * globeScale, 11.5, 20);
+        const left = projectedLogo.x - tileSize * 0.5;
+        const top = projectedLogo.y - tileSize * 0.5;
 
         const colorT = (point.styleVariant % 7) / 6;
-        const gradient = ctx.createLinearGradient(left, top, left + badgeWidth, top + badgeHeight);
+        const gradient = ctx.createLinearGradient(left, top, left + tileSize, top + tileSize);
         gradient.addColorStop(0, gradientColorAt(clamp(colorT * 0.75, 0, 1), 1.2));
         gradient.addColorStop(1, gradientColorAt(clamp(0.55 + colorT * 0.45, 0, 1), 0.86));
 
-        ctx.globalAlpha = clamp(0.52 + depthAlpha * 0.65, 0.42, 0.96);
-        drawRoundedRect(left, top, badgeWidth, badgeHeight, badgeHeight * 0.42);
+        ctx.globalAlpha = clamp((0.52 + depthAlpha * 0.65) * visibility, 0.04, 0.96);
+        drawRoundedRect(left, top, tileSize, tileSize, tileSize * 0.28);
         ctx.fillStyle = gradient;
         ctx.fill();
 
-        ctx.globalAlpha = clamp(0.46 + depthAlpha * 0.48, 0.4, 0.95);
-        drawRoundedRect(left, top, badgeWidth, badgeHeight, badgeHeight * 0.42);
+        ctx.globalAlpha = clamp((0.46 + depthAlpha * 0.48) * visibility, 0.03, 0.95);
+        drawRoundedRect(left, top, tileSize, tileSize, tileSize * 0.28);
         ctx.strokeStyle = gradientColorAt(clamp(0.4 + colorT * 0.3, 0, 1), 1.24);
-        ctx.lineWidth = 0.8;
+        ctx.lineWidth = 0.74;
         ctx.stroke();
 
-        const emblemLeft = left + 2.2;
-        const emblemTop = top + 1.75;
-        ctx.globalAlpha = clamp(0.58 + depthAlpha * 0.56, 0.48, 1);
-        drawRoundedRect(emblemLeft, emblemTop, emblemSize, emblemSize, emblemSize * 0.36);
-        ctx.fillStyle = gradientColorAt(clamp(0.2 + colorT * 0.5, 0, 1), 1.12);
-        ctx.fill();
+        const image = logoImageCache.get(point.logoUrl);
+        const hasLoadedImage = !!image && image.complete && image.naturalWidth > 0;
+        const inset = Math.max(1.7, tileSize * 0.12);
+        const innerLeft = left + inset;
+        const innerTop = top + inset;
+        const innerSize = tileSize - inset * 2;
 
-        ctx.globalAlpha = clamp(0.72 + depthAlpha * 0.28, 0.7, 1);
-        ctx.fillStyle = 'rgb(236 239 255)';
-        ctx.font = `${Math.max(7.2, emblemSize * 0.45)}px ui-sans-serif, system-ui, -apple-system, Segoe UI`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(point.monogram, emblemLeft + emblemSize * 0.5, emblemTop + emblemSize * 0.54);
+        const tickerText = (point.ticker || '').trim();
+        if (hasLoadedImage && image) {
+          ctx.save();
+          drawRoundedRect(innerLeft, innerTop, innerSize, innerSize, innerSize * 0.22);
+          ctx.clip();
+          ctx.globalAlpha = clamp((0.86 + depthAlpha * 0.14) * visibility, 0.06, 1);
+          ctx.drawImage(image, innerLeft, innerTop, innerSize, innerSize);
+          ctx.globalAlpha = clamp((0.38 + depthAlpha * 0.2) * visibility, 0.04, 0.72);
+          ctx.fillStyle = gradientColorAt(clamp(0.34 + colorT * 0.5, 0, 1), 1.06);
+          ctx.globalCompositeOperation = 'source-atop';
+          ctx.fillRect(innerLeft, innerTop, innerSize, innerSize);
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.restore();
+        } else {
+          ctx.globalAlpha = clamp((0.58 + depthAlpha * 0.56) * visibility, 0.04, 1);
+          drawRoundedRect(innerLeft, innerTop, innerSize, innerSize, innerSize * 0.22);
+          ctx.fillStyle = gradientColorAt(clamp(0.2 + colorT * 0.5, 0, 1), 1.12);
+          ctx.fill();
+        }
 
-        ctx.globalAlpha = clamp(0.68 + depthAlpha * 0.34, 0.6, 1);
-        ctx.fillStyle = 'rgb(237 240 255)';
-        ctx.font = `${Math.max(6.2, badgeHeight * 0.44)}px ui-sans-serif, system-ui, -apple-system, Segoe UI`;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(point.wordmark, emblemLeft + emblemSize + 3.2, top + badgeHeight * 0.54);
+        if (tickerText) {
+          const textMaxWidth = innerSize * 0.92;
+          let fontPx = Math.max(6.2, innerSize * 0.74);
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          while (fontPx > 5.6) {
+            ctx.font = `${fontPx}px ui-sans-serif, system-ui, -apple-system, Segoe UI`;
+            if (ctx.measureText(tickerText).width <= textMaxWidth) break;
+            fontPx -= 0.45;
+          }
+
+          const centerX = innerLeft + innerSize * 0.5;
+          const centerY = innerTop + innerSize * 0.5;
+          ctx.globalAlpha = clamp((0.96 + depthAlpha * 0.04) * visibility, 0.08, 1);
+          ctx.strokeStyle = 'rgb(40 32 84)';
+          ctx.lineWidth = Math.max(0.9, fontPx * 0.08);
+          ctx.strokeText(tickerText, centerX, centerY);
+          ctx.fillStyle = 'rgb(242 245 255)';
+          ctx.fillText(tickerText, centerX, centerY);
+        }
       }
     };
 
@@ -1088,6 +1174,7 @@ export function SplashGrid({
       const countryOutlineStride = getRenderStride(adaptiveQualityStep, 'countryOutline');
       const continentOutlineStride = getRenderStride(adaptiveQualityStep, 'continentOutline');
 
+      drawOceanSphere(cx, cy, globeScale);
       drawPoints(
         oceanPoints,
         cx,

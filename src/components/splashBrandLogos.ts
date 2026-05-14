@@ -18,6 +18,9 @@ export type BrandLogoMarker = {
   continent: ContinentName;
   lat: number;
   lon: number;
+  logoDomain: string;
+  logoUrl: string;
+  ticker: string;
   monogram: string;
   wordmark: string;
   styleVariant: number;
@@ -30,33 +33,13 @@ export const CONTINENT_BRANDS: Record<ContinentName, string[]> = {
     'Microsoft',
     'Amazon',
     'Coca-Cola',
-    "McDonald's",
-    'Disney',
-    'Nike',
-    'Netflix',
-    'Meta',
-    'Walmart',
-    'Tesla',
-    'NVIDIA',
-    'Starbucks',
-    'Ford',
   ],
   Europe: [
     'Volkswagen',
     'Adidas',
     'IKEA',
     'LEGO',
-    'Nestle',
-    'BMW',
-    'Zara',
-    'Mercedes-Benz',
-    'Spotify',
-    'Shell',
-    "L'Oreal",
-    'H&M',
-    'Siemens',
-    'Deutsche Telekom',
-    'Airbus',
+    'Nestlé',
   ],
   Asia: [
     'Samsung',
@@ -64,16 +47,6 @@ export const CONTINENT_BRANDS: Record<ContinentName, string[]> = {
     'Sony',
     'TikTok',
     'Nintendo',
-    'Honda',
-    'Alibaba',
-    'Panasonic',
-    'Uniqlo',
-    'Hyundai',
-    'Tencent',
-    'TSMC',
-    'Canon',
-    'Lenovo',
-    'LG Electronics',
   ],
   'South America': [
     'MercadoLibre',
@@ -81,16 +54,6 @@ export const CONTINENT_BRANDS: Record<ContinentName, string[]> = {
     'Havaianas',
     'Nubank',
     'Petrobras',
-    'Embraer',
-    'Corona',
-    'JBS',
-    'Guarana Antarctica',
-    'YPF',
-    'Vale',
-    'Ambev',
-    'Gerdau',
-    'Banco do Brasil',
-    'Itau Unibanco',
   ],
   Africa: [
     'MTN',
@@ -98,16 +61,6 @@ export const CONTINENT_BRANDS: Record<ContinentName, string[]> = {
     'Ethiopian Airlines',
     'Safaricom',
     'DSTV',
-    'Standard Bank',
-    'South African Airways',
-    'Dangote Cement',
-    'Jumia',
-    'Shoprite',
-    'M-Pesa',
-    'Naspers',
-    'FirstRand',
-    'Sanlam',
-    'Attijariwafa Bank',
   ],
   Oceania: [
     'Qantas',
@@ -115,16 +68,6 @@ export const CONTINENT_BRANDS: Record<ContinentName, string[]> = {
     'BHP',
     'Coles',
     'Canva',
-    'Rip Curl',
-    'Commonwealth Bank',
-    'Atlassian',
-    'Vegemite',
-    'Air New Zealand',
-    'Billabong',
-    'Rio Tinto',
-    'Bunnings Warehouse',
-    'Macquarie Group',
-    'Telstra',
   ],
 };
 
@@ -135,6 +78,186 @@ const CONTINENT_INDEX: Record<ContinentName, number> = {
   Africa: 3,
   Asia: 4,
   Oceania: 5,
+};
+
+const normalizeLon = (lon: number): number => {
+  let normalized = lon;
+  while (normalized > 180) normalized -= 360;
+  while (normalized < -180) normalized += 360;
+  return normalized;
+};
+
+const isCanadaOrAlaska = (lat: number, lon: number): boolean => {
+  const safeLon = normalizeLon(lon);
+  const inCanadaBand = lat >= 49 && safeLon >= -170 && safeLon <= -52;
+  const inAlaskaBand = lat >= 52 && (safeLon <= -128 || safeLon >= 170);
+  return inCanadaBand || inAlaskaBand;
+};
+
+export const BRAND_LOGO_DOMAINS: Record<string, string> = {
+  Google: 'google.com',
+  Apple: 'apple.com',
+  Microsoft: 'microsoft.com',
+  Amazon: 'amazon.com',
+  'Coca-Cola': 'coca-cola.com',
+  "McDonald's": 'mcdonalds.com',
+  Disney: 'disney.com',
+  Nike: 'nike.com',
+  Netflix: 'netflix.com',
+  Meta: 'meta.com',
+  Walmart: 'walmart.com',
+  Tesla: 'tesla.com',
+  NVIDIA: 'nvidia.com',
+  Starbucks: 'starbucks.com',
+  Ford: 'ford.com',
+  Volkswagen: 'vw.com',
+  Adidas: 'adidas.com',
+  IKEA: 'ikea.com',
+  LEGO: 'lego.com',
+  'Nestlé': 'nestle.com',
+  BMW: 'bmw.com',
+  Zara: 'zara.com',
+  'Mercedes-Benz': 'mercedes-benz.com',
+  Spotify: 'spotify.com',
+  Shell: 'shell.com',
+  "L'Oreal": 'loreal.com',
+  'H&M': 'hm.com',
+  Siemens: 'siemens.com',
+  'Deutsche Telekom': 'telekom.com',
+  Airbus: 'airbus.com',
+  Samsung: 'samsung.com',
+  Toyota: 'toyota.com',
+  Sony: 'sony.com',
+  TikTok: 'tiktok.com',
+  Nintendo: 'nintendo.com',
+  Honda: 'honda.com',
+  Alibaba: 'alibabagroup.com',
+  Panasonic: 'panasonic.com',
+  Uniqlo: 'uniqlo.com',
+  Hyundai: 'hyundai.com',
+  Tencent: 'tencent.com',
+  TSMC: 'tsmc.com',
+  Canon: 'canon.com',
+  Lenovo: 'lenovo.com',
+  'LG Electronics': 'lg.com',
+  MercadoLibre: 'mercadolibre.com',
+  'LATAM Airlines': 'latamairlines.com',
+  Havaianas: 'havaianas.com',
+  Nubank: 'nubank.com.br',
+  Petrobras: 'petrobras.com.br',
+  Embraer: 'embraer.com',
+  Corona: 'coronausa.com',
+  JBS: 'jbs.com.br',
+  'Guarana Antarctica': 'guaranaantarctica.com.br',
+  YPF: 'ypf.com',
+  Vale: 'vale.com',
+  Ambev: 'ambev.com.br',
+  Gerdau: 'gerdau.com',
+  'Banco do Brasil': 'bb.com.br',
+  'Itau Unibanco': 'itau.com.br',
+  MTN: 'mtn.com',
+  Vodacom: 'vodacom.com',
+  'Ethiopian Airlines': 'ethiopianairlines.com',
+  Safaricom: 'safaricom.co.ke',
+  DSTV: 'dstv.com',
+  'Standard Bank': 'standardbank.com',
+  'South African Airways': 'flysaa.com',
+  'Dangote Cement': 'dangotecement.com',
+  Jumia: 'jumia.com',
+  Shoprite: 'shoprite.co.za',
+  'M-Pesa': 'mpesa.africa',
+  Naspers: 'naspers.com',
+  FirstRand: 'firstrand.co.za',
+  Sanlam: 'sanlam.com',
+  'Attijariwafa Bank': 'attijariwafabank.com',
+  Qantas: 'qantas.com',
+  Woolworths: 'woolworths.com.au',
+  BHP: 'bhp.com',
+  Coles: 'coles.com.au',
+  Canva: 'canva.com',
+  'Rip Curl': 'ripcurl.com',
+  'Commonwealth Bank': 'commbank.com.au',
+  Atlassian: 'atlassian.com',
+  Vegemite: 'vegemite.com.au',
+  'Air New Zealand': 'airnewzealand.co.nz',
+  Billabong: 'billabong.com',
+  'Rio Tinto': 'riotinto.com',
+  'Bunnings Warehouse': 'bunnings.com.au',
+  'Macquarie Group': 'macquarie.com',
+  Telstra: 'telstra.com.au',
+};
+
+export const buildBrandLogoUrl = (brand: string): string => {
+  const domain = BRAND_LOGO_DOMAINS[brand] || 'example.com';
+  return `https://logo.clearbit.com/${domain}?size=256`;
+};
+
+export const BRAND_TICKERS: Record<string, string> = {
+  Google: 'GOOGL',
+  Apple: 'AAPL',
+  Microsoft: 'MSFT',
+  Amazon: 'AMZN',
+  'Coca-Cola': 'KO',
+  Volkswagen: 'VOW3.DE',
+  Adidas: 'ADS.DE',
+  IKEA: 'PRIVATE',
+  LEGO: 'PRIVATE',
+  'Nestlé': 'NESN.SW',
+  Samsung: '005930.KS',
+  Toyota: '7203.T',
+  Sony: '6758.T',
+  TikTok: 'PRIVATE',
+  Nintendo: '7974.T',
+  MercadoLibre: 'MELI',
+  'LATAM Airlines': 'LTM.SN',
+  Havaianas: 'ALPA4.SA',
+  Nubank: 'NU',
+  Petrobras: 'PBR',
+  MTN: 'MTN.JO',
+  Vodacom: 'VOD.JO',
+  'Ethiopian Airlines': 'PRIVATE',
+  Safaricom: 'SCOM',
+  DSTV: 'MCG.JO',
+  Qantas: 'QAN.AX',
+  Woolworths: 'WOW.AX',
+  BHP: 'BHP.AX',
+  Coles: 'COL.AX',
+  Canva: 'PRIVATE',
+};
+
+export const getBrandTicker = (brand: string): string => BRAND_TICKERS[brand] || 'N/A';
+
+const brandWords = (brand: string): string[] => (
+  brand
+    .replace(/-/g, ' ')
+    .replace(/[^a-zA-Z0-9\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((token) => token.trim())
+    .filter(Boolean)
+);
+
+export const getBrandAbbreviation = (brand: string): string => {
+  const words = brandWords(brand);
+  if (words.length === 0) return 'N/A';
+  if (words.length === 1) {
+    const solo = words[0].toUpperCase();
+    return solo.length <= 5 ? solo : solo.slice(0, 4);
+  }
+  const initials = words
+    .slice(0, 4)
+    .map((word) => word[0]?.toUpperCase() || '')
+    .join('');
+  return initials || words[0].slice(0, 4).toUpperCase();
+};
+
+export const getDisplayTickerCopy = (brand: string): string => {
+  const rawTicker = getBrandTicker(brand);
+  if (rawTicker === 'PRIVATE' || /\d/.test(rawTicker) || rawTicker.includes('.')) {
+    return getBrandAbbreviation(brand);
+  }
+  return rawTicker;
 };
 
 const STOP_WORDS = new Set(['and', 'the', 'group', 'holdings', 'bank', 'airlines', 'electronics', 'warehouse']);
@@ -165,7 +288,10 @@ const pickReadableWordmark = (brand: string): string => {
 };
 
 export const getBrandMonogram = (brand: string): string => {
-  const cleaned = brand
+  const normalizedBrand = brand
+    .replace(/'s\b/gi, '')
+    .replace(/'/g, '');
+  const cleaned = normalizedBrand
     .replace(/[^a-zA-Z0-9\s-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -176,6 +302,7 @@ export const getBrandMonogram = (brand: string): string => {
     .split(' ')
     .map((token) => token.trim())
     .filter(Boolean)
+    .filter((token) => token.length > 1)
     .filter((token) => !STOP_WORDS.has(token.toLowerCase()));
 
   if (tokens.length === 0) return cleaned.slice(0, 3).toUpperCase();
@@ -243,16 +370,23 @@ export const buildBrandLogoMarkers = (
       const localSeed = seed ^ hashString(`${continent}:${brand}`);
       const rng = createRng(localSeed);
       const localCandidates = pointsByContinent[continent];
-      const point = pickPointForBrand(rng, localCandidates, usedPoints)
-        ?? pickPointForBrand(rng, allCandidates, usedPoints);
+      const eligibleLocalCandidates = continent === 'North America'
+        ? localCandidates.filter((candidate) => !isCanadaOrAlaska(candidate.lat, candidate.lon))
+        : localCandidates;
+      const point = pickPointForBrand(rng, eligibleLocalCandidates, usedPoints)
+        ?? (continent === 'North America' ? null : pickPointForBrand(rng, allCandidates, usedPoints));
       if (!point) continue;
 
       usedPoints.push({ lat: point.lat, lon: point.lon });
+      const logoDomain = BRAND_LOGO_DOMAINS[brand] || 'example.com';
       markers.push({
         brand,
         continent,
         lat: point.lat,
         lon: point.lon,
+        logoDomain,
+        logoUrl: buildBrandLogoUrl(brand),
+        ticker: getDisplayTickerCopy(brand),
         monogram: getBrandMonogram(brand),
         wordmark: pickReadableWordmark(brand),
         styleVariant: hashString(brand) % 7,

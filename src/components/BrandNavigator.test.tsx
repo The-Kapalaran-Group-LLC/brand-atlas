@@ -5,6 +5,7 @@ import BrandNavigator from './BrandNavigator';
 const {
   generateBrandResearchMatrix,
   suggestBrands,
+  suggestBrandWebsite,
   askMatrixQuestion,
   askBrandNavigatorQuestion,
   generateDeepDive,
@@ -15,6 +16,7 @@ const {
 } = vi.hoisted(() => ({
   generateBrandResearchMatrix: vi.fn(),
   suggestBrands: vi.fn(),
+  suggestBrandWebsite: vi.fn(),
   askMatrixQuestion: vi.fn(),
   askBrandNavigatorQuestion: vi.fn(),
   generateDeepDive: vi.fn(),
@@ -27,6 +29,7 @@ const {
 vi.mock('../services/azure-openai', () => ({
   generateBrandResearchMatrix,
   suggestBrands,
+  suggestBrandWebsite,
   askMatrixQuestion,
   askBrandNavigatorQuestion,
   generateDeepDive,
@@ -78,6 +81,7 @@ describe('BrandNavigator', () => {
     supabaseInsert.mockClear();
     supabaseLimit.mockClear();
     suggestBrands.mockResolvedValue(['Nike', 'Adidas']);
+    suggestBrandWebsite.mockResolvedValue(null);
     generateBrandResearchMatrix.mockResolvedValue(emptyMatrix);
     askMatrixQuestion.mockResolvedValue({ answer: 'ok', relevantInsights: [] });
     askBrandNavigatorQuestion.mockResolvedValue({ answer: 'web-backed answer', relevantSections: [], webHighlights: [] });
@@ -114,6 +118,26 @@ describe('BrandNavigator', () => {
     fireEvent.click(screen.getByRole('button', { name: /remove nike/i }));
     await waitFor(() => {
       expect(screen.queryByTestId('brand-chip-0')).not.toBeInTheDocument();
+    });
+  });
+
+  it('resolves homepage website in the background and exposes it on chip hover metadata', async () => {
+    suggestBrandWebsite.mockResolvedValue('https://www.nike.com/');
+
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Nike' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => {
+      expect(suggestBrandWebsite).toHaveBeenCalledWith('Nike');
+    });
+
+    const chip = await screen.findByTestId('brand-chip-0');
+    await waitFor(() => {
+      expect(chip).toHaveAttribute('title', expect.stringContaining('https://www.nike.com/'));
     });
   });
 
@@ -775,6 +799,57 @@ describe('BrandNavigator', () => {
       within(recentNewsSection).getByText('No recent coverage found from news outlets or brand press pages.')
     ).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /corporate source only/i })).not.toBeInTheDocument();
+  });
+
+  it('filters invalid sources so Sources & Research only renders external URLs', async () => {
+    generateBrandResearchMatrix.mockResolvedValue({
+      analysisObjective: 'test objective',
+      ecosystemMethod: 'test method',
+      results: [
+        {
+          brandName: 'Cadre AI',
+          highLevelSummary: 'Summary',
+          brandMission: 'Mission',
+          brandPositioning: {
+            taglines: [],
+            keyMessagesAndClaims: [],
+            valueProposition: 'Value',
+            voiceAndTone: 'Tone',
+          },
+          keyOfferingsProductsServices: [],
+          strategicMoatsStrengths: [],
+          potentialThreatsWeaknesses: [],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: [],
+          socialMediaChannels: [],
+          recentNews: [],
+          sources: [
+            { title: 'Invalid source text', url: 'Cadre AI official website / product pages' },
+          ],
+        },
+      ],
+      sources: [
+        { title: 'Another invalid source text', url: 'News validation should be performed via live search' },
+        { title: 'Global valid source', url: 'https://www.linkedin.com/company/cadre-ai/' },
+      ],
+    });
+
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Cadre AI' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
+
+    await screen.findByText(/sources & research/i);
+    expect(screen.queryByRole('link', { name: /invalid source text/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /another invalid source text/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /global valid source/i })).toHaveAttribute(
+      'href',
+      'https://www.linkedin.com/company/cadre-ai/'
+    );
   });
 
   it('does not display social media links in recent news', async () => {

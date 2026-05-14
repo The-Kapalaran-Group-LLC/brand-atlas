@@ -38,6 +38,7 @@ import {
   saveRecentResult,
   type RecentResultRecord,
 } from '../services/recent-results-storage';
+import { SourceLinkRow } from './SourceLinkRow';
 
 
 
@@ -3369,17 +3370,12 @@ export default function CulturalArchaeologist() {
                   </h3>
                   <ul className="space-y-3">
                     {matrix.sources.map((source, idx) => (
-                      <li key={idx} className="text-sm">
-                        <a 
-                          href={toSafeExternalHref(source.url)} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-indigo-600 hover:text-indigo-800 hover:underline flex items-start gap-2"
-                        >
-                          <span className="text-zinc-400 mt-0.5">[{idx + 1}]</span>
-                          <span>{source.title}</span>
-                        </a>
-                      </li>
+                      <SourceLinkRow
+                        key={`${source.url}-${idx}`}
+                        index={idx}
+                        title={source.title}
+                        url={source.url}
+                      />
                     ))}
                   </ul>
                 </motion.div>

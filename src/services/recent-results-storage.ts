@@ -133,3 +133,72 @@ export const clearRecentResults = (mode: RecentResultsMode): void => {
     console.error('[recent-results-storage] Failed to clear recent results.', { mode, error });
   }
 };
+
+export const removeRecentResult = <T extends RecentResultRecord>(
+  mode: RecentResultsMode,
+  resultId: string | number
+): T[] => {
+  const storage = safeLocalStorage();
+  if (!storage) {
+    console.log('[recent-results-storage] No storage available. Skipping remove.', { mode, resultId });
+    return [];
+  }
+
+  const currentResults = getRecentResults<T>(mode);
+  const next = currentResults.filter((item) => String(item.id) !== String(resultId));
+
+  try {
+    if (next.length === 0) {
+      storage.removeItem(mode);
+    } else {
+      storage.setItem(mode, JSON.stringify(next));
+    }
+    console.log('[recent-results-storage] Removed recent result.', {
+      mode,
+      resultId,
+      previousCount: currentResults.length,
+      nextCount: next.length,
+    });
+  } catch (error) {
+    console.error('[recent-results-storage] Failed to remove recent result.', {
+      mode,
+      resultId,
+      error,
+    });
+  }
+
+  return next;
+};
+
+export const replaceRecentResults = <T extends RecentResultRecord>(
+  mode: RecentResultsMode,
+  items: T[]
+): T[] => {
+  const storage = safeLocalStorage();
+  if (!storage) {
+    console.log('[recent-results-storage] No storage available. Skipping replace.', { mode, itemCount: items.length });
+    return [];
+  }
+
+  const validItems = (items || []).filter(isRecentResultRecord) as T[];
+  const next = validItems.slice(0, MAX_RECENT_RESULTS);
+
+  try {
+    if (next.length === 0) {
+      storage.removeItem(mode);
+    } else {
+      storage.setItem(mode, JSON.stringify(next));
+    }
+    console.log('[recent-results-storage] Replaced recent results list.', {
+      mode,
+      nextCount: next.length,
+    });
+  } catch (error) {
+    console.error('[recent-results-storage] Failed to replace recent results.', {
+      mode,
+      error,
+    });
+  }
+
+  return next;
+};
