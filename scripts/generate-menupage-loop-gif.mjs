@@ -5,9 +5,10 @@ import { GifFrame, GifUtil, GifCodec } from 'gifwrap';
 
 const WIDTH = 900;
 const HEIGHT = 506;
-const FRAME_COUNT = 120;
-const FPS = 12;
-const FRAME_DELAY_CS = Math.max(1, Math.round(100 / FPS));
+const AUTO_ROTATE_SPEED = 0.176;
+const ROTATION_PERIOD_SECONDS = (Math.PI * 2) / AUTO_ROTATE_SPEED;
+const FRAME_DELAY_CS = 10;
+const FRAME_COUNT = Math.round(ROTATION_PERIOD_SECONDS / (FRAME_DELAY_CS / 100));
 const GLOBE_RADIUS = 220;
 const DEPTH = 600;
 const AXIS_TILT_DEG = 23.4;
@@ -102,42 +103,71 @@ const staticSvgStart = `
 
   <g>
     <rect x="${WIDTH / 2 - 20}" y="16" width="40" height="40" rx="10" fill="#e0e7ff"/>
-    <text x="${WIDTH / 2}" y="43" text-anchor="middle" font-size="17" fill="#4f46e5">✦</text>
-    <text x="${WIDTH / 2 - 34}" y="78" text-anchor="end" font-family="Arial, sans-serif" font-size="34" font-weight="600" fill="#09090b">Brand</text>
-    <text x="${WIDTH / 2 - 30}" y="78" text-anchor="start" font-family="Arial, sans-serif" font-size="34" font-weight="600" fill="url(#brandGrad)">Atlas</text>
+    <g transform="translate(${WIDTH / 2 - 10},26)" stroke="#4f46e5" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6.2 0.9a1 1 0 0 1 1.96 0L9.2 6.45A2 2 0 0 0 10.8 8.05L16.35 9.1a1 1 0 0 1 0 1.96L10.8 12.11a2 2 0 0 0-1.6 1.6l-1.04 5.56a1 1 0 0 1-1.96 0L5.16 13.7a2 2 0 0 0-1.6-1.6L-2 11.06a1 1 0 0 1 0-1.96l5.56-1.05a2 2 0 0 0 1.6-1.6z"/>
+      <path d="M14.8 0.3v3.1"/>
+      <path d="M16.3 1.85h-3.1"/>
+    </g>
 
-    <text x="${WIDTH / 2}" y="126" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="600" fill="#18181b">Choose Your Research Experience</text>
-    <text x="${WIDTH / 2}" y="154" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="500" fill="#52525b">Start with cultural research, run a brand audit, or jump into a visual identity analysis.</text>
+    <text x="${WIDTH / 2 - 18}" y="74" text-anchor="end" font-family="Arial, sans-serif" font-size="29" font-weight="600" fill="#09090b">Brand</text>
+    <text x="${WIDTH / 2 - 12}" y="74" text-anchor="start" font-family="Arial, sans-serif" font-size="29" font-weight="600" fill="url(#brandGrad)">Atlas</text>
+
+    <text x="${WIDTH / 2}" y="126" text-anchor="middle" font-family="Arial, sans-serif" font-size="41" font-weight="600" fill="#18181b">Choose Your Research Experience</text>
+    <text x="${WIDTH / 2}" y="160" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" font-weight="500" fill="#52525b">Start with cultural research, run a brand audit, or jump into a visual identity analysis.</text>
   </g>
 `;
 
 const staticSvgForeground = `
   <g opacity="0.94">
-    <rect x="86" y="190" width="250" height="210" rx="22" fill="#ffffff" stroke="#e4e4e7"/>
-    <rect x="355" y="190" width="250" height="210" rx="22" fill="#ffffff" stroke="#e4e4e7"/>
-    <rect x="624" y="190" width="250" height="210" rx="22" fill="#ffffff" stroke="#e4e4e7"/>
-    <text x="108" y="223" font-family="Arial, sans-serif" font-size="16" font-weight="600" fill="#18181b">Cultural Archaeologist</text>
-    <text x="377" y="223" font-family="Arial, sans-serif" font-size="16" font-weight="600" fill="#18181b">Brand Navigator</text>
-    <text x="646" y="223" font-family="Arial, sans-serif" font-size="16" font-weight="600" fill="#18181b">Design Excavator</text>
+    <rect x="72" y="196" width="244" height="248" rx="22" fill="#ffffff" stroke="#e4e4e7"/>
+    <rect x="328" y="196" width="244" height="248" rx="22" fill="#ffffff" stroke="#e4e4e7"/>
+    <rect x="584" y="196" width="244" height="248" rx="22" fill="#ffffff" stroke="#e4e4e7"/>
 
-    <text x="108" y="247" font-family="Arial, sans-serif" font-size="12" fill="#71717a">Generate sharper insights about any audience.</text>
-    <text x="377" y="247" font-family="Arial, sans-serif" font-size="12" fill="#71717a">Audit brands to compare positioning and campaigns.</text>
-    <text x="646" y="247" font-family="Arial, sans-serif" font-size="12" fill="#71717a">Compare design systems across brands.</text>
+    <g transform="translate(92,214)" stroke="#27272a" fill="none" stroke-width="2" stroke-linecap="round">
+      <path d="m16 16-3.8-3.8"/>
+      <circle cx="9" cy="9" r="6.5"/>
+    </g>
+    <text x="116" y="232" font-family="Arial, sans-serif" font-size="24" font-weight="600" fill="#27272a">Cultural Archaeologist</text>
 
-    <text x="108" y="274" font-family="Arial, sans-serif" font-size="11" fill="#71717a">• Audience research</text>
-    <text x="108" y="293" font-family="Arial, sans-serif" font-size="11" fill="#71717a">• Strategy development</text>
-    <text x="108" y="312" font-family="Arial, sans-serif" font-size="11" fill="#71717a">• Campaign ideation</text>
+    <g transform="translate(348,214)" fill="#27272a">
+      <path d="M2.8 11.2C2.3 11.4 2.3 12.2 2.8 12.4L10.8 15.4L13.7 22C13.9 22.5 14.7 22.5 14.9 22L21.6 4.6C21.8 4.1 21.3 3.6 20.8 3.8L2.8 11.2Z"/>
+      <path d="M20.8 3.8L10.8 15.4L2.8 12.4L20.8 3.8Z" fill="#ffffff" opacity="0.28"/>
+    </g>
+    <text x="372" y="232" font-family="Arial, sans-serif" font-size="24" font-weight="600" fill="#27272a">Brand Navigator</text>
 
-    <text x="377" y="274" font-family="Arial, sans-serif" font-size="11" fill="#71717a">• Brand audits &amp; comp analysis</text>
-    <text x="377" y="293" font-family="Arial, sans-serif" font-size="11" fill="#71717a">• Opportunity space identification</text>
-    <text x="377" y="312" font-family="Arial, sans-serif" font-size="11" fill="#71717a">• Messaging development</text>
+    <g transform="translate(604,214)" stroke="#27272a" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/>
+      <circle cx="13.5" cy="6.5" r=".5" fill="#27272a"/>
+      <circle cx="17.5" cy="10.5" r=".5" fill="#27272a"/>
+      <circle cx="6.5" cy="12.5" r=".5" fill="#27272a"/>
+      <circle cx="8.5" cy="7.5" r=".5" fill="#27272a"/>
+    </g>
+    <text x="628" y="232" font-family="Arial, sans-serif" font-size="24" font-weight="600" fill="#27272a">Design Excavator</text>
 
-    <text x="646" y="274" font-family="Arial, sans-serif" font-size="11" fill="#71717a">• Competitive research</text>
-    <text x="646" y="293" font-family="Arial, sans-serif" font-size="11" fill="#71717a">• Visual identity exploration</text>
-    <text x="646" y="312" font-family="Arial, sans-serif" font-size="11" fill="#71717a">• Creative briefs</text>
+    <text x="92" y="260" font-family="Arial, sans-serif" font-size="14" fill="#71717a">Generate sharper insights about any audience through a cultural lens.</text>
+    <text x="348" y="260" font-family="Arial, sans-serif" font-size="14" fill="#71717a">Audit multiple brands to compare positionings, messages, campaigns, etc.</text>
+    <text x="604" y="260" font-family="Arial, sans-serif" font-size="14" fill="#71717a">Compare design systems across brands: logos, colors, typography, visual cues.</text>
 
-    <rect x="815" y="212" width="44" height="16" rx="8" fill="#e0e7ff" stroke="#c7d2fe"/>
-    <text x="837" y="223" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#4338ca">BETA</text>
+    <text x="92" y="287" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Audience research</text>
+    <text x="92" y="306" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Strategy development</text>
+    <text x="92" y="325" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Campaign &amp; content ideation</text>
+    <text x="92" y="344" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Creative briefs</text>
+    <text x="92" y="363" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Pitches</text>
+
+    <text x="348" y="287" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Brand audits &amp; competitive analysis</text>
+    <text x="348" y="306" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Opportunity space identification</text>
+    <text x="348" y="325" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Messaging development</text>
+    <text x="348" y="344" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Creative briefs</text>
+    <text x="348" y="363" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Pitches</text>
+
+    <text x="604" y="287" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Competitive research</text>
+    <text x="604" y="306" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Branding strategy development</text>
+    <text x="604" y="325" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Visual identity exploration</text>
+    <text x="604" y="344" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Creative briefs</text>
+    <text x="604" y="363" font-family="Arial, sans-serif" font-size="12" fill="#71717a">• Pitches</text>
+
+    <rect x="774" y="216" width="40" height="16" rx="8" fill="#e0e7ff" stroke="#c7d2fe"/>
+    <text x="794" y="227" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#4338ca">Beta</text>
   </g>
 `;
 
@@ -195,7 +225,8 @@ const loadPoints = async () => {
 
 const createFrameSvg = (frameIndex, points) => {
   const rotBase = (-START_LONGITUDE * Math.PI) / 180;
-  const rotY = rotBase + (frameIndex / FRAME_COUNT) * Math.PI * 2;
+  const elapsedSeconds = frameIndex * (FRAME_DELAY_CS / 100);
+  const rotY = rotBase + elapsedSeconds * AUTO_ROTATE_SPEED;
   const rotX = (AXIS_TILT_DEG * Math.PI) / 180;
   const cosX = Math.cos(rotX);
   const sinX = Math.sin(rotX);

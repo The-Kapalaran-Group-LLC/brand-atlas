@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "generate:splash-data": "node scripts/generate-splash-globe-data.mjs",
+    "generate:menupage-gif:deployed": "node scripts/capture-deployed-menupage-gif.mjs",
     "dev": "/bin/zsh -lc 'PORT=3001 node --import tsx server/index.ts & vite --port=3000 --host=127.0.0.1'",
     "dev:3002": "vite --port=3002 --host=127.0.0.1",
     "server": "tsx server/index.ts",
