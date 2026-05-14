@@ -58,10 +58,10 @@ const CONTINENT_INDIGO_COLORS = [
   'rgb(226 159 255)', // Antarctica
 ] as const;
 const INDIGO_GRADIENT_STOPS: Array<[number, number, number]> = [
-  [52, 36, 206],
-  [96, 69, 245],
-  [152, 95, 255],
-  [255, 123, 230],
+  [36, 22, 178],
+  [88, 56, 239],
+  [168, 88, 255],
+  [255, 102, 221],
 ];
 const CONTINENT_INDIGO_DARK_COLORS = [
   'rgb(89 62 233)', // North America
@@ -794,18 +794,18 @@ export function SplashGrid({
       const swirlBias = (rotatedX * 0.65 + rotatedY * 0.35) / (GLOBE_RADIUS * 1.45);
       // Anchor the strongest color handoff at the front-center of the globe.
       const centerDistance = Math.hypot(xNorm - 0.5, yNorm - 0.5);
-      const centerFrontMask = Math.exp(-Math.pow(centerDistance / 0.35, 2));
-      const centerTransition = (frontNorm - 0.5) * 0.34 * centerFrontMask;
+      const centerFrontMask = Math.exp(-Math.pow(centerDistance / 0.32, 2));
+      const centerTransition = (frontNorm - 0.5) * 0.48 * centerFrontMask;
       const baseT = clamp(
-        xNorm * 0.74 + yNorm * 0.16 + continentShift + swirlBias * 0.08 + centerTransition,
+        xNorm * 0.78 + yNorm * 0.14 + continentShift + swirlBias * 0.1 + centerTransition,
         0,
         1,
       );
-      const gradientT = Math.pow(baseT, 0.82);
-      if (mode === 'countryFill') return gradientColorAt(gradientT, 0.98);
-      if (mode === 'countryOutline') return gradientColorAt(gradientT, 1.02);
-      if (mode === 'continentOutline') return gradientColorAt(gradientT, 1.08);
-      return gradientColorAt(gradientT, 1.16);
+      const gradientT = Math.pow(baseT, 0.7);
+      if (mode === 'countryFill') return gradientColorAt(gradientT, 1.08);
+      if (mode === 'countryOutline') return gradientColorAt(gradientT, 1.14);
+      if (mode === 'continentOutline') return gradientColorAt(gradientT, 1.2);
+      return gradientColorAt(gradientT, 1.28);
     };
 
     const drawPoints = (
@@ -846,10 +846,10 @@ export function SplashGrid({
         const dotRadius = Math.max(mode === 'ocean' ? 0.34 : 0.45, dotDiameter * 0.5);
 
         if (mode === 'ocean') ctx.globalAlpha = Math.min(1, depthAlpha * 0.34);
-        else if (mode === 'continentFill') ctx.globalAlpha = Math.min(1, depthAlpha * 0.82);
-        else if (mode === 'countryFill') ctx.globalAlpha = Math.min(1, depthAlpha * 0.98);
-        else if (mode === 'countryOutline') ctx.globalAlpha = Math.min(1, depthAlpha * 0.78);
-        else ctx.globalAlpha = Math.min(1, depthAlpha * 0.92);
+        else if (mode === 'continentFill') ctx.globalAlpha = Math.min(1, depthAlpha * 0.92);
+        else if (mode === 'countryFill') ctx.globalAlpha = Math.min(1, depthAlpha * 1.04);
+        else if (mode === 'countryOutline') ctx.globalAlpha = Math.min(1, depthAlpha * 0.86);
+        else ctx.globalAlpha = Math.min(1, depthAlpha * 0.98);
 
         ctx.fillStyle = colorForMode(mode, point, projected.x, projected.y, projected.z);
         const px = cx + projected.x * projected.scale * globeScale;
