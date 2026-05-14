@@ -58,10 +58,10 @@ const CONTINENT_INDIGO_COLORS = [
   'rgb(226 159 255)', // Antarctica
 ] as const;
 const INDIGO_GRADIENT_STOPS: Array<[number, number, number]> = [
-  [24, 12, 156],
-  [76, 40, 232],
-  [176, 78, 255],
   [255, 86, 210],
+  [176, 78, 255],
+  [76, 40, 232],
+  [24, 12, 156],
 ];
 const CONTINENT_INDIGO_DARK_COLORS = [
   'rgb(89 62 233)', // North America
