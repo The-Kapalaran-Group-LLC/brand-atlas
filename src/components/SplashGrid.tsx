@@ -48,30 +48,12 @@ const DEFAULT_START_LONGITUDE = 121;
 const AUTO_ROTATE_SPEED = 0.176;
 const AXIS_TILT_DEG = 23.4;
 const DEPTH = 600;
-const CONTINENT_INDIGO_COLORS = [
-  'rgb(128 105 255)', // North America
-  'rgb(146 114 255)', // South America
-  'rgb(162 123 255)', // Europe
-  'rgb(178 132 255)', // Africa
-  'rgb(194 141 255)', // Asia
-  'rgb(210 150 255)', // Oceania
-  'rgb(226 159 255)', // Antarctica
-] as const;
 const INDIGO_GRADIENT_STOPS: Array<[number, number, number]> = [
   [255, 86, 210],
   [176, 78, 255],
   [76, 40, 232],
   [24, 12, 156],
 ];
-const CONTINENT_INDIGO_DARK_COLORS = [
-  'rgb(89 62 233)', // North America
-  'rgb(104 70 235)', // South America
-  'rgb(117 78 238)', // Europe
-  'rgb(129 86 240)', // Africa
-  'rgb(141 94 242)', // Asia
-  'rgb(154 103 245)', // Oceania
-  'rgb(167 112 247)', // Antarctica
-] as const;
 
 const normalizeLon = (lon: number): number => {
   let normalized = lon;
@@ -830,8 +812,7 @@ export function SplashGrid({
         return { x: x1, y: y2, z: z2, scale };
       };
 
-      const startIndex = 0;
-      for (let i = startIndex; i < sourcePoints.length; i += stride) {
+      for (let i = 0; i < sourcePoints.length; i += stride) {
         const point = sourcePoints[i];
         const projected = rotateAndProjectPoint(point, -GLOBE_RADIUS * 0.98);
         if (!projected) continue;
@@ -943,7 +924,7 @@ export function SplashGrid({
       const globeScale = targetRadius / projectedRadiusMax;
       const cx = width * 0.5;
       const cy = height * 0.5;
-      return { cx, cy, targetRadius, globeScale };
+      return { cx, cy, globeScale };
     };
 
     const frame = (now: number) => {
