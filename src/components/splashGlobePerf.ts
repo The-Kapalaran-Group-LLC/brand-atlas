@@ -30,8 +30,8 @@ export const getNextQualityStep = (currentStep: number, rawDeltaMs: number): num
 export const getRenderStride = (qualityStep: number, mode: GlobeRenderMode): number => {
   const step = clamp(Math.round(qualityStep), 0, MAX_QUALITY_STEP);
 
-  if (mode === 'countryFill') return 1 + step;
-  if (mode === 'continentFill') return 1 + Math.floor(step * 0.7);
+  if (mode === 'countryFill') return Math.min(3, 1 + step);
+  if (mode === 'continentFill') return Math.min(3, 1 + Math.floor(step * 0.7));
   if (mode === 'countryOutline') return 1 + Math.floor(step * 0.7);
   if (mode === 'continentOutline') return 1 + Math.floor(step * 0.5);
   return Math.max(1, Math.floor((step + 2) / 2));

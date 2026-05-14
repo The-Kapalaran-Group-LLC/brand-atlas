@@ -210,6 +210,28 @@ describe('BrandNavigator', () => {
     expect(await screen.findByRole('button', { name: /generate analysis/i })).toBeInTheDocument();
   });
 
+  it('stacks top action controls on mobile and keeps auto sizing at sm+', async () => {
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const actionContainer = await screen.findByTestId('top-action-buttons');
+    const culturalButton = screen.getByRole('button', { name: /cultural archaeologist/i });
+    const designButton = screen.getByRole('button', { name: /design excavator/i });
+    const newSearchButton = screen.getByRole('button', { name: /new search/i });
+
+    expect(actionContainer.className).toContain('left-4');
+    expect(actionContainer.className).toContain('right-4');
+    expect(actionContainer.className).toContain('sm:left-auto');
+    expect(actionContainer.className).toContain('sm:flex-row');
+
+    expect(culturalButton.className).toContain('w-full');
+    expect(culturalButton.className).toContain('sm:w-auto');
+    expect(designButton.className).toContain('w-full');
+    expect(designButton.className).toContain('sm:w-auto');
+    expect(newSearchButton.className).toContain('w-full');
+    expect(newSearchButton.className).toContain('sm:w-auto');
+  });
+
   it('left aligns text in the brand, audience, and topic inputs', async () => {
     render(<BrandNavigator />);
     fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));

@@ -1762,25 +1762,28 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
           </a>
         </div>
         {/* Top Navigation / Actions */}
-        <div className="absolute top-20 right-4 z-50 no-print flex flex-col items-end gap-3 sm:top-6 sm:right-6 sm:flex-row sm:items-center sm:gap-2">
+        <div
+          data-testid="top-action-buttons"
+          className="absolute top-20 left-4 right-4 z-50 no-print flex flex-col items-stretch gap-2 sm:top-6 sm:left-auto sm:right-6 sm:w-auto sm:flex-row sm:items-center sm:justify-end sm:gap-2"
+        >
           <a
             href="/#cultural-archaeologist"
             onClick={(event) => handlePrimaryLinkNavigation(event, () => navigateToHashRoute('cultural-archaeologist'))}
-            className="inline-flex h-10 items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+            className="inline-flex h-10 w-full items-center justify-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm sm:w-auto"
           >
             <Search className="w-4 h-4" /> Cultural Archaeologist
           </a>
           <a
             href="/#brand-navigator"
             onClick={(event) => handlePrimaryLinkNavigation(event, () => navigateToHashRoute('brand-navigator'))}
-            className="inline-flex h-10 items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+            className="inline-flex h-10 w-full items-center justify-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm sm:w-auto"
           >
             <CompassRoseIcon className="w-4 h-4" /> Brand Navigator
           </a>
           <a
             href="/#design-excavator"
             onClick={(event) => handlePrimaryLinkNavigation(event, clearExcavatorSearch)}
-            className="inline-flex h-10 items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+            className="inline-flex h-10 w-full items-center justify-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm sm:w-auto"
           >
             <RefreshCw className="w-4 h-4" /> New Search
           </a>

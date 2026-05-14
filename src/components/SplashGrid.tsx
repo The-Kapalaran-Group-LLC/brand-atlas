@@ -148,6 +148,11 @@ type PopulationHub = {
   weight: number;
 };
 
+type LatLon = {
+  lat: number;
+  lon: number;
+};
+
 const POPULATION_HUBS: PopulationHub[] = [
   { lat: 35.68, lon: 139.76, weight: 1.0 }, // Tokyo
   { lat: 31.23, lon: 121.47, weight: 0.95 }, // Shanghai
@@ -174,6 +179,69 @@ const POPULATION_HUBS: PopulationHub[] = [
   { lat: -33.87, lon: 151.21, weight: 0.5 }, // Sydney
   { lat: 37.57, lon: 126.98, weight: 0.7 }, // Seoul
   { lat: 22.32, lon: 114.17, weight: 0.7 }, // Hong Kong
+];
+
+// Explicit Pacific island anchors to ensure tiny island nations are represented
+// as single visible dots even when coarse geojson/fill sampling misses them.
+const PACIFIC_ISLAND_DOTS: LatLon[] = [
+  // Western / Micronesia
+  { lat: 13.44, lon: 144.79 }, // Guam
+  { lat: 15.19, lon: 145.75 }, // Saipan (Northern Mariana Islands)
+  { lat: 7.35, lon: 134.46 }, // Palau
+  { lat: 9.52, lon: 138.12 }, // Yap
+  { lat: 6.92, lon: 158.16 }, // Pohnpei
+  { lat: 7.45, lon: 151.84 }, // Chuuk
+  { lat: 5.33, lon: 163.02 }, // Kosrae
+  { lat: 7.12, lon: 171.06 }, // Majuro (Marshall Islands)
+  { lat: 9.08, lon: 167.33 }, // Kwajalein Atoll
+  { lat: 1.87, lon: 173.00 }, // Kiribati (Gilbert)
+  { lat: -0.53, lon: 166.93 }, // Nauru
+  { lat: 1.45, lon: 172.98 }, // Tarawa
+
+  // Equatorial remote North Pacific islands
+  { lat: 19.71, lon: 166.63 }, // Wake Island
+  { lat: 16.75, lon: -169.53 }, // Johnston Atoll
+  { lat: 5.88, lon: -162.08 }, // Palmyra Atoll
+  { lat: 0.80, lon: -176.62 }, // Howland Island
+  { lat: 0.19, lon: -176.48 }, // Baker Island
+  { lat: -0.37, lon: -159.99 }, // Kiritimati (Christmas Island, Kiribati)
+  { lat: -3.86, lon: -171.74 }, // Tokelau area
+  { lat: 28.20, lon: -177.35 }, // Midway Atoll
+  { lat: 21.31, lon: -157.86 }, // Hawaii (Oahu)
+  { lat: 19.64, lon: -155.55 }, // Hawaii (Big Island)
+
+  // Melanesia / Coral Sea
+  { lat: -9.44, lon: 147.18 }, // Port Moresby (PNG)
+  { lat: -5.84, lon: 144.28 }, // PNG highlands anchor
+  { lat: -9.43, lon: 160.04 }, // Honiara (Solomon Islands)
+  { lat: -8.10, lon: 156.84 }, // Western Solomons
+  { lat: -17.74, lon: 168.31 }, // Port Vila (Vanuatu)
+  { lat: -16.13, lon: 167.43 }, // Espiritu Santo (Vanuatu)
+  { lat: -22.28, lon: 166.46 }, // Noumea (New Caledonia)
+  { lat: -21.50, lon: 165.50 }, // New Caledonia north
+  { lat: -17.82, lon: 177.98 }, // Viti Levu (Fiji)
+  { lat: -16.78, lon: 179.34 }, // Vanua Levu (Fiji)
+  { lat: -8.52, lon: 179.20 }, // Tuvalu
+
+  // Polynesia core
+  { lat: -13.84, lon: -171.75 }, // Samoa
+  { lat: -14.28, lon: -170.70 }, // American Samoa
+  { lat: -13.30, lon: -176.20 }, // Wallis and Futuna
+  { lat: -21.18, lon: -175.20 }, // Tonga (Tongatapu)
+  { lat: -18.65, lon: -173.98 }, // Tonga north
+  { lat: -21.24, lon: -159.78 }, // Cook Islands (Rarotonga)
+  { lat: -19.05, lon: -169.87 }, // Niue
+  { lat: -17.54, lon: -149.56 }, // Tahiti / Society Islands
+  { lat: -16.50, lon: -151.74 }, // Bora Bora / Leeward
+  { lat: -23.12, lon: -134.97 }, // Mangareva / Gambier
+  { lat: -9.76, lon: -139.03 }, // Marquesas (Nuku Hiva)
+  { lat: -14.27, lon: -170.70 }, // Central Samoa arc
+  { lat: -21.20, lon: -159.70 }, // Southern Cooks arc
+  { lat: -17.67, lon: -149.40 }, // Society arc
+
+  // Far South / Eastern Pacific islands visible on reference
+  { lat: -25.07, lon: -130.10 }, // Pitcairn Islands
+  { lat: 10.30, lon: -109.22 }, // Clipperton Island
 ];
 
 const wrappedLonDistance = (a: number, b: number): number => {
@@ -803,6 +871,17 @@ export function SplashGrid({
         oceanPoints.push({ ...toCartesian(jitteredLat, jitteredLon, 0), lat: jitteredLat, lon: jitteredLon, variant: 0 });
       }
 
+      // Add one guaranteed dot for each Pacific island anchor.
+      for (const island of PACIFIC_ISLAND_DOTS) {
+        const variant = 700 + getContinentIndex(island.lat, island.lon);
+        countryFillPoints.push({
+          ...toCartesian(island.lat, island.lon, variant),
+          lat: island.lat,
+          lon: island.lon,
+          variant,
+        });
+      }
+
       generationReady = true;
       console.log('[SplashGlobe] points generated', {
         quality,
@@ -830,7 +909,8 @@ export function SplashGrid({
       const swirlBias = (rotatedX * 0.65 + rotatedY * 0.35) / (GLOBE_RADIUS * 1.45);
       // Anchor the strongest color handoff at the front-center of the globe.
       const centerDistance = Math.hypot(xNorm - 0.5, yNorm - 0.5);
-      const centerFrontMask = Math.exp(-Math.pow(centerDistance / 0.28, 2));
+      const isFront = frontNorm > 0.5;
+      const centerFrontMask = isFront ? Math.exp(-Math.pow(centerDistance / 0.28, 2)) : 0;
       const centerTransition = (frontNorm - 0.5) * 0.64 * centerFrontMask;
       const baseT = clamp(
         xNorm * 0.82 + yNorm * 0.12 + continentShift + swirlBias * 0.13 + centerTransition,
@@ -855,6 +935,7 @@ export function SplashGrid({
       mode: 'continentFill' | 'continentOutline' | 'countryFill' | 'countryOutline' | 'ocean',
       globeScale: number,
       stride: number,
+      hemisphere: 'back' | 'front',
     ) => {
       const rotateAndProjectPoint = (point: GlobePoint) => {
         const x1 = point.x * cosY + point.z * sinY;
@@ -866,51 +947,54 @@ export function SplashGrid({
         return { x: x1, y: y2, z: z2, scale };
       };
 
-      for (const hemisphere of ['back', 'front'] as const) {
-        const hemisphereStride = hemisphere === 'back'
-          ? Math.max(1, Math.floor(stride * 0.52))
-          : stride;
-        for (let i = 0; i < sourcePoints.length; i += hemisphereStride) {
-          const point = sourcePoints[i];
-          const projected = rotateAndProjectPoint(point);
-          if (!projected) continue;
-          if (hemisphere === 'front' && projected.z < 0) continue;
-          if (hemisphere === 'back' && projected.z >= 0) continue;
+      const hemisphereStride = hemisphere === 'back'
+        ? Math.max(1, Math.floor(stride * 0.52))
+        : stride;
+      for (let i = 0; i < sourcePoints.length; i += hemisphereStride) {
+        const point = sourcePoints[i];
+        const projected = rotateAndProjectPoint(point);
+        if (!projected) continue;
+        if (hemisphere === 'front' && projected.z < 0) continue;
+        if (hemisphere === 'back' && projected.z >= 0) continue;
 
-          const depthAlpha = Math.max(
-            0.08,
-            Math.min(0.96, (projected.z + GLOBE_RADIUS) / (GLOBE_RADIUS * 2) + 0.22),
-          );
-          const sizeBase = mode === 'ocean' ? 0.9 : (mode === 'continentFill' ? 1.32 : mode === 'countryFill' ? 1.46 : 1.02);
-          const size = Math.max(0.52, sizeBase * projected.scale) * globeScale;
-          const dotDiameter = size * 0.5;
-          const dotRadius = Math.max(mode === 'ocean' ? 0.34 : 0.45, dotDiameter * 0.5);
+        const depthAlpha = Math.max(
+          0.08,
+          Math.min(0.96, (projected.z + GLOBE_RADIUS) / (GLOBE_RADIUS * 2) + 0.22),
+        );
+        const sizeBase = mode === 'ocean' ? 0.9 : (mode === 'continentFill' ? 1.32 : mode === 'countryFill' ? 1.46 : 1.02);
+        const size = Math.max(0.52, sizeBase * projected.scale) * globeScale;
+        const dotDiameter = size * 0.5;
+        const dotRadius = Math.max(mode === 'ocean' ? 0.34 : 0.45, dotDiameter * 0.5);
 
-          const frontAlphaBase = mode === 'ocean'
-            ? depthAlpha * 0.34
-            : mode === 'continentFill'
-              ? depthAlpha * 1.0
-              : mode === 'countryFill'
-                ? depthAlpha * 1.12
-                : mode === 'countryOutline'
-                  ? depthAlpha * 0.92
-                  : depthAlpha * 1.04;
-          const hemisphereAlpha = hemisphere === 'back'
-            ? Math.min(1, frontAlphaBase * (mode === 'ocean' ? 0.56 : mode === 'continentFill' ? 0.36 : 0.3))
-            : Math.min(1, frontAlphaBase);
-          ctx.globalAlpha = hemisphereAlpha;
+        const frontAlphaBase = mode === 'ocean'
+          ? depthAlpha * 0.34
+          : mode === 'continentFill'
+            ? depthAlpha * 1.0
+            : mode === 'countryFill'
+              ? depthAlpha * 1.12
+              : mode === 'countryOutline'
+                ? depthAlpha * 0.92
+                : depthAlpha * 1.04;
+        const hemisphereAlpha = hemisphere === 'back'
+          ? (() => {
+            const backBase = frontAlphaBase * (mode === 'ocean' ? 0.58 : mode === 'continentFill' ? 0.72 : 0.66);
+            // Keep far-side fill present enough to avoid a center "donut" hole.
+            const minBackAlpha = mode === 'ocean' ? 0.14 : mode === 'continentFill' ? 0.22 : 0.2;
+            return Math.min(1, Math.max(minBackAlpha, backBase));
+          })()
+          : Math.min(1, frontAlphaBase);
+        ctx.globalAlpha = hemisphereAlpha;
 
-          ctx.fillStyle = colorForMode(mode, point, projected.x, projected.y, projected.z);
-          const px = cx + projected.x * projected.scale * globeScale;
-          const py = cy - projected.y * projected.scale * globeScale;
-          if (dotRadius <= 0.95) {
-            const side = dotRadius * 1.7;
-            ctx.fillRect(px - side * 0.5, py - side * 0.5, side, side);
-          } else {
-            ctx.beginPath();
-            ctx.arc(px, py, dotRadius, 0, Math.PI * 2);
-            ctx.fill();
-          }
+        ctx.fillStyle = colorForMode(mode, point, projected.x, projected.y, projected.z);
+        const px = cx + projected.x * projected.scale * globeScale;
+        const py = cy - projected.y * projected.scale * globeScale;
+        if (dotRadius <= 0.95) {
+          const side = dotRadius * 1.7;
+          ctx.fillRect(px - side * 0.5, py - side * 0.5, side, side);
+        } else {
+          ctx.beginPath();
+          ctx.arc(px, py, dotRadius, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
     };
@@ -936,11 +1020,13 @@ export function SplashGrid({
         const scale = DEPTH / (DEPTH - z2);
         return { x: x1, y: y2, z: z2, scale };
       };
+      const snapToPixel = (value: number) => Math.round(value) + 0.5;
 
       // Keep geopolitical outlines intentionally very thin so they read as subtle structure.
       const lineWidthBase = mode === 'countryOutline' ? 0.66 : 0.13;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+      ctx.lineCap = 'butt';
+      ctx.lineJoin = 'miter';
+      ctx.miterLimit = 2;
       for (const line of lines) {
         let started = false;
         let visibleSegments = 0;
@@ -959,11 +1045,13 @@ export function SplashGrid({
 
           const px = cx + projected.x * projected.scale * globeScale;
           const py = cy - projected.y * projected.scale * globeScale;
+          const sx = snapToPixel(px);
+          const sy = snapToPixel(py);
           if (!started) {
-            ctx.moveTo(px, py);
+            ctx.moveTo(sx, sy);
             started = true;
           } else {
-            ctx.lineTo(px, py);
+            ctx.lineTo(sx, sy);
             visibleSegments += 1;
             zAccum += projected.z;
             xAccum += projected.x;
@@ -1026,66 +1114,74 @@ export function SplashGrid({
       const countryOutlineStride = getRenderStride(adaptiveQualityStep, 'countryOutline');
       const continentOutlineStride = getRenderStride(adaptiveQualityStep, 'continentOutline');
 
-      drawPoints(
-        oceanPoints,
-        cx,
-        cy,
-        cosY,
-        sinY,
-        cosX,
-        sinX,
-        'ocean',
-        globeScale,
-        oceanStride,
-      );
-      drawPoints(
-        continentFillPoints,
-        cx,
-        cy,
-        cosY,
-        sinY,
-        cosX,
-        sinX,
-        'continentFill',
-        globeScale,
-        continentFillStride,
-      );
-      drawPoints(
-        countryFillPoints,
-        cx,
-        cy,
-        cosY,
-        sinY,
-        cosX,
-        sinX,
-        'countryFill',
-        globeScale,
-        countryFillStride,
-      );
-      drawLines(
-        countryOutlineLines,
-        cx,
-        cy,
-        cosY,
-        sinY,
-        cosX,
-        sinX,
-        'countryOutline',
-        globeScale,
-        countryOutlineStride,
-      );
-      drawLines(
-        continentOutlineLines,
-        cx,
-        cy,
-        cosY,
-        sinY,
-        cosX,
-        sinX,
-        'continentOutline',
-        globeScale,
-        continentOutlineStride,
-      );
+      for (const hemisphere of ['back', 'front'] as const) {
+        drawPoints(
+          oceanPoints,
+          cx,
+          cy,
+          cosY,
+          sinY,
+          cosX,
+          sinX,
+          'ocean',
+          globeScale,
+          oceanStride,
+          hemisphere,
+        );
+        drawPoints(
+          continentFillPoints,
+          cx,
+          cy,
+          cosY,
+          sinY,
+          cosX,
+          sinX,
+          'continentFill',
+          globeScale,
+          continentFillStride,
+          hemisphere,
+        );
+        drawPoints(
+          countryFillPoints,
+          cx,
+          cy,
+          cosY,
+          sinY,
+          cosX,
+          sinX,
+          'countryFill',
+          globeScale,
+          countryFillStride,
+          hemisphere,
+        );
+
+        if (hemisphere === 'front') {
+          drawLines(
+            countryOutlineLines,
+            cx,
+            cy,
+            cosY,
+            sinY,
+            cosX,
+            sinX,
+            'countryOutline',
+            globeScale,
+            countryOutlineStride,
+          );
+          drawLines(
+            continentOutlineLines,
+            cx,
+            cy,
+            cosY,
+            sinY,
+            cosX,
+            sinX,
+            'continentOutline',
+            globeScale,
+            continentOutlineStride,
+          );
+        }
+      }
 
       ctx.globalAlpha = 1;
       animationFrameId = requestAnimationFrame(frame);

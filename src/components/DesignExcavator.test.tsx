@@ -119,9 +119,22 @@ describe('BrandDeepDivePage', () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 
     expect(screen.getByRole('link', { name: /back to home/i })).toHaveAttribute('href', '/?home=1');
-    expect(screen.getByRole('link', { name: /cultural archaeologist/i })).toHaveAttribute('href', '/#cultural-archaeologist');
-    expect(screen.getByRole('link', { name: /brand navigator/i })).toHaveAttribute('href', '/#brand-navigator');
-    expect(screen.getByRole('link', { name: /new search/i })).toHaveAttribute('href', '/#design-excavator');
+    const culturalLink = screen.getByRole('link', { name: /cultural archaeologist/i });
+    const brandLink = screen.getByRole('link', { name: /brand navigator/i });
+    const newSearchLink = screen.getByRole('link', { name: /new search/i });
+    const actionContainer = screen.getByTestId('top-action-buttons');
+
+    expect(culturalLink).toHaveAttribute('href', '/#cultural-archaeologist');
+    expect(brandLink).toHaveAttribute('href', '/#brand-navigator');
+    expect(newSearchLink).toHaveAttribute('href', '/#design-excavator');
+    expect(actionContainer.className).toContain('left-4');
+    expect(actionContainer.className).toContain('sm:flex-row');
+    expect(culturalLink.className).toContain('w-full');
+    expect(culturalLink.className).toContain('sm:w-auto');
+    expect(brandLink.className).toContain('w-full');
+    expect(brandLink.className).toContain('sm:w-auto');
+    expect(newSearchLink.className).toContain('w-full');
+    expect(newSearchLink.className).toContain('sm:w-auto');
   });
 
   it('uses the same primary generate button size and font treatment as other research pages', () => {

@@ -24,9 +24,14 @@ describe('splashGlobePerf', () => {
 
   it('increases draw stride as quality step rises', () => {
     expect(getRenderStride(0, 'countryFill')).toBe(1);
-    expect(getRenderStride(3, 'countryFill')).toBe(4);
+    expect(getRenderStride(3, 'countryFill')).toBe(3);
     expect(getRenderStride(3, 'countryOutline')).toBe(3);
     expect(getRenderStride(4, 'ocean')).toBe(3);
+  });
+
+  it('caps fill stride at high quality pressure to avoid visible globe voids', () => {
+    expect(getRenderStride(MAX_QUALITY_STEP, 'countryFill')).toBe(3);
+    expect(getRenderStride(MAX_QUALITY_STEP, 'continentFill')).toBe(3);
   });
 
   it('applies stronger damping for longer frames', () => {

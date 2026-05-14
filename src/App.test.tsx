@@ -129,7 +129,8 @@ describe('App Component', () => {
     const actionBar = screen.getByRole('button', { name: /design excavator/i }).parentElement;
 
     expect(actionBar).toHaveClass('flex-col');
-    expect(actionBar).toHaveClass('gap-3');
+    expect(actionBar).toHaveClass('items-stretch');
+    expect(actionBar).toHaveClass('gap-2');
     expect(actionBar).toHaveClass('sm:flex-row');
   });
 });

@@ -116,6 +116,27 @@ describe('CulturalArchaeologist', () => {
     expect(await screen.findByTestId('rerun-analysis-button')).toBeInTheDocument();
   });
 
+  it('stacks top action controls on mobile and keeps auto sizing at sm+', async () => {
+    render(<CulturalArchaeologist />);
+
+    const actionContainer = await screen.findByTestId('top-action-buttons');
+    const brandButton = screen.getByRole('button', { name: /brand navigator/i });
+    const designButton = screen.getByRole('button', { name: /design excavator/i });
+    const newSearchButton = screen.getByRole('button', { name: /new search/i });
+
+    expect(actionContainer.className).toContain('left-4');
+    expect(actionContainer.className).toContain('right-4');
+    expect(actionContainer.className).toContain('sm:left-auto');
+    expect(actionContainer.className).toContain('sm:flex-row');
+
+    expect(brandButton.className).toContain('w-full');
+    expect(brandButton.className).toContain('sm:w-auto');
+    expect(designButton.className).toContain('w-full');
+    expect(designButton.className).toContain('sm:w-auto');
+    expect(newSearchButton.className).toContain('w-full');
+    expect(newSearchButton.className).toContain('sm:w-auto');
+  });
+
   it('reruns analysis with active filter constraints while keeping current filter behavior', async () => {
     generateCulturalMatrix
       .mockResolvedValueOnce(mockMatrix)
