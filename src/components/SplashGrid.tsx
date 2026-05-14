@@ -5,7 +5,6 @@ import {
   getRenderStride,
   getStripeClusterDensity,
 } from './splashGlobePerf';
-import { buildBrandLogoMarkers, type BrandLogoMarker } from './splashBrandLogos';
 
 type GlobePoint = {
   x: number;
@@ -14,16 +13,6 @@ type GlobePoint = {
   lat: number;
   lon: number;
   variant: number;
-};
-
-type GlobeLogoPoint = GlobePoint & {
-  brand: string;
-  continent: string;
-  logoUrl: string;
-  logoDomain: string;
-  ticker: string;
-  monogram: string;
-  styleVariant: number;
 };
 
 type GeoJsonFeature = {
@@ -102,10 +91,6 @@ const getContinentIndex = (lat: number, lon: number): number => {
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-const smoothstep = (edge0: number, edge1: number, value: number): number => {
-  const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
-  return t * t * (3 - 2 * t);
-};
 
 const gradientColorAt = (t: number, brightness = 1): string => {
   const safeT = clamp(t, 0, 1);
@@ -246,9 +231,64 @@ type PrecomputedSplashDotData = {
   countryFill?: number[];
 };
 
+const REMOTE_COUNTRIES_GEOJSON_URLS = [
+  'https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json',
+  'https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json',
+];
+const STATIC_GLOBE_SNAPSHOT_KEY = 'splash_globe_static_snapshot_v1';
+const COUNTRIES_GEOJSON_CACHE_KEY = 'splash_globe_countries_geojson_v1';
+const COUNTRIES_GEOJSON_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
+const COUNTRIES_REMOTE_FAILURE_KEY = 'splash_globe_countries_remote_failure_ts_v1';
+const COUNTRIES_REMOTE_RETRY_BACKOFF_MS = 1000 * 60 * 60 * 6; // 6 hours
+
 let cachedLandGeoJson: GeoJsonData | null = null;
 let cachedCountriesGeoJson: GeoJsonData | null = null;
 let cachedPrecomputedSplashDots: PrecomputedSplashDotData | null = null;
+
+const readCachedCountriesGeoJson = (): GeoJsonData | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(COUNTRIES_GEOJSON_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { savedAt?: number; data?: GeoJsonData };
+    if (!parsed?.data) return null;
+    const savedAt = typeof parsed.savedAt === 'number' ? parsed.savedAt : 0;
+    if (Date.now() - savedAt > COUNTRIES_GEOJSON_CACHE_MAX_AGE_MS) {
+      window.localStorage.removeItem(COUNTRIES_GEOJSON_CACHE_KEY);
+      return null;
+    }
+    return parsed.data;
+  } catch (error) {
+    console.log('[SplashGlobe] Failed to read cached countries geojson', error);
+    return null;
+  }
+};
+
+const writeCachedCountriesGeoJson = (geoJson: GeoJsonData) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(COUNTRIES_GEOJSON_CACHE_KEY, JSON.stringify({
+      savedAt: Date.now(),
+      data: geoJson,
+    }));
+    window.localStorage.removeItem(COUNTRIES_REMOTE_FAILURE_KEY);
+    console.log('[SplashGlobe] Cached countries geojson in localStorage');
+  } catch (error) {
+    console.log('[SplashGlobe] Failed to cache countries geojson in localStorage', error);
+  }
+};
+
+const readRemoteFailureTimestamp = (): number => {
+  if (typeof window === 'undefined') return 0;
+  const raw = window.localStorage.getItem(COUNTRIES_REMOTE_FAILURE_KEY);
+  const parsed = raw ? Number(raw) : 0;
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const writeRemoteFailureTimestamp = () => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(COUNTRIES_REMOTE_FAILURE_KEY, String(Date.now()));
+};
 
 export function SplashGrid({
   sizeMultiplier = 1,
@@ -287,6 +327,8 @@ export function SplashGrid({
     let lastPointerY = 0;
     let pointerMoved = false;
     let suppressNextClick = false;
+    let snapshotStoredForThisMount = false;
+    let staticSnapshotImage: HTMLImageElement | null = null;
 
     let generationReady = false;
     let landGeoJsonRef: GeoJsonData | null = null;
@@ -297,8 +339,6 @@ export function SplashGrid({
     const countryOutlineLines: GlobeOutlineLine[] = [];
     const countryFillPoints: GlobePoint[] = [];
     const oceanPoints: GlobePoint[] = [];
-    const logoPoints: GlobeLogoPoint[] = [];
-    const logoImageCache = new Map<string, HTMLImageElement | null>();
 
     const resize = () => {
       const dprCap = qualityMode === 'fast' ? 1.25 : 2;
@@ -309,6 +349,48 @@ export function SplashGrid({
       canvas.height = Math.floor(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       console.log('[SplashGlobe] resize', { width, height, dpr });
+      if (staticSnapshotImage) {
+        ctx.clearRect(0, 0, width, height);
+        ctx.drawImage(staticSnapshotImage, 0, 0, width, height);
+      }
+    };
+
+    const saveStaticSnapshot = () => {
+      if (interactive || snapshotStoredForThisMount) return;
+      if (typeof window === 'undefined') return;
+      try {
+        const dataUrl = canvas.toDataURL('image/png');
+        window.localStorage.setItem(STATIC_GLOBE_SNAPSHOT_KEY, dataUrl);
+        snapshotStoredForThisMount = true;
+        console.log('[SplashGlobe] static snapshot cached');
+      } catch (error) {
+        console.log('[SplashGlobe] failed to cache static snapshot', error);
+      }
+    };
+
+    const tryDrawCachedStaticSnapshot = (): boolean => {
+      if (interactive || typeof window === 'undefined') return false;
+      try {
+        const dataUrl = window.localStorage.getItem(STATIC_GLOBE_SNAPSHOT_KEY);
+        if (!dataUrl) return false;
+        const image = new Image();
+        image.decoding = 'async';
+        image.onload = () => {
+          staticSnapshotImage = image;
+          ctx.clearRect(0, 0, width, height);
+          ctx.drawImage(image, 0, 0, width, height);
+          console.log('[SplashGlobe] rendered static snapshot from cache');
+        };
+        image.onerror = () => {
+          console.log('[SplashGlobe] cached static snapshot failed to load');
+          window.localStorage.removeItem(STATIC_GLOBE_SNAPSHOT_KEY);
+        };
+        image.src = dataUrl;
+        return true;
+      } catch (error) {
+        console.log('[SplashGlobe] failed to read static snapshot cache', error);
+        return false;
+      }
     };
 
     const drawRing = (ring: number[][]) => {
@@ -767,46 +849,6 @@ export function SplashGrid({
       }
 
       generationReady = true;
-      const sourceForLogos = countryFillPoints.length > 0 ? countryFillPoints : continentFillPoints;
-      const logoCandidatePoints = sourceForLogos.map((point) => ({
-        lat: point.lat,
-        lon: point.lon,
-        variant: point.variant,
-        continentIndex: getContinentIndex(point.lat, point.lon),
-      }));
-      const brandLogoMarkers: BrandLogoMarker[] = buildBrandLogoMarkers(logoCandidatePoints);
-      for (const marker of brandLogoMarkers) {
-        if (logoImageCache.has(marker.logoUrl)) continue;
-        const image = new Image();
-        image.crossOrigin = 'anonymous';
-        image.referrerPolicy = 'no-referrer';
-        image.decoding = 'async';
-        image.loading = 'eager';
-        image.src = marker.logoUrl;
-        image.onload = () => {
-          logoImageCache.set(marker.logoUrl, image);
-          console.log('[SplashGlobe] logo loaded', { brand: marker.brand, domain: marker.logoDomain });
-        };
-        image.onerror = () => {
-          logoImageCache.set(marker.logoUrl, null);
-          console.log('[SplashGlobe] logo failed to load', { brand: marker.brand, domain: marker.logoDomain });
-        };
-        logoImageCache.set(marker.logoUrl, image);
-      }
-      logoPoints.length = 0;
-      for (const marker of brandLogoMarkers) {
-        const cartesian = toCartesian(marker.lat, marker.lon, marker.styleVariant);
-        logoPoints.push({
-          ...cartesian,
-          brand: marker.brand,
-          continent: marker.continent,
-          logoUrl: marker.logoUrl,
-          logoDomain: marker.logoDomain,
-          ticker: marker.ticker,
-          monogram: marker.monogram,
-          styleVariant: marker.styleVariant,
-        });
-      }
       console.log('[SplashGlobe] points generated', {
         quality,
         continentOutlineLines: continentOutlineLines.length,
@@ -814,7 +856,6 @@ export function SplashGrid({
         countryOutlineLines: countryOutlineLines.length,
         countryFill: countryFillPoints.length,
         ocean: oceanPoints.length,
-        logos: logoPoints.length,
       });
     };
 
@@ -843,7 +884,7 @@ export function SplashGrid({
       );
       const gradientT = Math.pow(baseT, 0.6);
       if (mode === 'countryFill') return gradientColorAt(gradientT, 1.14);
-      if (mode === 'countryOutline') return gradientColorAt(gradientT, 1.2);
+      if (mode === 'countryOutline') return 'rgb(92 92 255)';
       if (mode === 'continentOutline') return gradientColorAt(gradientT, 1.28);
       return gradientColorAt(gradientT, 1.38);
     };
@@ -941,7 +982,8 @@ export function SplashGrid({
         return { x: x1, y: y2, z: z2, scale };
       };
 
-      const lineWidthBase = mode === 'countryOutline' ? 0.38 : 0.34;
+      // Keep geopolitical outlines intentionally very thin so they read as subtle structure.
+      const lineWidthBase = mode === 'countryOutline' ? 0.66 : 0.13;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       for (const line of lines) {
@@ -980,157 +1022,12 @@ export function SplashGrid({
         const avgX = xAccum / Math.max(1, visibleSegments);
         const avgY = yAccum / Math.max(1, visibleSegments);
         const depthAlpha = Math.max(0.2, Math.min(0.95, (avgZ + GLOBE_RADIUS) / (GLOBE_RADIUS * 2) + 0.25));
-        ctx.globalAlpha = mode === 'countryOutline' ? depthAlpha * 0.72 : depthAlpha * 0.82;
+        ctx.globalAlpha = mode === 'countryOutline' ? depthAlpha * 1.0 : depthAlpha * 0.82;
         const samplePoint = line.points[0] ?? { lat: 0, lon: 0, variant: line.variant };
         ctx.strokeStyle = colorForMode(mode, samplePoint, avgX, avgY, avgZ);
-        const minWidth = mode === 'countryOutline' ? 0.45 : 0.24;
+        const minWidth = mode === 'countryOutline' ? 0.58 : 0.1;
         ctx.lineWidth = Math.max(minWidth, lineWidthBase * globeScale);
         ctx.stroke();
-      }
-    };
-
-    const drawRoundedRect = (
-      x: number,
-      y: number,
-      widthValue: number,
-      heightValue: number,
-      radiusValue: number,
-    ) => {
-      const radius = Math.min(radiusValue, widthValue * 0.5, heightValue * 0.5);
-      ctx.beginPath();
-      ctx.moveTo(x + radius, y);
-      ctx.lineTo(x + widthValue - radius, y);
-      ctx.quadraticCurveTo(x + widthValue, y, x + widthValue, y + radius);
-      ctx.lineTo(x + widthValue, y + heightValue - radius);
-      ctx.quadraticCurveTo(x + widthValue, y + heightValue, x + widthValue - radius, y + heightValue);
-      ctx.lineTo(x + radius, y + heightValue);
-      ctx.quadraticCurveTo(x, y + heightValue, x, y + heightValue - radius);
-      ctx.lineTo(x, y + radius);
-      ctx.quadraticCurveTo(x, y, x + radius, y);
-      ctx.closePath();
-    };
-
-    const drawOceanSphere = (cx: number, cy: number, globeScale: number) => {
-      const radius = GLOBE_RADIUS * globeScale * 1.005;
-      ctx.globalAlpha = 1;
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      // Neutral base avoids blue shadowing while still preventing white holes.
-      ctx.fillStyle = 'rgba(247, 247, 250, 0.95)';
-      ctx.fill();
-    };
-
-    const drawBrandLogos = (
-      sourceLogos: GlobeLogoPoint[],
-      cx: number,
-      cy: number,
-      cosY: number,
-      sinY: number,
-      cosX: number,
-      sinX: number,
-      globeScale: number,
-    ) => {
-      const projectedLogos: Array<{
-        point: GlobeLogoPoint;
-        x: number;
-        y: number;
-        z: number;
-        scale: number;
-      }> = [];
-
-      for (let i = 0; i < sourceLogos.length; i += 1) {
-        const point = sourceLogos[i];
-        const x1 = point.x * cosY + point.z * sinY;
-        const z1 = -point.x * sinY + point.z * cosY;
-        const y2 = point.y * cosX - z1 * sinX;
-        const z2 = point.y * sinX + z1 * cosX;
-        if (z2 < -GLOBE_RADIUS * 0.5) continue;
-
-        const projection = DEPTH / (DEPTH - z2);
-        const px = cx + x1 * projection * globeScale;
-        const py = cy - y2 * projection * globeScale;
-        projectedLogos.push({ point, x: px, y: py, z: z2, scale: projection });
-      }
-
-      projectedLogos.sort((a, b) => a.z - b.z);
-
-      for (const projectedLogo of projectedLogos) {
-        const point = projectedLogo.point;
-        const depthAlpha = clamp((projectedLogo.z + GLOBE_RADIUS) / (GLOBE_RADIUS * 2), 0, 1);
-        const zNorm = projectedLogo.z / GLOBE_RADIUS;
-        // Fade logos smoothly through the horizon so they don't pop on/off.
-        const horizonFade = smoothstep(-0.2, 0.16, zNorm);
-        const backFade = smoothstep(-0.5, -0.22, zNorm) * 0.2;
-        const visibility = clamp(horizonFade + backFade, 0, 1);
-        if (visibility <= 0.01) continue;
-
-        const tileSize = clamp(16 * projectedLogo.scale * globeScale, 11.5, 20);
-        const left = projectedLogo.x - tileSize * 0.5;
-        const top = projectedLogo.y - tileSize * 0.5;
-
-        const colorT = (point.styleVariant % 7) / 6;
-        const gradient = ctx.createLinearGradient(left, top, left + tileSize, top + tileSize);
-        gradient.addColorStop(0, gradientColorAt(clamp(colorT * 0.75, 0, 1), 1.2));
-        gradient.addColorStop(1, gradientColorAt(clamp(0.55 + colorT * 0.45, 0, 1), 0.86));
-
-        ctx.globalAlpha = clamp((0.52 + depthAlpha * 0.65) * visibility, 0.04, 0.96);
-        drawRoundedRect(left, top, tileSize, tileSize, tileSize * 0.28);
-        ctx.fillStyle = gradient;
-        ctx.fill();
-
-        ctx.globalAlpha = clamp((0.46 + depthAlpha * 0.48) * visibility, 0.03, 0.95);
-        drawRoundedRect(left, top, tileSize, tileSize, tileSize * 0.28);
-        ctx.strokeStyle = gradientColorAt(clamp(0.4 + colorT * 0.3, 0, 1), 1.24);
-        ctx.lineWidth = 0.74;
-        ctx.stroke();
-
-        const image = logoImageCache.get(point.logoUrl);
-        const hasLoadedImage = !!image && image.complete && image.naturalWidth > 0;
-        const inset = Math.max(1.7, tileSize * 0.12);
-        const innerLeft = left + inset;
-        const innerTop = top + inset;
-        const innerSize = tileSize - inset * 2;
-
-        const tickerText = (point.ticker || '').trim();
-        if (hasLoadedImage && image) {
-          ctx.save();
-          drawRoundedRect(innerLeft, innerTop, innerSize, innerSize, innerSize * 0.22);
-          ctx.clip();
-          ctx.globalAlpha = clamp((0.86 + depthAlpha * 0.14) * visibility, 0.06, 1);
-          ctx.drawImage(image, innerLeft, innerTop, innerSize, innerSize);
-          ctx.globalAlpha = clamp((0.38 + depthAlpha * 0.2) * visibility, 0.04, 0.72);
-          ctx.fillStyle = gradientColorAt(clamp(0.34 + colorT * 0.5, 0, 1), 1.06);
-          ctx.globalCompositeOperation = 'source-atop';
-          ctx.fillRect(innerLeft, innerTop, innerSize, innerSize);
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.restore();
-        } else {
-          ctx.globalAlpha = clamp((0.58 + depthAlpha * 0.56) * visibility, 0.04, 1);
-          drawRoundedRect(innerLeft, innerTop, innerSize, innerSize, innerSize * 0.22);
-          ctx.fillStyle = gradientColorAt(clamp(0.2 + colorT * 0.5, 0, 1), 1.12);
-          ctx.fill();
-        }
-
-        if (tickerText) {
-          const textMaxWidth = innerSize * 0.92;
-          let fontPx = Math.max(6.2, innerSize * 0.74);
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          while (fontPx > 5.6) {
-            ctx.font = `${fontPx}px ui-sans-serif, system-ui, -apple-system, Segoe UI`;
-            if (ctx.measureText(tickerText).width <= textMaxWidth) break;
-            fontPx -= 0.45;
-          }
-
-          const centerX = innerLeft + innerSize * 0.5;
-          const centerY = innerTop + innerSize * 0.5;
-          ctx.globalAlpha = clamp((0.96 + depthAlpha * 0.04) * visibility, 0.08, 1);
-          ctx.strokeStyle = 'rgb(40 32 84)';
-          ctx.lineWidth = Math.max(0.9, fontPx * 0.08);
-          ctx.strokeText(tickerText, centerX, centerY);
-          ctx.fillStyle = 'rgb(242 245 255)';
-          ctx.fillText(tickerText, centerX, centerY);
-        }
       }
     };
 
@@ -1174,7 +1071,6 @@ export function SplashGrid({
       const countryOutlineStride = getRenderStride(adaptiveQualityStep, 'countryOutline');
       const continentOutlineStride = getRenderStride(adaptiveQualityStep, 'continentOutline');
 
-      drawOceanSphere(cx, cy, globeScale);
       drawPoints(
         oceanPoints,
         cx,
@@ -1235,18 +1131,12 @@ export function SplashGrid({
         globeScale,
         continentOutlineStride,
       );
-      drawBrandLogos(
-        logoPoints,
-        cx,
-        cy,
-        cosY,
-        sinY,
-        cosX,
-        sinX,
-        globeScale,
-      );
 
       ctx.globalAlpha = 1;
+      if (!interactive) {
+        saveStaticSnapshot();
+        return;
+      }
       animationFrameId = requestAnimationFrame(frame);
     };
 
@@ -1288,12 +1178,53 @@ export function SplashGrid({
         void (async () => {
           try {
             if (!cachedCountriesGeoJson) {
+              const cachedLocalStorageGeoJson = readCachedCountriesGeoJson();
+              if (cachedLocalStorageGeoJson) {
+                cachedCountriesGeoJson = cachedLocalStorageGeoJson;
+                console.log('[SplashGlobe] countries geojson loaded (localStorage cache)');
+              }
+            }
+
+            if (!cachedCountriesGeoJson) {
               const countriesResponse = await fetch('/countries.geojson', { cache: 'force-cache' });
               if (countriesResponse.ok) {
                 cachedCountriesGeoJson = (await countriesResponse.json()) as GeoJsonData;
-                console.log('[SplashGlobe] countries geojson loaded');
+                console.log('[SplashGlobe] countries geojson loaded (local file)');
+                writeCachedCountriesGeoJson(cachedCountriesGeoJson);
               } else {
-                console.log('[SplashGlobe] countries.geojson not found; using land features for region-like country layer');
+                console.log('[SplashGlobe] countries.geojson not found locally; trying remote fallbacks');
+                const lastFailureTs = readRemoteFailureTimestamp();
+                const shouldSkipRemoteRetry = Date.now() - lastFailureTs < COUNTRIES_REMOTE_RETRY_BACKOFF_MS;
+                if (shouldSkipRemoteRetry) {
+                  console.log('[SplashGlobe] skipping remote countries retry due to recent failure', {
+                    lastFailureTs,
+                  });
+                } else {
+                  for (const url of REMOTE_COUNTRIES_GEOJSON_URLS) {
+                    try {
+                      const remoteResponse = await fetch(url, { cache: 'force-cache' });
+                      if (!remoteResponse.ok) {
+                        console.log('[SplashGlobe] remote countries source failed', {
+                          url,
+                          status: remoteResponse.status,
+                        });
+                        continue;
+                      }
+                      cachedCountriesGeoJson = (await remoteResponse.json()) as GeoJsonData;
+                      console.log('[SplashGlobe] countries geojson loaded (remote fallback)', { url });
+                      writeCachedCountriesGeoJson(cachedCountriesGeoJson);
+                      break;
+                    } catch (remoteError) {
+                      console.log('[SplashGlobe] remote countries source error', { url, remoteError });
+                    }
+                  }
+                  if (!cachedCountriesGeoJson) {
+                    writeRemoteFailureTimestamp();
+                  }
+                }
+                if (!cachedCountriesGeoJson) {
+                  console.log('[SplashGlobe] no countries geojson available; using land features for country layer fallback');
+                }
               }
             }
 
@@ -1313,8 +1244,11 @@ export function SplashGrid({
     };
 
     resize();
-    init();
-    animationFrameId = requestAnimationFrame(frame);
+    const usedCachedSnapshot = tryDrawCachedStaticSnapshot();
+    if (!usedCachedSnapshot) {
+      init();
+      animationFrameId = requestAnimationFrame(frame);
+    }
 
     const handlePointerDown = (event: PointerEvent) => {
       if (!interactive) return;
@@ -1373,7 +1307,7 @@ export function SplashGrid({
       canvas.removeEventListener('pointercancel', handlePointerUpOrCancel);
       canvas.removeEventListener('click', handleClickCapture, true);
       window.removeEventListener('resize', resize);
-      cancelAnimationFrame(animationFrameId);
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
   }, [sizeMultiplier, qualityMode, startLongitude, interactive]);
 
