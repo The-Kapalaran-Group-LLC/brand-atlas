@@ -235,7 +235,6 @@ const REMOTE_COUNTRIES_GEOJSON_URLS = [
   'https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json',
   'https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json',
 ];
-const STATIC_GLOBE_SNAPSHOT_KEY = 'splash_globe_static_snapshot_v1';
 const COUNTRIES_GEOJSON_CACHE_KEY = 'splash_globe_countries_geojson_v1';
 const COUNTRIES_GEOJSON_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
 const COUNTRIES_REMOTE_FAILURE_KEY = 'splash_globe_countries_remote_failure_ts_v1';
@@ -327,8 +326,6 @@ export function SplashGrid({
     let lastPointerY = 0;
     let pointerMoved = false;
     let suppressNextClick = false;
-    let snapshotStoredForThisMount = false;
-    let staticSnapshotImage: HTMLImageElement | null = null;
 
     let generationReady = false;
     let landGeoJsonRef: GeoJsonData | null = null;
@@ -349,48 +346,6 @@ export function SplashGrid({
       canvas.height = Math.floor(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       console.log('[SplashGlobe] resize', { width, height, dpr });
-      if (staticSnapshotImage) {
-        ctx.clearRect(0, 0, width, height);
-        ctx.drawImage(staticSnapshotImage, 0, 0, width, height);
-      }
-    };
-
-    const saveStaticSnapshot = () => {
-      if (interactive || snapshotStoredForThisMount) return;
-      if (typeof window === 'undefined') return;
-      try {
-        const dataUrl = canvas.toDataURL('image/png');
-        window.localStorage.setItem(STATIC_GLOBE_SNAPSHOT_KEY, dataUrl);
-        snapshotStoredForThisMount = true;
-        console.log('[SplashGlobe] static snapshot cached');
-      } catch (error) {
-        console.log('[SplashGlobe] failed to cache static snapshot', error);
-      }
-    };
-
-    const tryDrawCachedStaticSnapshot = (): boolean => {
-      if (interactive || typeof window === 'undefined') return false;
-      try {
-        const dataUrl = window.localStorage.getItem(STATIC_GLOBE_SNAPSHOT_KEY);
-        if (!dataUrl) return false;
-        const image = new Image();
-        image.decoding = 'async';
-        image.onload = () => {
-          staticSnapshotImage = image;
-          ctx.clearRect(0, 0, width, height);
-          ctx.drawImage(image, 0, 0, width, height);
-          console.log('[SplashGlobe] rendered static snapshot from cache');
-        };
-        image.onerror = () => {
-          console.log('[SplashGlobe] cached static snapshot failed to load');
-          window.localStorage.removeItem(STATIC_GLOBE_SNAPSHOT_KEY);
-        };
-        image.src = dataUrl;
-        return true;
-      } catch (error) {
-        console.log('[SplashGlobe] failed to read static snapshot cache', error);
-        return false;
-      }
     };
 
     const drawRing = (ring: number[][]) => {
@@ -1133,10 +1088,6 @@ export function SplashGrid({
       );
 
       ctx.globalAlpha = 1;
-      if (!interactive) {
-        saveStaticSnapshot();
-        return;
-      }
       animationFrameId = requestAnimationFrame(frame);
     };
 
@@ -1244,11 +1195,8 @@ export function SplashGrid({
     };
 
     resize();
-    const usedCachedSnapshot = tryDrawCachedStaticSnapshot();
-    if (!usedCachedSnapshot) {
-      init();
-      animationFrameId = requestAnimationFrame(frame);
-    }
+    init();
+    animationFrameId = requestAnimationFrame(frame);
 
     const handlePointerDown = (event: PointerEvent) => {
       if (!interactive) return;
@@ -1307,7 +1255,7 @@ export function SplashGrid({
       canvas.removeEventListener('pointercancel', handlePointerUpOrCancel);
       canvas.removeEventListener('click', handleClickCapture, true);
       window.removeEventListener('resize', resize);
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      cancelAnimationFrame(animationFrameId);
     };
   }, [sizeMultiplier, qualityMode, startLongitude, interactive]);
 
