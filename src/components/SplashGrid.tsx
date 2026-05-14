@@ -44,7 +44,7 @@ type Rng = () => number;
 const GLOBE_RADIUS = 220;
 const MASK_WIDTH = 2048;
 const MASK_HEIGHT = 1024;
-const START_LONGITUDE = 121;
+const DEFAULT_START_LONGITUDE = 121;
 const AUTO_ROTATE_SPEED = 0.176;
 const AXIS_TILT_DEG = 23.4;
 const DEPTH = 600;
@@ -217,9 +217,25 @@ const toCartesian = (lat: number, lon: number, variant = 0): GlobePoint => {
 
 type SplashGridProps = {
   sizeMultiplier?: number;
+  qualityMode?: 'auto' | 'fast';
+  startLongitude?: number;
 };
 
-export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
+type PrecomputedSplashDotData = {
+  version?: number;
+  continentFill?: number[];
+  countryFill?: number[];
+};
+
+let cachedLandGeoJson: GeoJsonData | null = null;
+let cachedCountriesGeoJson: GeoJsonData | null = null;
+let cachedPrecomputedSplashDots: PrecomputedSplashDotData | null = null;
+
+export function SplashGrid({
+  sizeMultiplier = 1,
+  qualityMode = 'auto',
+  startLongitude = DEFAULT_START_LONGITUDE,
+}: SplashGridProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -242,7 +258,7 @@ export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
     let dpr = 1;
     let elapsedSeconds = 0;
     let lastFrameNow = 0;
-    let adaptiveQualityStep = 0;
+    let adaptiveQualityStep = qualityMode === 'fast' ? 2 : 0;
 
     let generationReady = false;
     let landGeoJsonRef: GeoJsonData | null = null;
@@ -255,7 +271,8 @@ export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
     const oceanPoints: GlobePoint[] = [];
 
     const resize = () => {
-      dpr = Math.min(2, window.devicePixelRatio || 1);
+      const dprCap = qualityMode === 'fast' ? 1.25 : 2;
+      dpr = Math.min(dprCap, window.devicePixelRatio || 1);
       width = canvas.clientWidth || window.innerWidth;
       height = canvas.clientHeight || window.innerHeight;
       canvas.width = Math.floor(width * dpr);
@@ -600,7 +617,26 @@ export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
       }
     };
 
-    const buildEarthPoints = (quality: GlobeBuildQuality = 'full') => {
+    const applyPackedFillPoints = (packed: number[] | undefined, output: GlobePoint[]) => {
+      if (!Array.isArray(packed) || packed.length < 3) return;
+      output.length = 0;
+      for (let i = 0; i + 2 < packed.length; i += 3) {
+        const lat = packed[i];
+        const lon = packed[i + 1];
+        const variant = packed[i + 2];
+        output.push({
+          ...toCartesian(lat, lon, variant),
+          lat,
+          lon,
+          variant,
+        });
+      }
+    };
+
+    const buildEarthPoints = (
+      quality: GlobeBuildQuality = 'full',
+      precomputedDots?: PrecomputedSplashDotData | null,
+    ) => {
       const isFast = quality === 'fast';
       const rng = createRng(isFast ? 0x5eed1234 : 0x5eed5678);
       continentOutlineLines.length = 0;
@@ -610,17 +646,27 @@ export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
       oceanPoints.length = 0;
 
       const landData = landGeoJsonRef ?? { features: [] };
-      appendOutlineLinesFromGeoJson(landData, continentOutlineLines, isFast ? 0.36 : 0.22, 0);
+      appendOutlineLinesFromGeoJson(landData, continentOutlineLines, isFast ? 0.52 : 0.22, 0);
+      const canUsePackedFastDots = isFast
+        && !!precomputedDots
+        && Array.isArray(precomputedDots.continentFill)
+        && Array.isArray(precomputedDots.countryFill)
+        && precomputedDots.continentFill.length > 0
+        && precomputedDots.countryFill.length > 0;
 
-      if (countryGeoJsonRef) {
-        appendOutlineLinesFromGeoJson(countryGeoJsonRef, countryOutlineLines, isFast ? 0.38 : 0.24, 300);
+      if (canUsePackedFastDots) {
+        appendOutlineLinesFromGeoJson(landData, countryOutlineLines, 0.66, 300);
+        applyPackedFillPoints(precomputedDots?.continentFill, continentFillPoints);
+        applyPackedFillPoints(precomputedDots?.countryFill, countryFillPoints);
+      } else if (countryGeoJsonRef) {
+        appendOutlineLinesFromGeoJson(countryGeoJsonRef, countryOutlineLines, isFast ? 0.58 : 0.24, 300);
         appendFillDotsFromGeoJson(
           countryGeoJsonRef,
           continentFillPoints,
-          isFast ? 1.2 : 0.86,
+          isFast ? 1.56 : 0.86,
           0.08,
-          isFast ? 0.32 : 0.42,
-          isFast ? 52000 : 100000,
+          isFast ? 0.3 : 0.42,
+          isFast ? 28000 : 100000,
           true,
           rng,
           25,
@@ -629,24 +675,24 @@ export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
         appendFillDotsFromGeoJson(
           countryGeoJsonRef,
           countryFillPoints,
-          isFast ? 1.05 : 0.7,
+          isFast ? 1.34 : 0.7,
           0.08,
           isFast ? 0.36 : 0.5,
-          isFast ? 82000 : 170000,
+          isFast ? 42000 : 170000,
           true,
           rng,
           300,
           { populationWeighted: true, populationHotspots: true, variantByContinent: false },
         );
       } else {
-        appendOutlineLinesFromGeoJson(landData, countryOutlineLines, isFast ? 0.52 : 0.42, 300);
+        appendOutlineLinesFromGeoJson(landData, countryOutlineLines, isFast ? 0.66 : 0.42, 300);
         appendFillDotsFromGeoJson(
           landData,
           continentFillPoints,
-          isFast ? 0.96 : 0.64,
+          isFast ? 1.22 : 0.64,
           0.08,
-          isFast ? 0.4 : 0.58,
-          isFast ? 58000 : 105000,
+          isFast ? 0.36 : 0.58,
+          isFast ? 32000 : 105000,
           true,
           rng,
           25,
@@ -655,10 +701,10 @@ export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
         appendFillDotsFromGeoJson(
           landData,
           countryFillPoints,
-          isFast ? 1.2 : 0.92,
+          isFast ? 1.46 : 0.92,
           0.1,
           isFast ? 0.3 : 0.46,
-          isFast ? 52000 : 112000,
+          isFast ? 38000 : 112000,
           true,
           rng,
           300,
@@ -666,7 +712,7 @@ export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
         );
       }
 
-      const oceanTarget = isFast ? 1600 : 3000;
+      const oceanTarget = isFast ? 900 : 3000;
       const oceanAttempts = oceanTarget * 20;
       for (let attempt = 0; attempt < oceanAttempts && oceanPoints.length < oceanTarget; attempt += 1) {
         const lat = -86 + rng() * (82 - -86);
@@ -860,7 +906,7 @@ export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
 
       const { cx, cy, globeScale } = getLayout();
 
-      const rotY = (-START_LONGITUDE * Math.PI) / 180 + elapsedSeconds * AUTO_ROTATE_SPEED;
+      const rotY = (-startLongitude * Math.PI) / 180 + elapsedSeconds * AUTO_ROTATE_SPEED;
       const rotX = (AXIS_TILT_DEG * Math.PI) / 180;
       const cosY = Math.cos(rotY);
       const sinY = Math.sin(rotY);
@@ -939,25 +985,54 @@ export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
 
     const init = async () => {
       try {
-        console.log('[SplashGlobe] loading /land.geojson');
-        const landResponse = await fetch('/land.geojson', { cache: 'no-store' });
-        if (!landResponse.ok) {
-          throw new Error(`land.geojson load failed: ${landResponse.status}`);
+        if (!cachedPrecomputedSplashDots) {
+          try {
+            console.log('[SplashGlobe] loading /splash-globe-fast.json');
+            const dotsResponse = await fetch('/splash-globe-fast.json', { cache: 'force-cache' });
+            if (dotsResponse.ok) {
+              cachedPrecomputedSplashDots = (await dotsResponse.json()) as PrecomputedSplashDotData;
+              console.log('[SplashGlobe] precomputed splash dots loaded');
+            } else {
+              console.log('[SplashGlobe] precomputed splash dots not found; runtime generation will be used');
+            }
+          } catch (precomputeError) {
+            console.log('[SplashGlobe] precomputed splash dots load skipped', precomputeError);
+          }
         }
 
-        const landGeoJson = (await landResponse.json()) as GeoJsonData;
+        if (!cachedLandGeoJson) {
+          console.log('[SplashGlobe] loading /land.geojson');
+          const landResponse = await fetch('/land.geojson', { cache: 'force-cache' });
+          if (!landResponse.ok) {
+            throw new Error(`land.geojson load failed: ${landResponse.status}`);
+          }
+          cachedLandGeoJson = (await landResponse.json()) as GeoJsonData;
+        }
+
+        const landGeoJson = cachedLandGeoJson;
         landGeoJsonRef = landGeoJson;
         buildLandMask(landGeoJson);
-        buildEarthPoints('fast');
+        buildEarthPoints('fast', cachedPrecomputedSplashDots);
+
+        if (qualityMode === 'fast') {
+          return;
+        }
 
         void (async () => {
           try {
-            const countriesResponse = await fetch('/countries.geojson', { cache: 'no-store' });
-            if (countriesResponse.ok) {
-              countryGeoJsonRef = (await countriesResponse.json()) as GeoJsonData;
+            if (!cachedCountriesGeoJson) {
+              const countriesResponse = await fetch('/countries.geojson', { cache: 'force-cache' });
+              if (countriesResponse.ok) {
+                cachedCountriesGeoJson = (await countriesResponse.json()) as GeoJsonData;
+                console.log('[SplashGlobe] countries geojson loaded');
+              } else {
+                console.log('[SplashGlobe] countries.geojson not found; using land features for region-like country layer');
+              }
+            }
+
+            if (cachedCountriesGeoJson) {
+              countryGeoJsonRef = cachedCountriesGeoJson;
               console.log('[SplashGlobe] countries geojson loaded');
-            } else {
-              console.log('[SplashGlobe] countries.geojson not found; using land features for region-like country layer');
             }
           } catch (countryError) {
             console.log('[SplashGlobe] countries outline load skipped', countryError);
@@ -980,12 +1055,13 @@ export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
       window.removeEventListener('resize', resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [sizeMultiplier]);
+  }, [sizeMultiplier, qualityMode, startLongitude]);
 
   return (
     <canvas
       ref={canvasRef}
       data-testid="splash-globe-canvas"
+      data-quality-mode={qualityMode}
       className="absolute inset-0 h-full w-full"
       style={{ touchAction: 'auto', cursor: 'default', userSelect: 'none' }}
     />

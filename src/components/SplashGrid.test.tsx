@@ -11,5 +11,14 @@ describe('SplashGrid', () => {
     expect(canvas).toBeInTheDocument();
     expect(canvas).toHaveStyle({ touchAction: 'auto' });
     expect(canvas).toHaveStyle({ cursor: 'default' });
+    expect(canvas).toHaveAttribute('data-quality-mode', 'auto');
+  });
+
+  it('supports a fast quality mode for splash-only rendering', () => {
+    render(<SplashGrid qualityMode="fast" />);
+
+    const canvas = screen.getByTestId('splash-globe-canvas');
+
+    expect(canvas).toHaveAttribute('data-quality-mode', 'fast');
   });
 });

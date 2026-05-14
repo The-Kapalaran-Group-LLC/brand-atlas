@@ -286,6 +286,7 @@ export default function BrandNavigator() {
     shouldShowSplashOnInit(isDirectBrandNavigatorRoute)
   );
   const [isSplashHeld, setIsSplashHeld] = useState(false);
+  const [isSplashManualMode, setIsSplashManualMode] = useState(false);
   const [activeExperience, setActiveExperience] = useState<'research' | 'brand' | null>(
     isDirectBrandNavigatorRoute ? 'research' : null
   );
@@ -440,6 +441,17 @@ export default function BrandNavigator() {
       setShowSplash(false);
       return;
     }
+    if (!showSplash) {
+      return;
+    }
+    if (isSplashManualMode) {
+      if (splashTimeoutRef.current) {
+        clearTimeout(splashTimeoutRef.current);
+        splashTimeoutRef.current = null;
+      }
+      splashStartedAtRef.current = null;
+      return;
+    }
     if (isSplashHeld) {
       if (splashStartedAtRef.current !== null) {
         const elapsed = Date.now() - splashStartedAtRef.current;
@@ -466,7 +478,15 @@ export default function BrandNavigator() {
         splashTimeoutRef.current = null;
       }
     };
-  }, [showSplash, isSplashHeld]);
+  }, [showSplash, isSplashHeld, isSplashManualMode]);
+
+  useEffect(() => {
+    if (showSplash) {
+      return;
+    }
+    setIsSplashManualMode(false);
+    setIsSplashHeld(false);
+  }, [showSplash]);
 
   useEffect(() => {
     if (!showSplash || !isSplashHeld) {
@@ -504,6 +524,19 @@ export default function BrandNavigator() {
     if (showSplash) {
       setIsSplashHeld(false);
     }
+  };
+
+  const handleSplashDoubleClick = () => {
+    if (!showSplash) return;
+    setIsSplashManualMode(true);
+    setIsSplashHeld(false);
+  };
+
+  const handleSplashManualDismiss = () => {
+    if (!showSplash || !isSplashManualMode) return;
+    setShowSplash(false);
+    setIsSplashManualMode(false);
+    setIsSplashHeld(false);
   };
 
   // Handle click outside dropdowns
@@ -1248,26 +1281,30 @@ export default function BrandNavigator() {
             onPointerDown={handleSplashHoldStart}
             onPointerUp={handleSplashHoldEnd}
             onPointerCancel={handleSplashHoldEnd}
+            onDoubleClick={handleSplashDoubleClick}
+            onClick={handleSplashManualDismiss}
           >
-            <div className="absolute inset-0 z-0">
-              <SplashGrid sizeMultiplier={1.25} />
+            <div className="absolute inset-0 z-0 translate-y-[20px]">
+              <SplashGrid sizeMultiplier={1.25} qualityMode="fast" startLongitude={-74.006} />
             </div>
             
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.12, duration: 0.8 }}
-              className="relative z-20 flex flex-col items-center text-center px-4 py-6 pointer-events-none mb-24 md:mb-16"
-            >
-              <Sparkles className="w-7 h-7 text-indigo-600 mb-8" />
-              <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-zinc-950 mb-5 select-none">
-                  Brand <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">Atlas</span>
-              </h1>
-              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-zinc-200/70 bg-white/80 px-3 py-1.5 text-xs font-medium text-zinc-600 shadow-sm">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
-                Loading research tools...
-              </div>
-            </motion.div>
+            {!isSplashManualMode && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.12, duration: 0.8 }}
+                className="relative z-20 flex flex-col items-center text-center px-4 py-6 pointer-events-none mb-24 md:mb-16"
+              >
+                <Sparkles className="w-7 h-7 text-indigo-600 mb-8" />
+                <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-zinc-950 mb-5 select-none">
+                    Brand <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">Atlas</span>
+                </h1>
+                <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-zinc-200/70 bg-white/80 px-3 py-1.5 text-xs font-medium text-zinc-600 shadow-sm">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
+                  Loading research tools...
+                </div>
+              </motion.div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1281,8 +1318,8 @@ export default function BrandNavigator() {
             transition={{ duration: 0.6, ease: 'easeOut' }}
             className="fixed inset-0 z-[1] pointer-events-none overflow-hidden"
           >
-            <div className="absolute inset-0">
-              <SplashGrid />
+            <div className="absolute inset-0 translate-y-[20px]">
+              <SplashGrid qualityMode="fast" startLongitude={-74.006} />
             </div>
           </motion.div>
         )}
