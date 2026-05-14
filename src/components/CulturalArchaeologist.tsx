@@ -1856,7 +1856,12 @@ export default function CulturalArchaeologist() {
             onClick={handleSplashManualDismiss}
           >
             <div className="absolute inset-0 z-0 translate-y-[20px]">
-              <SplashGrid sizeMultiplier={1.25} qualityMode="fast" startLongitude={-74.006} />
+              <SplashGrid
+                sizeMultiplier={1.25}
+                qualityMode="fast"
+                startLongitude={-74.006}
+                interactive={isSplashManualMode}
+              />
             </div>
             
             {!isSplashManualMode && (

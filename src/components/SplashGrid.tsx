@@ -57,6 +57,12 @@ const CONTINENT_INDIGO_COLORS = [
   'rgb(210 150 255)', // Oceania
   'rgb(226 159 255)', // Antarctica
 ] as const;
+const INDIGO_GRADIENT_STOPS: Array<[number, number, number]> = [
+  [52, 36, 206],
+  [96, 69, 245],
+  [152, 95, 255],
+  [255, 123, 230],
+];
 const CONTINENT_INDIGO_DARK_COLORS = [
   'rgb(89 62 233)', // North America
   'rgb(104 70 235)', // South America
@@ -102,6 +108,21 @@ const getContinentIndex = (lat: number, lon: number): number => {
 };
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+const gradientColorAt = (t: number, brightness = 1): string => {
+  const safeT = clamp(t, 0, 1);
+  const scaled = safeT * (INDIGO_GRADIENT_STOPS.length - 1);
+  const index = Math.floor(scaled);
+  const nextIndex = Math.min(INDIGO_GRADIENT_STOPS.length - 1, index + 1);
+  const localT = scaled - index;
+  const from = INDIGO_GRADIENT_STOPS[index];
+  const to = INDIGO_GRADIENT_STOPS[nextIndex];
+  const r = Math.round(clamp(lerp(from[0], to[0], localT) * brightness, 0, 255));
+  const g = Math.round(clamp(lerp(from[1], to[1], localT) * brightness, 0, 255));
+  const b = Math.round(clamp(lerp(from[2], to[2], localT) * brightness, 0, 255));
+  return `rgb(${r} ${g} ${b})`;
+};
 
 const readNumericProperty = (properties: Record<string, unknown> | undefined, keys: string[]): number | null => {
   if (!properties) return null;
@@ -219,6 +240,7 @@ type SplashGridProps = {
   sizeMultiplier?: number;
   qualityMode?: 'auto' | 'fast';
   startLongitude?: number;
+  interactive?: boolean;
 };
 
 type PrecomputedSplashDotData = {
@@ -235,6 +257,7 @@ export function SplashGrid({
   sizeMultiplier = 1,
   qualityMode = 'auto',
   startLongitude = DEFAULT_START_LONGITUDE,
+  interactive = false,
 }: SplashGridProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -259,6 +282,14 @@ export function SplashGrid({
     let elapsedSeconds = 0;
     let lastFrameNow = 0;
     let adaptiveQualityStep = qualityMode === 'fast' ? 2 : 0;
+    let dragYaw = 0;
+    let dragPitch = 0;
+    let isPointerDown = false;
+    let activePointerId: number | null = null;
+    let lastPointerX = 0;
+    let lastPointerY = 0;
+    let pointerMoved = false;
+    let suppressNextClick = false;
 
     let generationReady = false;
     let landGeoJsonRef: GeoJsonData | null = null;
@@ -750,11 +781,31 @@ export function SplashGrid({
     const colorForMode = (
       mode: 'continentFill' | 'continentOutline' | 'countryFill' | 'countryOutline' | 'ocean',
       point: { lat: number; lon: number; variant: number },
+      rotatedX = 0,
+      rotatedY = 0,
+      rotatedZ = 0,
     ) => {
       if (mode === 'ocean') return 'rgb(156 182 238)';
       const continentIndex = getContinentIndex(point.lat, point.lon);
-      if (mode === 'countryFill') return CONTINENT_INDIGO_DARK_COLORS[continentIndex];
-      return CONTINENT_INDIGO_COLORS[continentIndex];
+      const xNorm = (rotatedX / GLOBE_RADIUS + 1) * 0.5;
+      const yNorm = 1 - (rotatedY / GLOBE_RADIUS + 1) * 0.5;
+      const frontNorm = clamp((rotatedZ / GLOBE_RADIUS + 1) * 0.5, 0, 1);
+      const continentShift = (continentIndex - 3) * 0.03;
+      const swirlBias = (rotatedX * 0.65 + rotatedY * 0.35) / (GLOBE_RADIUS * 1.45);
+      // Anchor the strongest color handoff at the front-center of the globe.
+      const centerDistance = Math.hypot(xNorm - 0.5, yNorm - 0.5);
+      const centerFrontMask = Math.exp(-Math.pow(centerDistance / 0.35, 2));
+      const centerTransition = (frontNorm - 0.5) * 0.34 * centerFrontMask;
+      const baseT = clamp(
+        xNorm * 0.74 + yNorm * 0.16 + continentShift + swirlBias * 0.08 + centerTransition,
+        0,
+        1,
+      );
+      const gradientT = Math.pow(baseT, 0.82);
+      if (mode === 'countryFill') return gradientColorAt(gradientT, 0.98);
+      if (mode === 'countryOutline') return gradientColorAt(gradientT, 1.02);
+      if (mode === 'continentOutline') return gradientColorAt(gradientT, 1.08);
+      return gradientColorAt(gradientT, 1.16);
     };
 
     const drawPoints = (
@@ -795,12 +846,12 @@ export function SplashGrid({
         const dotRadius = Math.max(mode === 'ocean' ? 0.34 : 0.45, dotDiameter * 0.5);
 
         if (mode === 'ocean') ctx.globalAlpha = Math.min(1, depthAlpha * 0.34);
-        else if (mode === 'continentFill') ctx.globalAlpha = Math.min(1, depthAlpha * 0.72);
+        else if (mode === 'continentFill') ctx.globalAlpha = Math.min(1, depthAlpha * 0.82);
         else if (mode === 'countryFill') ctx.globalAlpha = Math.min(1, depthAlpha * 0.98);
         else if (mode === 'countryOutline') ctx.globalAlpha = Math.min(1, depthAlpha * 0.78);
         else ctx.globalAlpha = Math.min(1, depthAlpha * 0.92);
 
-        ctx.fillStyle = colorForMode(mode, point);
+        ctx.fillStyle = colorForMode(mode, point, projected.x, projected.y, projected.z);
         const px = cx + projected.x * projected.scale * globeScale;
         const py = cy - projected.y * projected.scale * globeScale;
         if (dotRadius <= 0.95) {
@@ -843,6 +894,8 @@ export function SplashGrid({
         let started = false;
         let visibleSegments = 0;
         let zAccum = 0;
+        let xAccum = 0;
+        let yAccum = 0;
         ctx.beginPath();
 
         for (let i = 0; i < line.points.length; i += pointStride) {
@@ -862,16 +915,20 @@ export function SplashGrid({
             ctx.lineTo(px, py);
             visibleSegments += 1;
             zAccum += projected.z;
+            xAccum += projected.x;
+            yAccum += projected.y;
           }
         }
 
         if (visibleSegments === 0) continue;
 
         const avgZ = zAccum / Math.max(1, visibleSegments);
+        const avgX = xAccum / Math.max(1, visibleSegments);
+        const avgY = yAccum / Math.max(1, visibleSegments);
         const depthAlpha = Math.max(0.2, Math.min(0.95, (avgZ + GLOBE_RADIUS) / (GLOBE_RADIUS * 2) + 0.25));
         ctx.globalAlpha = mode === 'countryOutline' ? depthAlpha * 0.72 : depthAlpha * 0.82;
         const samplePoint = line.points[0] ?? { lat: 0, lon: 0, variant: line.variant };
-        ctx.strokeStyle = colorForMode(mode, samplePoint);
+        ctx.strokeStyle = colorForMode(mode, samplePoint, avgX, avgY, avgZ);
         const minWidth = mode === 'countryOutline' ? 0.45 : 0.24;
         ctx.lineWidth = Math.max(minWidth, lineWidthBase * globeScale);
         ctx.stroke();
@@ -906,8 +963,8 @@ export function SplashGrid({
 
       const { cx, cy, globeScale } = getLayout();
 
-      const rotY = (-startLongitude * Math.PI) / 180 + elapsedSeconds * AUTO_ROTATE_SPEED;
-      const rotX = (AXIS_TILT_DEG * Math.PI) / 180;
+      const rotY = (-startLongitude * Math.PI) / 180 + elapsedSeconds * AUTO_ROTATE_SPEED + dragYaw;
+      const rotX = (AXIS_TILT_DEG * Math.PI) / 180 + dragPitch;
       const cosY = Math.cos(rotY);
       const sinY = Math.sin(rotY);
       const cosX = Math.cos(rotX);
@@ -1049,13 +1106,66 @@ export function SplashGrid({
     init();
     animationFrameId = requestAnimationFrame(frame);
 
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!interactive) return;
+      isPointerDown = true;
+      activePointerId = event.pointerId;
+      lastPointerX = event.clientX;
+      lastPointerY = event.clientY;
+      pointerMoved = false;
+      canvas.setPointerCapture(event.pointerId);
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!interactive || !isPointerDown || activePointerId !== event.pointerId) return;
+      const dx = event.clientX - lastPointerX;
+      const dy = event.clientY - lastPointerY;
+      lastPointerX = event.clientX;
+      lastPointerY = event.clientY;
+      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+        pointerMoved = true;
+      }
+      dragYaw += dx * 0.0065;
+      dragPitch = clamp(dragPitch - dy * 0.0034, -0.42, 0.42);
+    };
+
+    const handlePointerUpOrCancel = (event: PointerEvent) => {
+      if (!interactive || activePointerId !== event.pointerId) return;
+      isPointerDown = false;
+      activePointerId = null;
+      if (pointerMoved) suppressNextClick = true;
+      pointerMoved = false;
+      if (canvas.hasPointerCapture(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
+      }
+    };
+
+    const handleClickCapture = (event: MouseEvent) => {
+      if (!interactive) return;
+      if (suppressNextClick) {
+        suppressNextClick = false;
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    canvas.addEventListener('pointermove', handlePointerMove);
+    canvas.addEventListener('pointerup', handlePointerUpOrCancel);
+    canvas.addEventListener('pointercancel', handlePointerUpOrCancel);
+    canvas.addEventListener('click', handleClickCapture, true);
     window.addEventListener('resize', resize);
 
     return () => {
+      canvas.removeEventListener('pointerdown', handlePointerDown);
+      canvas.removeEventListener('pointermove', handlePointerMove);
+      canvas.removeEventListener('pointerup', handlePointerUpOrCancel);
+      canvas.removeEventListener('pointercancel', handlePointerUpOrCancel);
+      canvas.removeEventListener('click', handleClickCapture, true);
       window.removeEventListener('resize', resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [sizeMultiplier, qualityMode, startLongitude]);
+  }, [sizeMultiplier, qualityMode, startLongitude, interactive]);
 
   return (
     <canvas
@@ -1063,7 +1173,11 @@ export function SplashGrid({
       data-testid="splash-globe-canvas"
       data-quality-mode={qualityMode}
       className="absolute inset-0 h-full w-full"
-      style={{ touchAction: 'auto', cursor: 'default', userSelect: 'none' }}
+      style={{
+        touchAction: interactive ? 'none' : 'auto',
+        cursor: interactive ? 'grab' : 'default',
+        userSelect: 'none',
+      }}
     />
   );
 }
