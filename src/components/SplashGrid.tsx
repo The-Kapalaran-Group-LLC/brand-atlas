@@ -217,9 +217,10 @@ const toCartesian = (lat: number, lon: number, variant = 0): GlobePoint => {
 
 type SplashGridProps = {
   sizeMultiplier?: number;
+  onGlobeReady?: () => void;
 };
 
-export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
+export function SplashGrid({ sizeMultiplier = 1, onGlobeReady }: SplashGridProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -245,6 +246,7 @@ export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
     let adaptiveQualityStep = 0;
 
     let generationReady = false;
+    let hasNotifiedReady = false;
     let landGeoJsonRef: GeoJsonData | null = null;
     let countryGeoJsonRef: GeoJsonData | null = null;
 
@@ -691,6 +693,10 @@ export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
       }
 
       generationReady = true;
+      if (!hasNotifiedReady) {
+        hasNotifiedReady = true;
+        onGlobeReady?.();
+      }
       console.log('[SplashGlobe] points generated', {
         quality,
         continentOutlineLines: continentOutlineLines.length,
@@ -980,7 +986,7 @@ export function SplashGrid({ sizeMultiplier = 1 }: SplashGridProps) {
       window.removeEventListener('resize', resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [sizeMultiplier]);
+  }, [onGlobeReady, sizeMultiplier]);
 
   return (
     <canvas

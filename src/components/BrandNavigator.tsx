@@ -285,6 +285,7 @@ export default function BrandNavigator() {
   const [showSplash, setShowSplash] = useState(() =>
     shouldShowSplashOnInit(isDirectBrandNavigatorRoute)
   );
+  const [isSplashGlobeReady, setIsSplashGlobeReady] = useState(false);
   const [isSplashHeld, setIsSplashHeld] = useState(false);
   const [activeExperience, setActiveExperience] = useState<'research' | 'brand' | null>(
     isDirectBrandNavigatorRoute ? 'research' : null
@@ -406,6 +407,12 @@ export default function BrandNavigator() {
   const splashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const splashStartedAtRef = useRef<number | null>(null);
   const splashRemainingMsRef = useRef<number>(SPLASH_DURATION_MS);
+
+  useEffect(() => {
+    if (showSplash) {
+      setIsSplashGlobeReady(false);
+    }
+  }, [showSplash]);
 
   useEffect(() => {
     if (activeExperience === 'brand') {
@@ -1250,13 +1257,13 @@ export default function BrandNavigator() {
             onPointerCancel={handleSplashHoldEnd}
           >
             <div className="absolute inset-0 z-0">
-              <SplashGrid sizeMultiplier={1.25} />
+              <SplashGrid sizeMultiplier={1.25} onGlobeReady={() => setIsSplashGlobeReady(true)} />
             </div>
             
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.12, duration: 0.8 }}
+              animate={isSplashGlobeReady ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+              transition={{ delay: isSplashGlobeReady ? 0.06 : 0, duration: 0.55 }}
               className="relative z-20 flex flex-col items-center text-center px-4 py-6 pointer-events-none mb-24 md:mb-16"
             >
               <Sparkles className="w-7 h-7 text-indigo-600 mb-8" />
