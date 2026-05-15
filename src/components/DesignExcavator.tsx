@@ -3580,17 +3580,20 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                 <header className="flex items-center justify-between gap-3 px-5 py-4 border-b border-zinc-200">
                   <div>
                     <h3 className="text-base font-semibold text-zinc-900">Verify {activeColorOverride.brandName} Color</h3>
-                    <p className="text-xs text-zinc-500 mt-1 inline-flex items-center gap-2">
-                      Current selection:
-                      <span className="ml-1 font-medium" style={{ color: activeColorOverride.currentHex }}>
-                        {activeColorOverride.currentHex}
-                      </span>
+                    <div className="mt-1 inline-flex items-center gap-2">
+                      <p className="text-xs text-zinc-500">
+                        Current selection:
+                        <span className="ml-1 font-medium" style={{ color: activeColorOverride.currentHex }}>
+                          {activeColorOverride.currentHex}
+                        </span>
+                      </p>
                       <span
-                        className="inline-block w-4 h-4 rounded border border-zinc-300 align-middle"
+                        className="inline-flex w-6 h-6 rounded-md border border-zinc-300 shadow-sm shrink-0"
                         style={{ backgroundColor: activeColorOverride.currentHex }}
                         aria-label="Current selected color reference"
+                        title={`Reference color ${activeColorOverride.currentHex}`}
                       />
-                    </p>
+                    </div>
                   </div>
                   <button
                     type="button"
