@@ -49,7 +49,7 @@ const AUTO_ROTATE_SPEED = 0.176;
 const AXIS_TILT_DEG = 23.4;
 const DEPTH = 600;
 const INDIGO_GRADIENT_STOPS: Array<[number, number, number]> = [
-  [126, 191, 255],
+  [244, 153, 220],
   [138, 122, 255],
   [76, 40, 232],
   [24, 12, 156],
@@ -924,13 +924,16 @@ export function SplashGrid({
         1,
       );
       // Keep the near hemisphere predominantly purple while softly rolling the
-      // far hemisphere toward a subtle cool-blue for depth separation.
+      // far hemisphere toward a smooth pink cast for depth separation.
       const frontWeight = Math.pow(frontNorm, 1.15);
       const purpleForwardT = clamp(0.28 + baseT * 0.46, 0, 1);
-      // Keep a gentle far-side cool cast without pulling too strongly away
-      // from the indigo/purple midpoint.
+      // Blend cool and rosy far-side tones so pink appears when the hemisphere
+      // rotates away, but transitions smoothly as it comes forward.
       const coolFarSideT = clamp(0.058 + xNorm * 0.042 + yNorm * 0.022, 0.045, 0.165);
-      const depthBiasedT = lerp(coolFarSideT, purpleForwardT, frontWeight);
+      const rosyFarSideT = clamp(0.03 + xNorm * 0.028 + yNorm * 0.018, 0.022, 0.11);
+      const farSideWeight = Math.pow(1 - frontNorm, 1.24);
+      const farSideBlendT = lerp(coolFarSideT, rosyFarSideT, farSideWeight * 0.82);
+      const depthBiasedT = lerp(farSideBlendT, purpleForwardT, frontWeight);
       const gradientT = Math.pow(depthBiasedT, 0.78);
       if (mode === 'countryFill') return gradientColorAt(gradientT, 1.14);
       if (mode === 'countryOutline') return 'rgb(92 92 255)';

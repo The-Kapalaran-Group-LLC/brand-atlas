@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { z } from 'zod';
 
 type BrandVisionAnalysis = {
   imageryStyle: string[];
@@ -16,6 +17,14 @@ type OpenAIClientLike = {
 };
 
 const DEFAULT_MODEL = 'gpt-4o';
+const MAX_BASE64_IMAGE_CHARS = 8_000_000;
+
+const BrandVisionAnalysisSchema = z.object({
+  imageryStyle: z.array(z.string()),
+  layoutComposition: z.string(),
+  lightingAndTone: z.string(),
+  distinctivenessAssessment: z.string(),
+}).strict();
 
 function getOpenAIClient(): OpenAI {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -31,7 +40,18 @@ function toDataUrl(base64Image: string): string {
     throw new Error('base64Image is required.');
   }
   if (trimmed.startsWith('data:image/')) {
+    const commaIndex = trimmed.indexOf(',');
+    const payload = commaIndex >= 0 ? trimmed.slice(commaIndex + 1) : '';
+    if (!payload) {
+      throw new Error('base64Image data URL is missing base64 payload.');
+    }
+    if (payload.length > MAX_BASE64_IMAGE_CHARS) {
+      throw new Error(`base64Image exceeds max supported size (${MAX_BASE64_IMAGE_CHARS} chars).`);
+    }
     return trimmed;
+  }
+  if (trimmed.length > MAX_BASE64_IMAGE_CHARS) {
+    throw new Error(`base64Image exceeds max supported size (${MAX_BASE64_IMAGE_CHARS} chars).`);
   }
   return `data:image/jpeg;base64,${trimmed}`;
 }
@@ -51,22 +71,13 @@ function extractJsonObject(rawContent: string): Record<string, unknown> {
   }
 }
 
-function toStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.map((item) => String(item ?? '').trim()).filter(Boolean);
-}
-
-function toStringField(value: unknown): string {
-  if (typeof value !== 'string') return '';
-  return value.trim();
-}
-
 function normalizeAnalysis(payload: Record<string, unknown>): BrandVisionAnalysis {
+  const parsed = BrandVisionAnalysisSchema.parse(payload);
   return {
-    imageryStyle: toStringArray(payload.imageryStyle),
-    layoutComposition: toStringField(payload.layoutComposition),
-    lightingAndTone: toStringField(payload.lightingAndTone),
-    distinctivenessAssessment: toStringField(payload.distinctivenessAssessment),
+    imageryStyle: parsed.imageryStyle.map((value) => value.trim()).filter(Boolean),
+    layoutComposition: parsed.layoutComposition.trim(),
+    lightingAndTone: parsed.lightingAndTone.trim(),
+    distinctivenessAssessment: parsed.distinctivenessAssessment.trim(),
   };
 }
 
@@ -77,9 +88,10 @@ export async function analyzeBrandWithVision(
   base64Image: string,
   options: { client?: OpenAIClientLike; model?: string } = {},
 ): Promise<BrandVisionAnalysis> {
+  // Keep API-keyed model calls strictly on the server.
+  const imageUrl = toDataUrl(base64Image);
   const model = options.model || DEFAULT_MODEL;
   const client = options.client || getOpenAIClient();
-  const imageUrl = toDataUrl(base64Image);
 
   console.log('[analyze-brand-with-vision] Starting brand vision analysis.', {
     model,

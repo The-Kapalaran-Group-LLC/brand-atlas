@@ -99,4 +99,38 @@ describe('analyzeBrandWithVision', () => {
       'base64Image is required',
     );
   });
+
+  it('throws when screenshot payload exceeds max size guard', async () => {
+    const oversizedBase64 = 'a'.repeat(8_000_001);
+    await expect(analyzeBrandWithVision(oversizedBase64, { client: {} as any })).rejects.toThrow(
+      'base64Image exceeds max supported size',
+    );
+  });
+
+  it('throws when required schema keys are missing', async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              imageryStyle: ['Bold product macro'],
+              lightingAndTone: 'Moody',
+            }),
+          },
+        },
+      ],
+    });
+
+    const fakeClient = {
+      chat: {
+        completions: {
+          create,
+        },
+      },
+    } as any;
+
+    await expect(analyzeBrandWithVision('ZmFrZS1pbWFnZS1ieXRlcw==', { client: fakeClient })).rejects.toThrow(
+      'Failed to analyze brand screenshot with vision model',
+    );
+  });
 });
