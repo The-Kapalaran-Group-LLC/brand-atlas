@@ -64,7 +64,7 @@ const useAllVisualsLoaded = (
   return { allVisualsLoaded, handleImageLoad, handleImageError, expectedCount };
 };
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Info, Users, Trash2, Plus, Crosshair, Loader2, Presentation, FileText, ImageIcon, Type, Palette, Clock, ExternalLink, Share2, Globe, Tag, Sparkles, ArrowLeft, RefreshCw, X } from 'lucide-react';
+import { Search, Info, Users, Trash2, Plus, Crosshair, Loader2, Presentation, FileText, ImageIcon, Type, Palette, Clock, ExternalLink, Share2, Globe, Tag, Sparkles, ArrowLeft, RefreshCw, X, Pipette } from 'lucide-react';
 import { CompassRoseIcon } from './icons/CompassRoseIcon';
 import { navigateToHashRoute } from '../services/navigation';
 import { toSafeExternalHref } from '../services/external-links';
@@ -160,6 +160,7 @@ interface ActiveColorOverride {
   colorName: string;
   currentHex: string;
   screenshotUrl: string | null;
+  autoLaunchNonce: number;
 }
 
 const extractEvidenceTags = (value: string): { cleanText: string; labels: EvidenceTagLabel[] } => {
@@ -1434,6 +1435,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       colorName: color.name,
       currentHex: normalizedHex,
       screenshotUrl,
+      autoLaunchNonce: Date.now(),
     });
   }, [resolveColorSamplingImage]);
 
@@ -1494,6 +1496,16 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     setActiveColorOverride(null);
   }, [activeColorOverride, handleApplyPickedColor, pickColor]);
 
+  useEffect(() => {
+    if (!activeColorOverride) return;
+    if (!isNativeEyedropperSupported) return;
+    void handleLaunchEyedropper();
+  }, [
+    activeColorOverride?.autoLaunchNonce,
+    isNativeEyedropperSupported,
+    handleLaunchEyedropper,
+  ]);
+
   const renderColorSwatch = (
     color: BrandColorSpec,
     options: {
@@ -1534,11 +1546,16 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
               options.colorIndex,
               color
             )}
-            className="w-8 h-8 rounded-lg border border-zinc-200 cursor-pointer transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="group relative w-8 h-8 rounded-lg border border-zinc-200 cursor-pointer transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-400 overflow-hidden"
             style={{ backgroundColor: normalizedHex }}
             aria-label={`${color.name} swatch`}
             title={`Verify and replace ${color.name} with eyedropper`}
-          />
+          >
+            <span className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <Pipette className="w-3.5 h-3.5 text-white" aria-hidden="true" />
+            </span>
+          </button>
           <div>
             <p className="text-sm font-medium text-zinc-900">{color.name}</p>
             <p className="text-xs text-zinc-500">HEX {normalizedHex}</p>
@@ -3563,11 +3580,16 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                 <header className="flex items-center justify-between gap-3 px-5 py-4 border-b border-zinc-200">
                   <div>
                     <h3 className="text-base font-semibold text-zinc-900">Verify {activeColorOverride.brandName} Color</h3>
-                    <p className="text-xs text-zinc-500 mt-1">
+                    <p className="text-xs text-zinc-500 mt-1 inline-flex items-center gap-2">
                       Current selection:
                       <span className="ml-1 font-medium" style={{ color: activeColorOverride.currentHex }}>
                         {activeColorOverride.currentHex}
                       </span>
+                      <span
+                        className="inline-block w-4 h-4 rounded border border-zinc-300 align-middle"
+                        style={{ backgroundColor: activeColorOverride.currentHex }}
+                        aria-label="Current selected color reference"
+                      />
                     </p>
                   </div>
                   <button

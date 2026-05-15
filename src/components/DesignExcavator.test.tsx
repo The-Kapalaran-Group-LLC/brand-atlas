@@ -723,7 +723,7 @@ describe('BrandDeepDivePage', () => {
     expect(screen.getByText(/verify aesop color/i)).toBeInTheDocument();
   });
 
-  it('updates a color hex after picking a new value with the native eyedropper', async () => {
+  it('updates a color hex after auto-launching the native eyedropper when the modal opens', async () => {
     generateBrandDeepDive.mockResolvedValueOnce({
       ...sampleReport,
       brandProfiles: [
@@ -764,7 +764,6 @@ describe('BrandDeepDivePage', () => {
     await screen.findByText(/Ask About This Analysis/i);
 
     fireEvent.click(screen.getByTestId('color-swatch-trigger-0-primaryColors-0'));
-    fireEvent.click(await screen.findByTestId('launch-eyedropper-button'));
 
     await waitFor(() => {
       expect(screen.getByText('HEX #22CC88')).toBeInTheDocument();
