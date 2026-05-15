@@ -1118,6 +1118,52 @@ describe('BrandNavigator', () => {
     expect(within(identityGroup).queryByTestId('brand-result-logo-placeholder-0')).not.toBeInTheDocument();
   });
 
+  it('falls back to initials placeholder when logo candidates are exhausted', async () => {
+    generateBrandResearchMatrix.mockResolvedValue({
+      analysisObjective: 'test objective',
+      ecosystemMethod: 'test method',
+      results: [
+        {
+          brandName: 'Cadre AI',
+          highLevelSummary: 'Summary',
+          brandMission: 'Mission',
+          brandPositioning: {
+            taglines: [],
+            keyMessagesAndClaims: [],
+            valueProposition: 'Value',
+            voiceAndTone: 'Tone',
+          },
+          keyOfferingsProductsServices: [],
+          strategicMoatsStrengths: [],
+          potentialThreatsWeaknesses: [],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: [],
+          socialMediaChannels: [],
+          recentNews: [],
+          sources: [{ title: 'Cadre site', url: 'https://www.cadre.ai/' }],
+        },
+      ],
+      sources: [],
+    });
+
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Cadre AI' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
+
+    const identityGroup = await screen.findByTestId('brand-result-identity-0');
+    const logo = within(identityGroup).getByTestId('brand-result-logo-0') as HTMLImageElement;
+
+    logo.dataset.fallbackChain = '';
+    fireEvent.error(logo);
+
+    expect(await within(identityGroup).findByTestId('brand-result-logo-placeholder-0')).toHaveTextContent('C');
+  });
+
   it('does not display social media links in recent news', async () => {
     generateBrandResearchMatrix.mockResolvedValue({
       analysisObjective: 'test objective',
@@ -1440,6 +1486,8 @@ describe('BrandNavigator', () => {
     fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
 
     const missionSection = await screen.findByTestId('brand-result-section-brand-mission');
+    expect(missionSection.className).toContain('cursor-default');
+    expect(missionSection.className).not.toContain('cursor-pointer');
     fireEvent.click(missionSection);
 
     expect(screen.queryByRole('button', { name: /compare across brands/i })).not.toBeInTheDocument();

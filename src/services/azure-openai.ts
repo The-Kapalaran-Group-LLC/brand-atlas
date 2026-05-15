@@ -1932,7 +1932,16 @@ type ScrapedBrandDesignTokens = {
   website: string;
   colors: string[];
   fonts: string[];
+  logoUrl?: string | null;
+  heroImageUrl?: string | null;
+  screenshotUrl?: string | null;
 };
+
+function buildWebsiteScreenshotUrl(websiteUrl: string): string | null {
+  const normalized = normalizeHttpsUrl(websiteUrl);
+  if (!normalized) return null;
+  return `https://image.thum.io/get/width/1920/noanimate/${normalized}`;
+}
 
 async function fetchDesignTokensForBrand(brandName: string, website?: string): Promise<ScrapedBrandDesignTokens | null> {
   const trimmedWebsite = (website || '').trim();
@@ -1944,6 +1953,8 @@ async function fetchDesignTokensForBrand(brandName: string, website?: string): P
       const response = await fetch(`${baseUrl}${path}?domain=${encodeURIComponent(trimmedWebsite)}`);
       if (!response.ok) return null;
       return await response.json() as {
+        logoUrl?: string | null;
+        heroImageUrl?: string | null;
         designTokens?: {
           colors?: string[];
           fonts?: string[];
@@ -1982,6 +1993,9 @@ async function fetchDesignTokensForBrand(brandName: string, website?: string): P
       website: trimmedWebsite,
       colors,
       fonts,
+      logoUrl: normalizeHttpsUrl(activePayload.logoUrl || '') || null,
+      heroImageUrl: normalizeHttpsUrl(activePayload.heroImageUrl || '') || null,
+      screenshotUrl: buildWebsiteScreenshotUrl(trimmedWebsite),
     };
   } catch (error) {
     console.warn('[brand-deep-dive] Failed to fetch scraped design tokens.', { brandName, website: trimmedWebsite, error });
@@ -2000,7 +2014,13 @@ function buildHardDesignTokensBlock(tokens: ScrapedBrandDesignTokens[]): string 
     ...tokens.map((token, index) => {
       const colors = token.colors.length ? token.colors.join(', ') : 'Not available';
       const fonts = token.fonts.length ? token.fonts.join(', ') : 'Not available';
-      return `${index + 1}. ${token.brandName} (${token.website})\n   - Available Colors: ${colors}\n   - Available Fonts: ${fonts}`;
+      const visualUrls = [
+        token.logoUrl,
+        token.heroImageUrl,
+        token.screenshotUrl,
+      ].filter((value): value is string => Boolean(value));
+      const visuals = visualUrls.length ? visualUrls.join(', ') : 'Not available';
+      return `${index + 1}. ${token.brandName} (${token.website})\n   - Available Colors: ${colors}\n   - Available Fonts: ${fonts}\n   - Available Visual URLs: ${visuals}`;
     }),
   ].join('\n');
 }

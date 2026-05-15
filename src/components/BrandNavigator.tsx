@@ -355,12 +355,7 @@ const buildLargeLogoCandidateUrls = (website?: string | null): string[] => {
   if (!origin && !deterministicLogo) return [];
 
   return dedupeUrls([
-    origin ? `${origin}/apple-touch-icon.png` : null,
-    origin ? `${origin}/apple-touch-icon-precomposed.png` : null,
-    origin ? `${origin}/android-chrome-192x192.png` : null,
-    origin ? `${origin}/favicon.ico` : null,
-    origin ? `${origin}/favicon.png` : null,
-    origin ? `${origin}/favicon.svg` : null,
+    deterministicLogo,
     origin ? `${origin}/logo.svg` : null,
     origin ? `${origin}/logo.png` : null,
     origin ? `${origin}/logo.webp` : null,
@@ -372,8 +367,13 @@ const buildLargeLogoCandidateUrls = (website?: string | null): string[] => {
     origin ? `${origin}/assets/logo.svg` : null,
     origin ? `${origin}/images/logo.png` : null,
     origin ? `${origin}/images/logo.svg` : null,
+    origin ? `${origin}/apple-touch-icon.png` : null,
+    origin ? `${origin}/apple-touch-icon-precomposed.png` : null,
+    origin ? `${origin}/android-chrome-192x192.png` : null,
+    origin ? `${origin}/favicon.ico` : null,
+    origin ? `${origin}/favicon.png` : null,
+    origin ? `${origin}/favicon.svg` : null,
     origin ? `${origin}/android-chrome-512x512.png` : null,
-    deterministicLogo,
   ]);
 };
 
@@ -3411,10 +3411,15 @@ function BrandResultCard({
   const displayNewsItems = fallbackPressRelease ? [fallbackPressRelease] : recentNewsItems;
   const inferredEvidenceUrl = getPrimaryInferredEvidenceUrl(brandResult, displayNewsItems);
   const [extractedBrandLogoUrl, setExtractedBrandLogoUrl] = useState<string>(cachedExtractedLogo);
+  const [isPrimaryLogoHidden, setIsPrimaryLogoHidden] = useState(false);
   const brandWebsiteForLogo = extractedBrandLogoUrl || normalizedBrandWebsite || inferredEvidenceUrl;
   const brandLogoFallbackChain = buildBrandLogoFallbackChain(brandWebsiteForLogo);
   const primaryBrandLogo = brandLogoFallbackChain[0] || null;
   const brandLogoRemainingFallbacks = brandLogoFallbackChain.slice(1);
+
+  useEffect(() => {
+    setIsPrimaryLogoHidden(false);
+  }, [brandName, primaryBrandLogo]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -3443,14 +3448,16 @@ function BrandResultCard({
       };
     }
 
-    const lookupTarget = `${apiBase}/api/brand-images?domain=${encodeURIComponent(normalizedBrandWebsite)}`;
+    const controller = new AbortController();
+    const requestTimeout = setTimeout(() => controller.abort(), 4000);
+    const lookupTarget = `${apiBase}/api/brand-images-legacy?domain=${encodeURIComponent(normalizedBrandWebsite)}`;
     logger.debug('[BrandNavigator] Requesting brand logo from brand-images endpoint.', {
       brandName,
       normalizedBrandWebsite,
       lookupTarget,
     });
 
-    fetch(lookupTarget)
+    fetch(lookupTarget, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
@@ -3470,10 +3477,15 @@ function BrandResultCard({
           normalizedBrandWebsite,
           error: error instanceof Error ? error.message : String(error),
         });
+      })
+      .finally(() => {
+        clearTimeout(requestTimeout);
       });
 
     return () => {
       isCancelled = true;
+      clearTimeout(requestTimeout);
+      controller.abort();
     };
   }, [brandName, cachedExtractedLogo, normalizedBrandWebsite]);
 
@@ -3520,9 +3532,19 @@ function BrandResultCard({
       const [next, ...rest] = fallbacks;
       img.src = next;
       img.dataset.fallbackChain = rest.join('|');
+      logger.debug('[BrandNavigator] Retrying brand logo with fallback candidate.', {
+        brandName,
+        failedSrc: img.currentSrc || img.src,
+        nextCandidate: next,
+        remainingFallbacks: rest.length,
+      });
       return;
     }
-    img.style.display = 'none';
+    logger.debug('[BrandNavigator] Exhausted brand logo fallback chain; reverting to placeholder.', {
+      brandName,
+      website: brandWebsiteForLogo,
+    });
+    setIsPrimaryLogoHidden(true);
   };
 
   return (
@@ -3535,7 +3557,12 @@ function BrandResultCard({
                 {brandName[0] || '?'}
               </span>
             )}
-            {primaryBrandLogo && (
+            {isPrimaryLogoHidden && (
+              <span data-testid={`brand-result-logo-placeholder-${brandIndex}`} className="text-zinc-400 font-semibold text-base">
+                {brandName[0] || '?'}
+              </span>
+            )}
+            {primaryBrandLogo && !isPrimaryLogoHidden && (
               <img
                 data-testid={`brand-result-logo-${brandIndex}`}
                 src={primaryBrandLogo}
@@ -3751,7 +3778,7 @@ function BrandCriteriaSection({
         if (!compareEnabled || !sectionKey || !onRequestCompareAcrossBrands) return;
         onRequestCompareAcrossBrands(event, sectionKey);
       }}
-      className={`inline-block w-full mb-6 break-inside-avoid rounded-2xl border bg-zinc-50/80 p-6 shadow-[0_1px_6px_-3px_rgba(0,0,0,0.08)] h-fit self-start ${highlighted ? 'border-indigo-300 ring-2 ring-indigo-200/70' : 'border-zinc-200'} ${compareEnabled ? 'cursor-pointer hover:border-zinc-300' : ''} ${className}`.trim()}
+      className={`inline-block w-full mb-6 break-inside-avoid rounded-2xl border bg-zinc-50/80 p-6 shadow-[0_1px_6px_-3px_rgba(0,0,0,0.08)] h-fit self-start ${highlighted ? 'border-indigo-300 ring-2 ring-indigo-200/70' : 'border-zinc-200'} ${compareEnabled ? 'cursor-pointer hover:border-zinc-300' : 'cursor-default'} ${className}`.trim()}
     >
       <h4 className="text-sm font-semibold text-zinc-900 mb-3 uppercase tracking-wider inline-flex items-center gap-3">
         <span>{title}</span>

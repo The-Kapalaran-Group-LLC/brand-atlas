@@ -428,6 +428,18 @@ describe('BrandDeepDivePage', () => {
     expect(visualChainBundle).toContain('image.thum.io');
   });
 
+  it('renders both WordPress and Thum.io screenshot providers when direct visuals are unavailable', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    expect(await screen.findByAltText('Homepage Preview')).toBeInTheDocument();
+    expect(await screen.findByAltText('Homepage Preview (Thum.io)')).toBeInTheDocument();
+  });
+
   it('keeps visual cards on fallback sources after image errors instead of snapping back to broken URLs', async () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 
@@ -512,7 +524,7 @@ describe('BrandDeepDivePage', () => {
     expect(screen.queryByRole('button', { name: /^compare$/i })).not.toBeInTheDocument();
   });
 
-  it('hides Compare Across Brands actions when only one brand is shown in results', async () => {
+  it('hides Compare Across Brands actions and pointer cursor when only one brand is shown in results', async () => {
     generateBrandDeepDive.mockResolvedValueOnce({
       ...sampleReport,
       brandProfiles: [sampleReport.brandProfiles[0]],
@@ -533,10 +545,10 @@ describe('BrandDeepDivePage', () => {
     expect(screen.queryByRole('button', { name: /^compare$/i })).not.toBeInTheDocument();
 
     const typographyHeading = screen.getAllByText('Typography')[0];
-    const typographyCard = typographyHeading.closest('.cursor-pointer') as HTMLElement | null;
-    if (!typographyCard) {
-      throw new Error('Expected clickable typography card.');
-    }
+    const typographyCard = typographyHeading.closest('.bg-zinc-50') as HTMLElement | null;
+    if (!typographyCard) throw new Error('Expected typography result card.');
+    expect(typographyCard.className).toContain('cursor-default');
+    expect(typographyCard.className).not.toContain('cursor-pointer');
     fireEvent.click(typographyCard);
 
     expect(screen.queryByRole('button', { name: /compare across brands/i })).not.toBeInTheDocument();
@@ -669,6 +681,94 @@ describe('BrandDeepDivePage', () => {
 
     expect(screen.getAllByText('INFERRED').length).toBeGreaterThan(0);
     expect(screen.queryByText(/\[INFERRED\]/i)).not.toBeInTheDocument();
+  });
+
+  it('opens a color override modal when a color swatch is clicked', async () => {
+    generateBrandDeepDive.mockResolvedValueOnce({
+      ...sampleReport,
+      brandProfiles: [
+        {
+          ...sampleReport.brandProfiles[0],
+          sampleVisuals: [{ title: 'Homepage', url: 'https://www.aesop.com/home.jpg' }],
+          colorPalette: {
+            primaryColors: [
+              {
+                name: 'Ink',
+                hex: '#111111',
+                rgb: '17,17,17',
+                cmyk: '',
+                pantone: '',
+                usage: '',
+              },
+            ],
+            secondaryAccentColors: [],
+            neutrals: [],
+          },
+        },
+      ],
+    });
+
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    await screen.findByText(/Ask About This Analysis/i);
+
+    fireEvent.click(screen.getByTestId('color-swatch-trigger-0-primaryColors-0'));
+
+    expect(await screen.findByTestId('color-override-modal')).toBeInTheDocument();
+    expect(screen.getByText(/verify aesop color/i)).toBeInTheDocument();
+  });
+
+  it('updates a color hex after picking a new value with the native eyedropper', async () => {
+    generateBrandDeepDive.mockResolvedValueOnce({
+      ...sampleReport,
+      brandProfiles: [
+        {
+          ...sampleReport.brandProfiles[0],
+          sampleVisuals: [{ title: 'Homepage', url: 'https://www.aesop.com/home.jpg' }],
+          colorPalette: {
+            primaryColors: [
+              {
+                name: 'Ink',
+                hex: '#111111',
+                rgb: '17,17,17',
+                cmyk: '',
+                pantone: '',
+                usage: '',
+              },
+            ],
+            secondaryAccentColors: [],
+            neutrals: [],
+          },
+        },
+      ],
+    });
+
+    class MockEyeDropper {
+      open = vi.fn().mockResolvedValue({ sRGBHex: '#22cc88' });
+    }
+
+    (window as unknown as { EyeDropper: typeof MockEyeDropper }).EyeDropper = MockEyeDropper;
+
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    await screen.findByText(/Ask About This Analysis/i);
+
+    fireEvent.click(screen.getByTestId('color-swatch-trigger-0-primaryColors-0'));
+    fireEvent.click(await screen.findByTestId('launch-eyedropper-button'));
+
+    await waitFor(() => {
+      expect(screen.getByText('HEX #22CC88')).toBeInTheDocument();
+    });
   });
 
   it('does not render Devil’s Advocate recommendations in Design Excavator output', async () => {

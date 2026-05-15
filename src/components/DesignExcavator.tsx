@@ -64,7 +64,7 @@ const useAllVisualsLoaded = (
   return { allVisualsLoaded, handleImageLoad, handleImageError, expectedCount };
 };
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Info, Users, Trash2, Plus, Crosshair, Loader2, Presentation, FileText, ImageIcon, Type, Palette, Clock, ExternalLink, Share2, Globe, Tag, Sparkles, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Search, Info, Users, Trash2, Plus, Crosshair, Loader2, Presentation, FileText, ImageIcon, Type, Palette, Clock, ExternalLink, Share2, Globe, Tag, Sparkles, ArrowLeft, RefreshCw, X } from 'lucide-react';
 import { CompassRoseIcon } from './icons/CompassRoseIcon';
 import { navigateToHashRoute } from '../services/navigation';
 import { toSafeExternalHref } from '../services/external-links';
@@ -132,6 +132,7 @@ type DesignExcavatorRecentResult = RecentResultRecord & {
 
 type ResultTab = 'profiles' | 'compare';
 type CompareElement = 'primaryColors' | 'accentColors' | 'neutrals' | 'typography' | 'imageryStyle';
+type PaletteColorGroup = 'primaryColors' | 'secondaryAccentColors' | 'neutrals';
 type EvidenceTagLabel = 'known' | 'inferred' | 'speculative' | 'analogy';
 
 const isMissingResultTextValue = (value?: string | null): boolean => {
@@ -149,6 +150,16 @@ interface ComparePopupState {
   x: number;
   y: number;
   target: CompareElement;
+}
+
+interface ActiveColorOverride {
+  brandIndex: number;
+  brandName: string;
+  colorGroup: PaletteColorGroup;
+  colorIndex: number;
+  colorName: string;
+  currentHex: string;
+  screenshotUrl: string | null;
 }
 
 const extractEvidenceTags = (value: string): { cleanText: string; labels: EvidenceTagLabel[] } => {
@@ -677,6 +688,41 @@ function dedupeVisualCards(cards: BrandVisualCard[]): BrandVisualCard[] {
   });
 }
 
+function normalizeHexColorValue(value: string): string | null {
+  const cleaned = (value || '').trim().replace(/^#/, '');
+  if (!cleaned) return null;
+  if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(cleaned)) return null;
+  const expanded = cleaned.length === 3
+    ? cleaned.split('').map((char) => `${char}${char}`).join('')
+    : cleaned;
+  return `#${expanded.toUpperCase()}`;
+}
+
+function useNativeEyedropper() {
+  const [isSupported] = useState(() => typeof window !== 'undefined' && 'EyeDropper' in window);
+
+  const pickColor = useCallback(async (): Promise<string | null> => {
+    if (!isSupported || typeof window === 'undefined') {
+      return null;
+    }
+
+    try {
+      const EyeDropperCtor = (window as Window & { EyeDropper?: { new (): { open: () => Promise<{ sRGBHex: string }> } } }).EyeDropper;
+      if (!EyeDropperCtor) {
+        return null;
+      }
+      const eyeDropper = new EyeDropperCtor();
+      const result = await eyeDropper.open();
+      return normalizeHexColorValue(result?.sRGBHex || '') || result?.sRGBHex || null;
+    } catch (error) {
+      console.log('[DesignExcavator] Native eyedropper was cancelled or failed.', { error });
+      return null;
+    }
+  }, [isSupported]);
+
+  return { isSupported, pickColor };
+}
+
 export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   const brandNameInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const pendingBrandNameFocusIndexRef = useRef<number | null>(null);
@@ -718,6 +764,9 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [recentResultsRefreshNonce, setRecentResultsRefreshNonce] = useState(0);
+  const [activeColorOverride, setActiveColorOverride] = useState<ActiveColorOverride | null>(null);
+  const [isPickingColor, setIsPickingColor] = useState(false);
+  const { isSupported: isNativeEyedropperSupported, pickColor } = useNativeEyedropper();
 
   // Loader for all visuals (now after report and bestVisualsByBrand)
   const { allVisualsLoaded, handleImageLoad, handleImageError, expectedCount } = useAllVisualsLoaded(report, bestVisualsByBrand);
@@ -750,6 +799,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     setLogoImages({});
     requestedHeroRef.current.clear();
     setToast(options?.singleRow ? 'Cleared search fields.' : 'Started a new search.');
+    setActiveColorOverride(null);
+    setIsPickingColor(false);
   };
 
   const shouldKeepDefaultLinkBehavior = (event: React.MouseEvent<HTMLAnchorElement>): boolean => {
@@ -1335,8 +1386,124 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     }
   };
 
-  const renderColorSwatch = (color: BrandColorSpec) => {
-    const normalizedHex = color.hex.startsWith('#') ? color.hex : `#${color.hex}`;
+  const resolveColorSamplingImage = useCallback((profile: VisualDesignReport['brandProfiles'][number]) => {
+    const visuals = bestVisualsByBrand[profile.brandName];
+    const prioritizedCandidates = [
+      ...(visuals?.images || [])
+        .filter((card) => !isLogoLikeAsset(card.originalUrl || card.url, card.label))
+        .map((card) => card.url),
+      ...(visuals?.images || []).map((card) => card.url),
+      heroImages[profile.brandName] || '',
+      profile.sampleVisuals?.[0]?.url || '',
+      profile.website ? buildWordpressScreenshotUrl(profile.website) : '',
+      profile.website ? buildScreenshotPreviewUrl(profile.website) : '',
+    ].filter((candidate): candidate is string => Boolean(candidate));
+
+    if (prioritizedCandidates.length === 0) {
+      return null;
+    }
+
+    const firstCandidate = prioritizedCandidates[0];
+    return withImageProxy(firstCandidate);
+  }, [bestVisualsByBrand, heroImages]);
+
+  const handleOpenColorOverride = useCallback((
+    profile: VisualDesignReport['brandProfiles'][number],
+    brandIndex: number,
+    colorGroup: PaletteColorGroup,
+    colorIndex: number,
+    color: BrandColorSpec
+  ) => {
+    const normalizedHex = normalizeHexColorValue(color.hex) || (color.hex.startsWith('#') ? color.hex : `#${color.hex}`);
+    const screenshotUrl = resolveColorSamplingImage(profile);
+
+    console.log('[DesignExcavator] Opening color override modal.', {
+      brandName: profile.brandName,
+      brandIndex,
+      colorName: color.name,
+      colorIndex,
+      colorGroup,
+      screenshotUrl,
+    });
+
+    setActiveColorOverride({
+      brandIndex,
+      brandName: profile.brandName,
+      colorGroup,
+      colorIndex,
+      colorName: color.name,
+      currentHex: normalizedHex,
+      screenshotUrl,
+    });
+  }, [resolveColorSamplingImage]);
+
+  const handleApplyPickedColor = useCallback((nextHex: string) => {
+    const normalizedNextHex = normalizeHexColorValue(nextHex);
+    if (!normalizedNextHex || !activeColorOverride) {
+      return;
+    }
+
+    console.log('[DesignExcavator] Applying picked color override.', {
+      brandName: activeColorOverride.brandName,
+      brandIndex: activeColorOverride.brandIndex,
+      colorGroup: activeColorOverride.colorGroup,
+      colorIndex: activeColorOverride.colorIndex,
+      nextHex: normalizedNextHex,
+    });
+
+    setReport((previousReport) => {
+      if (!previousReport) return previousReport;
+
+      return {
+        ...previousReport,
+        brandProfiles: previousReport.brandProfiles.map((profile, profileIndex) => {
+          if (profileIndex !== activeColorOverride.brandIndex) {
+            return profile;
+          }
+
+          const updatedColors = (profile.colorPalette[activeColorOverride.colorGroup] || []).map((color, colorIndex) => (
+            colorIndex === activeColorOverride.colorIndex
+              ? { ...color, hex: normalizedNextHex }
+              : color
+          ));
+
+          return {
+            ...profile,
+            colorPalette: {
+              ...profile.colorPalette,
+              [activeColorOverride.colorGroup]: updatedColors,
+            },
+          };
+        }),
+      };
+    });
+
+    setActiveColorOverride((previous) => previous ? { ...previous, currentHex: normalizedNextHex } : previous);
+  }, [activeColorOverride]);
+
+  const handleLaunchEyedropper = useCallback(async () => {
+    if (!activeColorOverride) return;
+    setIsPickingColor(true);
+    const selectedHex = await pickColor();
+    setIsPickingColor(false);
+    if (!selectedHex) {
+      console.log('[DesignExcavator] No color selected from native eyedropper.');
+      return;
+    }
+    handleApplyPickedColor(selectedHex);
+    setActiveColorOverride(null);
+  }, [activeColorOverride, handleApplyPickedColor, pickColor]);
+
+  const renderColorSwatch = (
+    color: BrandColorSpec,
+    options: {
+      brandIndex: number;
+      colorGroup: PaletteColorGroup;
+      colorIndex: number;
+      profile: VisualDesignReport['brandProfiles'][number];
+    }
+  ) => {
+    const normalizedHex = normalizeHexColorValue(color.hex) || (color.hex.startsWith('#') ? color.hex : `#${color.hex}`);
     const renderColorMetaRow = (label: string, value: string) => {
       const parsed = extractEvidenceTags(value || '');
       return (
@@ -1355,16 +1522,26 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     };
 
     return (
-      <li key={`${color.name}-${color.hex}`} className="rounded-xl border border-zinc-200 p-3 bg-white">
+      <li key={`${options.profile.brandName}-${options.colorGroup}-${options.colorIndex}-${color.name}-${color.hex}`} className="rounded-xl border border-zinc-200 p-3 bg-white">
         <div className="flex items-center gap-3">
-          <span
-            className="w-8 h-8 rounded-lg border border-zinc-200"
+          <button
+            type="button"
+            data-testid={`color-swatch-trigger-${options.brandIndex}-${options.colorGroup}-${options.colorIndex}`}
+            onClick={() => handleOpenColorOverride(
+              options.profile,
+              options.brandIndex,
+              options.colorGroup,
+              options.colorIndex,
+              color
+            )}
+            className="w-8 h-8 rounded-lg border border-zinc-200 cursor-pointer transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-400"
             style={{ backgroundColor: normalizedHex }}
             aria-label={`${color.name} swatch`}
+            title={`Verify and replace ${color.name} with eyedropper`}
           />
           <div>
             <p className="text-sm font-medium text-zinc-900">{color.name}</p>
-            <p className="text-xs text-zinc-500">HEX {color.hex}</p>
+            <p className="text-xs text-zinc-500">HEX {normalizedHex}</p>
           </div>
         </div>
         {(color.rgb || color.cmyk || color.pantone || color.usage) && (
@@ -1425,7 +1602,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             data-testid="design-excavator-compare-cards-layout"
             className="columns-1 lg:columns-2 gap-4"
           >
-            {report.brandProfiles.map((profile) => {
+            {report.brandProfiles.map((profile, profileIndex) => {
               const colors =
                 compareElement === 'primaryColors'
                   ? profile.colorPalette.primaryColors
@@ -1437,7 +1614,19 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                 <div key={`${profile.brandName}-${compareElement}`} className="inline-block w-full mb-4 break-inside-avoid rounded-2xl border border-zinc-200 p-4">
                   <p className="text-sm font-semibold text-zinc-900 mb-3">{profile.brandName}</p>
                   {colors.length > 0 ? (
-                    <ul className="space-y-2">{colors.map(renderColorSwatch)}</ul>
+                    <ul className="space-y-2">
+                      {colors.map((color, colorIndex) => renderColorSwatch(color, {
+                        brandIndex: profileIndex,
+                        colorGroup:
+                          compareElement === 'primaryColors'
+                            ? 'primaryColors'
+                            : compareElement === 'accentColors'
+                              ? 'secondaryAccentColors'
+                              : 'neutrals',
+                        colorIndex,
+                        profile,
+                      }))}
+                    </ul>
                   ) : (
                     <p className="text-sm text-zinc-500">No color data available.</p>
                   )}
@@ -1716,6 +1905,29 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
           .filter((target) => Boolean(target.url))
       ).slice(0, 4);
 
+      const screenshotProviderCards = dedupeVisualCards(
+        screenshotTargets
+          .filter((target) => !isKnownBrokenVisualAssetUrl(target.url))
+          .flatMap((target) => {
+            const wordpressUrl = buildWordpressScreenshotUrl(target.url);
+            const thumioUrl = buildScreenshotPreviewUrl(target.url);
+            return [
+              {
+                label: target.label,
+                url: withImageProxy(wordpressUrl),
+                originalUrl: wordpressUrl,
+                status: 'ok' as const,
+              },
+              {
+                label: `${target.label} (Thum.io)`,
+                url: withImageProxy(thumioUrl),
+                originalUrl: thumioUrl,
+                status: 'ok' as const,
+              },
+            ];
+          })
+      ).slice(0, 8);
+
       const directVisualCards = dedupeVisualCards(
         buildLargeVisualCandidateUrls(profile.website)
           .filter((url) => !isKnownBrokenVisualAssetUrl(url))
@@ -1731,14 +1943,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         [
           ...reportSampleVisualCards,
           ...apiHeroVisualCards,
-          ...screenshotTargets
-            .filter((target) => !isKnownBrokenVisualAssetUrl(target.url))
-            .map((target) => ({
-              label: target.label,
-              url: withImageProxy(buildWordpressScreenshotUrl(target.url)),
-              originalUrl: buildWordpressScreenshotUrl(target.url),
-              status: 'ok' as const,
-            })),
+          ...screenshotProviderCards,
           ...directVisualCards,
         ]
       , 8);
@@ -2760,8 +2965,9 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                         )}
 
                         {/* Logo System Box */}
-                        <div className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4 cursor-pointer"
-                          onClick={(e) => openComparePopup(e, 'primaryColors')}
+                        <div
+                          className={`bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4 ${showCompareTab ? 'cursor-pointer' : 'cursor-default'}`}
+                          onClick={showCompareTab ? (e) => openComparePopup(e, 'primaryColors') : undefined}
                         >
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -2853,33 +3059,54 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                           </div>
                           {profile.colorPalette.primaryColors.length > 0 ? (
                             <div
-                              className="cursor-pointer hover:bg-zinc-50 rounded-xl p-2 -mx-2 transition-colors"
-                              onClick={(e) => openComparePopup(e, 'primaryColors')}
+                              className={`${showCompareTab ? 'cursor-pointer hover:bg-zinc-50' : 'cursor-default'} rounded-xl p-2 -mx-2 transition-colors`}
+                              onClick={showCompareTab ? (e) => openComparePopup(e, 'primaryColors') : undefined}
                             >
                               <p className="text-xs font-semibold text-zinc-600 mb-2">Primary</p>
-                              <ul className="space-y-2">{profile.colorPalette.primaryColors.map(c => renderColorSwatch(c))}</ul>
+                              <ul className="space-y-2">
+                                {profile.colorPalette.primaryColors.map((c, colorIndex) => renderColorSwatch(c, {
+                                  brandIndex: idx,
+                                  colorGroup: 'primaryColors',
+                                  colorIndex,
+                                  profile,
+                                }))}
+                              </ul>
                             </div>
                           ) : (
                             <p className="text-sm text-zinc-500">No primary colors documented.</p>
                           )}
                           {profile.colorPalette.secondaryAccentColors.length > 0 ? (
                             <div
-                              className="cursor-pointer hover:bg-zinc-50 rounded-xl p-2 -mx-2 transition-colors"
-                              onClick={(e) => openComparePopup(e, 'accentColors')}
+                              className={`${showCompareTab ? 'cursor-pointer hover:bg-zinc-50' : 'cursor-default'} rounded-xl p-2 -mx-2 transition-colors`}
+                              onClick={showCompareTab ? (e) => openComparePopup(e, 'accentColors') : undefined}
                             >
                               <p className="text-xs font-semibold text-zinc-600 mb-2">Accent</p>
-                              <ul className="space-y-2">{profile.colorPalette.secondaryAccentColors.map(c => renderColorSwatch(c))}</ul>
+                              <ul className="space-y-2">
+                                {profile.colorPalette.secondaryAccentColors.map((c, colorIndex) => renderColorSwatch(c, {
+                                  brandIndex: idx,
+                                  colorGroup: 'secondaryAccentColors',
+                                  colorIndex,
+                                  profile,
+                                }))}
+                              </ul>
                             </div>
                           ) : (
                             <p className="text-sm text-zinc-500 mt-2">No accent colors documented.</p>
                           )}
                           {profile.colorPalette.neutrals.length > 0 ? (
                             <div
-                              className="cursor-pointer hover:bg-zinc-50 rounded-xl p-2 -mx-2 transition-colors"
-                              onClick={(e) => openComparePopup(e, 'neutrals')}
+                              className={`${showCompareTab ? 'cursor-pointer hover:bg-zinc-50' : 'cursor-default'} rounded-xl p-2 -mx-2 transition-colors`}
+                              onClick={showCompareTab ? (e) => openComparePopup(e, 'neutrals') : undefined}
                             >
                               <p className="text-xs font-semibold text-zinc-600 mb-2">Neutrals</p>
-                              <ul className="space-y-2">{profile.colorPalette.neutrals.map(c => renderColorSwatch(c))}</ul>
+                              <ul className="space-y-2">
+                                {profile.colorPalette.neutrals.map((c, colorIndex) => renderColorSwatch(c, {
+                                  brandIndex: idx,
+                                  colorGroup: 'neutrals',
+                                  colorIndex,
+                                  profile,
+                                }))}
+                              </ul>
                             </div>
                           ) : (
                             <p className="text-sm text-zinc-500 mt-2">No neutral colors documented.</p>
@@ -2887,8 +3114,9 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                         </div>
 
                         {/* Typography Box */}
-                        <div className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4 cursor-pointer hover:bg-zinc-50"
-                          onClick={(e) => openComparePopup(e, 'typography')}
+                        <div
+                          className={`bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4 ${showCompareTab ? 'cursor-pointer hover:bg-zinc-50' : 'cursor-default'}`}
+                          onClick={showCompareTab ? (e) => openComparePopup(e, 'typography') : undefined}
                         >
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -2964,8 +3192,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                           </div>
                           {profile.supportingVisualElements.imageryStyle.length > 0 && (
                             <div
-                              className="cursor-pointer hover:bg-zinc-50 rounded-xl p-2 -mx-2 transition-colors"
-                              onClick={(e) => openComparePopup(e, 'imageryStyle')}
+                              className={`${showCompareTab ? 'cursor-pointer hover:bg-zinc-50' : 'cursor-default'} rounded-xl p-2 -mx-2 transition-colors`}
+                              onClick={showCompareTab ? (e) => openComparePopup(e, 'imageryStyle') : undefined}
                             >
                               <p className="text-xs font-semibold text-zinc-600 mb-1">Imagery Style</p>
                               {renderListOrFallback(profile.supportingVisualElements.imageryStyle, '')}
@@ -3304,6 +3532,103 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                 <Share2 className="w-4 h-4" /> Compare Across Brands
               </button>
             </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {activeColorOverride && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm"
+              onClick={() => {
+                console.log('[DesignExcavator] Closing color override modal from backdrop click.');
+                setActiveColorOverride(null);
+              }}
+            />
+            <motion.section
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              transition={{ duration: 0.18 }}
+              className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+              aria-modal="true"
+              role="dialog"
+              data-testid="color-override-modal"
+            >
+              <div className="w-full max-w-5xl max-h-[92vh] rounded-3xl border border-zinc-200 bg-white shadow-2xl overflow-hidden flex flex-col">
+                <header className="flex items-center justify-between gap-3 px-5 py-4 border-b border-zinc-200">
+                  <div>
+                    <h3 className="text-base font-semibold text-zinc-900">Verify {activeColorOverride.brandName} Color</h3>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Current selection:
+                      <span className="ml-1 font-medium" style={{ color: activeColorOverride.currentHex }}>
+                        {activeColorOverride.currentHex}
+                      </span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="close-color-override-modal"
+                    onClick={() => {
+                      console.log('[DesignExcavator] Closing color override modal with close button.');
+                      setActiveColorOverride(null);
+                    }}
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-full text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+                    aria-label="Close color override modal"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </header>
+
+                <div className="flex-1 overflow-auto bg-zinc-100">
+                  {activeColorOverride.screenshotUrl ? (
+                    <img
+                      src={activeColorOverride.screenshotUrl}
+                      alt={`${activeColorOverride.brandName} website preview`}
+                      className="w-full h-auto"
+                      data-testid="color-override-preview-image"
+                    />
+                  ) : (
+                    <div className="min-h-[300px] h-full flex items-center justify-center p-6">
+                      <div className="max-w-lg text-center space-y-2">
+                        <p className="text-sm font-medium text-zinc-700">No website preview was found for this brand.</p>
+                        <p className="text-xs text-zinc-500">Recovery option: launch the eyedropper anyway and sample from any visible screen area, then we will replace this color in your report.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <footer className="px-5 py-4 border-t border-zinc-200 flex flex-wrap items-center justify-between gap-3 bg-white">
+                  <div>
+                    {!isNativeEyedropperSupported ? (
+                      <p className="text-sm text-amber-700">
+                        Your browser does not support the native eyedropper. Recovery option: use Chrome or Edge, then re-open this color tool.
+                      </p>
+                    ) : (
+                      <p className="text-sm text-zinc-600">
+                        Click launch, then sample any pixel with the browser eyedropper. Press Escape to cancel.
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="launch-eyedropper-button"
+                    onClick={() => {
+                      void handleLaunchEyedropper();
+                    }}
+                    disabled={!isNativeEyedropperSupported || isPickingColor}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isPickingColor ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crosshair className="w-4 h-4" />}
+                    {isPickingColor ? 'Picking...' : 'Launch Eyedropper'}
+                  </button>
+                </footer>
+              </div>
+            </motion.section>
           </>
         )}
       </AnimatePresence>
