@@ -110,6 +110,20 @@ const CONFIDENCE_FILTERS: ConfidenceLevelFilter[] = ['high', 'medium', 'low'];
 const EVIDENCE_FILTERS: EvidenceLabelFilter[] = ['known', 'inferred', 'speculative'];
 const TREND_STAGE_FILTERS: TrendStageFilter[] = ['peaking', 'emerging', 'declining'];
 
+const isMissingResultTextValue = (value?: string | null): boolean => {
+  const normalized = (value || '').trim().toLowerCase();
+  return normalized.length === 0 || normalized === 'n/a' || normalized === 'na' || normalized === 'data unavailable';
+};
+
+const isMatrixItemMissing = (item?: MatrixItem | null): boolean => {
+  if (!item) return true;
+  const cleaned = (item.text || '')
+    .replace(/\[(KNOWN|INFERRED|INFERED|SPECULATIVE)\]\s*/gi, '')
+    .replace(/\b(KNOWN|INFERRED|INFERED|SPECULATIVE)\b\s*[:\-]?\s*/gi, '')
+    .trim();
+  return isMissingResultTextValue(cleaned);
+};
+
 const normalizeTrendStage = (stage?: string): TrendStageFilter => {
   if (stage === 'peaking' || stage === 'declining') {
     return stage;
@@ -1070,7 +1084,7 @@ export default function CulturalArchaeologist() {
     filesValue: UploadedFile[];
     sourcesTypeValue: string[];
     rerunFilters?: CulturalRerunFilters;
-    actionName: 'generate-cultural-matrix' | 'rerun-cultural-matrix';
+    actionName: string;
   }) => {
     setFakeProgress(5);
     setIsLoading(true);
@@ -1270,6 +1284,41 @@ export default function CulturalArchaeologist() {
       filesValue: files,
       sourcesTypeValue: rerunSources,
       rerunFilters: activeRerunFilters,
+    });
+  };
+
+  const handleRefreshCulturalSection = async (category: MatrixInsightKey, categoryTitle: string) => {
+    if (!matrix) return;
+    const rerunAudience = (matrixMeta?.audience || audience || '').trim();
+    if (!rerunAudience) return;
+
+    const rerunBrand = matrixMeta?.brand ?? normalizedBrands.join(', ');
+    const rerunGenerations = matrixMeta?.generations ?? selectedGenerations;
+    const baseTopic = matrixMeta?.topicFocus ?? topicFocus;
+    const rerunTopic = [baseTopic, `Refresh focus: ${categoryTitle}`]
+      .filter((value) => (value || '').trim().length > 0)
+      .join(' | ');
+    const rerunSources = matrixMeta?.sourcesType ?? sourcesType;
+
+    console.log('[CulturalArchaeologist] Running section refresh search for incomplete results.', {
+      category,
+      categoryTitle,
+      rerunAudience,
+      rerunBrand,
+      rerunGenerations,
+      rerunTopic,
+      rerunSources,
+    });
+    setToast(`Refreshing ${categoryTitle}...`);
+
+    await runCulturalMatrixGeneration({
+      actionName: `refresh-cultural-matrix-${category}`,
+      audienceValue: rerunAudience,
+      brandContextValue: rerunBrand,
+      generationsValue: rerunGenerations,
+      topicFocusValue: rerunTopic,
+      filesValue: files,
+      sourcesTypeValue: rerunSources,
     });
   };
 
@@ -3355,14 +3404,14 @@ export default function CulturalArchaeologist() {
                 data-testid="matrix-cards-layout"
                 className="columns-1 md:columns-2 lg:columns-3 gap-6"
               >
-                <MatrixCard title="Moments" subtext="External forces shaping their behavior" items={displayMatrix?.moments || []} delay={0.1} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
-                <MatrixCard title="Beliefs" subtext="Values they’re operating from" items={displayMatrix?.beliefs || []} delay={0.2} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
-                <MatrixCard title="Tone" subtext="What & how they feel" items={displayMatrix?.tone || []} delay={0.3} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
-                <MatrixCard title="Language" subtext="How they communicate" items={displayMatrix?.language || []} delay={0.4} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} onOpenVocabularyExtractor={() => setIsVocabularyOpen(true)} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
-                <MatrixCard title="Behaviors" subtext="How they act/interact" items={displayMatrix?.behaviors || []} delay={0.5} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
-                <MatrixCard title="Contradictions" subtext="Emerging tensions or shift in values or behavior" items={displayMatrix?.contradictions || []} delay={0.6} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
-                <MatrixCard title="Community" subtext="Who people look to for identity & belonging" items={displayMatrix?.community || []} delay={0.7} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
-                <MatrixCard title="Influencers" subtext="People who are shaping their beliefs & behavior" items={displayMatrix?.influencers || []} delay={0.8} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} />
+                <MatrixCard title="Moments" sectionKey="moments" subtext="External forces shaping their behavior" items={displayMatrix?.moments || []} delay={0.1} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.moments || []).length === 0 || (displayMatrix?.moments || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('moments', 'Moments'); }} />
+                <MatrixCard title="Beliefs" sectionKey="beliefs" subtext="Values they’re operating from" items={displayMatrix?.beliefs || []} delay={0.2} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.beliefs || []).length === 0 || (displayMatrix?.beliefs || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('beliefs', 'Beliefs'); }} />
+                <MatrixCard title="Tone" sectionKey="tone" subtext="What & how they feel" items={displayMatrix?.tone || []} delay={0.3} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.tone || []).length === 0 || (displayMatrix?.tone || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('tone', 'Tone'); }} />
+                <MatrixCard title="Language" sectionKey="language" subtext="How they communicate" items={displayMatrix?.language || []} delay={0.4} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} onOpenVocabularyExtractor={() => setIsVocabularyOpen(true)} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.language || []).length === 0 || (displayMatrix?.language || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('language', 'Language'); }} />
+                <MatrixCard title="Behaviors" sectionKey="behaviors" subtext="How they act/interact" items={displayMatrix?.behaviors || []} delay={0.5} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.behaviors || []).length === 0 || (displayMatrix?.behaviors || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('behaviors', 'Behaviors'); }} />
+                <MatrixCard title="Contradictions" sectionKey="contradictions" subtext="Emerging tensions or shift in values or behavior" items={displayMatrix?.contradictions || []} delay={0.6} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.contradictions || []).length === 0 || (displayMatrix?.contradictions || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('contradictions', 'Contradictions'); }} />
+                <MatrixCard title="Community" sectionKey="community" subtext="Who people look to for identity & belonging" items={displayMatrix?.community || []} delay={0.7} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.community || []).length === 0 || (displayMatrix?.community || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('community', 'Community'); }} />
+                <MatrixCard title="Influencers" sectionKey="influencers" subtext="People who are shaping their beliefs & behavior" items={displayMatrix?.influencers || []} delay={0.8} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.influencers || []).length === 0 || (displayMatrix?.influencers || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('influencers', 'Influencers'); }} />
               </div>
 
               {/* Sources Section */}
@@ -3490,7 +3539,33 @@ export default function CulturalArchaeologist() {
   );
 }
 
-function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], onDeepDive, onOpenVocabularyExtractor, showDocumentInsights = false }: { title: string; subtext: string; items: MatrixItem[]; delay: number; highlightedInsights?: string[]; onDeepDive?: (item: MatrixItem, category: string) => void; onOpenVocabularyExtractor?: () => void; showDocumentInsights?: boolean }) {
+function MatrixCard({
+  title,
+  sectionKey,
+  subtext,
+  items,
+  delay,
+  highlightedInsights = [],
+  onDeepDive,
+  onOpenVocabularyExtractor,
+  showDocumentInsights = false,
+  showRefresh = false,
+  isRefreshing = false,
+  onRefresh,
+}: {
+  title: string;
+  sectionKey: MatrixInsightKey;
+  subtext: string;
+  items: MatrixItem[];
+  delay: number;
+  highlightedInsights?: string[];
+  onDeepDive?: (item: MatrixItem, category: string) => void;
+  onOpenVocabularyExtractor?: () => void;
+  showDocumentInsights?: boolean;
+  showRefresh?: boolean;
+  isRefreshing?: boolean;
+  onRefresh?: () => void;
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
   const INITIAL_SHOW = 3;
   const cardTestId = `matrix-card-${title.toLowerCase().replace(/\s+/g, '-')}`;
@@ -3591,7 +3666,20 @@ function MatrixCard({ title, subtext, items, delay, highlightedInsights = [], on
       className="inline-block w-full mb-6 bg-white p-6 rounded-3xl border border-zinc-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-shadow duration-300 break-inside-avoid print-break-inside-avoid"
     >
       <div className="mb-1 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider">{title}</h3>
+        <div className="inline-flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-zinc-900 uppercase tracking-wider">{title}</h3>
+          {showRefresh && onRefresh ? (
+            <button
+              type="button"
+              data-testid={`matrix-card-refresh-${sectionKey}`}
+              onClick={onRefresh}
+              className="relative z-10 pointer-events-auto inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-zinc-600 cursor-pointer focus:outline-none"
+              title={`Refresh ${title}`}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+          ) : null}
+        </div>
         {title === 'Language' && onOpenVocabularyExtractor && (
           <button
             type="button"

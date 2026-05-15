@@ -199,6 +199,11 @@ export interface BrandResearchMatrix {
   sources: Source[];
 }
 
+type BrandWebsiteAnchor = {
+  brand: string;
+  website?: string | null;
+};
+
 export interface DeepDiveReport {
   originationDate: string;
   relevance: string;
@@ -759,6 +764,72 @@ const normalizeIsoDate = (value?: string | null): string | null => {
   return parsed.toISOString();
 };
 
+const normalizeBrandLookupKey = (value?: string | null): string =>
+  (value || '').trim().toLowerCase();
+
+const isMissingBrandMissionValue = (value?: string | null): boolean => {
+  const normalized = (value || '').trim().toLowerCase();
+  return normalized.length === 0 || normalized === 'n/a' || normalized === 'na' || normalized === 'data unavailable';
+};
+
+const extractDomainHint = (website?: string | null): string => {
+  const normalized = normalizeExternalHttpUrl(website || '');
+  if (!normalized) return '';
+  try {
+    return new URL(normalized).hostname.replace(/^www\./i, '');
+  } catch {
+    return '';
+  }
+};
+
+const firstSentence = (value?: string | null): string => {
+  const trimmed = (value || '').replace(/\s+/g, ' ').trim();
+  if (!trimmed) return '';
+  const match = trimmed.match(/^(.{1,280}?[.!?])(?:\s|$)/);
+  return (match?.[1] || trimmed).trim();
+};
+
+export function applyBrandMissionFallbacks(
+  report: BrandResearchMatrix,
+  websiteTargets: BrandWebsiteAnchor[] = []
+): BrandResearchMatrix {
+  const websiteByBrand = new Map<string, string>();
+  websiteTargets.forEach((item) => {
+    const key = normalizeBrandLookupKey(item.brand);
+    if (!key) return;
+    const website = (item.website || '').trim();
+    if (!websiteByBrand.has(key) && website) {
+      websiteByBrand.set(key, website);
+    }
+  });
+
+  return {
+    ...report,
+    results: (report.results || []).map((brandResult) => {
+      if (!isMissingBrandMissionValue(brandResult.brandMission)) {
+        return brandResult;
+      }
+
+      const key = normalizeBrandLookupKey(brandResult.brandName);
+      const domainHint = extractDomainHint(websiteByBrand.get(key));
+      const candidateBase =
+        firstSentence(brandResult.brandPositioning?.valueProposition)
+        || firstSentence(brandResult.highLevelSummary)
+        || firstSentence(brandResult.brandPositioning?.keyMessagesAndClaims?.[0])
+        || firstSentence(brandResult.keyOfferingsProductsServices?.[0]);
+
+      const fallbackMission = candidateBase
+        ? `[INFERRED] ${candidateBase}${domainHint ? ` (guided by ${domainHint})` : ''}`
+        : `[INFERRED] Mission not explicitly stated; inferred from first-party brand messaging${domainHint ? ` on ${domainHint}` : ''}.`;
+
+      return {
+        ...brandResult,
+        brandMission: fallbackMission,
+      };
+    }),
+  };
+}
+
 const compareNewsByMostRecent = (a: ValidatedNewsItem, b: ValidatedNewsItem): number => {
   const aTime = normalizeIsoDate(a.publishedAt) ? new Date(normalizeIsoDate(a.publishedAt)!).getTime() : 0;
   const bTime = normalizeIsoDate(b.publishedAt) ? new Date(normalizeIsoDate(b.publishedAt)!).getTime() : 0;
@@ -1288,6 +1359,7 @@ async function gatherEvidenceForTopic(topic: string, mode: SessionMode, intent: 
       const baseUrl = getApiBaseUrl();
       const searchUrl = new URL(`${baseUrl}/api/search`);
       searchUrl.searchParams.set('q', query);
+      searchUrl.searchParams.set('provider', 'google');
       if (intent === 'behaviors') {
         searchUrl.searchParams.set('mode', 'behaviors');
       }
@@ -2644,7 +2716,7 @@ const BrandResearchMatrixSchema = z.object({
     z.object({
       brandName: z.string(),
       highLevelSummary: z.string(),
-      brandMission: z.string().nullable().describe("The exact brand mission. Return null if not explicitly stated in the provided evidence."),
+      brandMission: z.string().nullable().describe("Prefer exact mission wording when explicitly available. If not explicit, infer a concise mission from first-party website/about messaging and prepend [INFERRED]. Return null only when no credible first-party signal exists."),
       brandPositioning: z.object({
         taglines: z.array(z.string()),
         keyMessagesAndClaims: z.array(z.string()),
@@ -3444,7 +3516,15 @@ export async function generateBrandResearchMatrix(
     console.warn('[brand-research] Falling back to inferred mode because evidence digest and website grounding are unavailable.');
   }
 
-  const prompt = `Generate a brand intelligence report for the following brands: ${brandContext}.${audienceStr}${topicStr}${generationStr}${filesStr}${sourcesTypeStr}
+  const brandWebsiteGuide = websiteTargets
+    .filter((target) => Boolean((target.website || '').trim()))
+    .map((target) => `- ${target.brand}: ${target.website}`)
+    .join('\n');
+  const websiteGuideStr = brandWebsiteGuide
+    ? `\n\nBrand website anchors (use these URLs as the primary entity guide, especially for mission extraction):\n${brandWebsiteGuide}`
+    : '';
+
+  const prompt = `Generate a brand intelligence report for the following brands: ${brandContext}.${audienceStr}${topicStr}${generationStr}${filesStr}${sourcesTypeStr}${websiteGuideStr}
 
 Requirements:
 - Use the same research rigor: recent evidence (2024-2026), explicit uncertainty handling, and source grounding.
@@ -3454,7 +3534,10 @@ ${evidenceRulesBlock}
 - Return one complete result object per brand in "results".
 - Each brand result must include:
   1) highLevelSummary (2-4 sentence executive summary of strategy, positioning, and market posture)
-  2) brandMission
+  2) brandMission:
+     - Use explicit mission text when found.
+     - If exact mission is not explicitly stated, infer from first-party website/about language and prepend [INFERRED].
+     - Do not leave null unless no credible first-party signal exists.
   3) brandPositioning:
      - taglines
      - keyMessagesAndClaims
@@ -3508,7 +3591,7 @@ ${websiteGroundingContext ? `\n${websiteGroundingContext}` : ''}`;
     maxRetries: 3,
   });
 
-  return filterRecentNewsToTopMainstream(report);
+  return applyBrandMissionFallbacks(filterRecentNewsToTopMainstream(report), websiteTargets);
 }
 
 function filterRecentNewsToTopMainstream(report: BrandResearchMatrix): BrandResearchMatrix {

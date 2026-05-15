@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyBrandMissionFallbacks,
   buildBrandEvidenceRulesBlock,
   buildCategoryRoleBlock,
   buildBrandDeepDiveQuestionSearchTopic,
@@ -345,6 +346,45 @@ describe('recent news fallback derivation', () => {
 
     expect(fallback).toHaveLength(1);
     expect(fallback[0].url).toBe('https://www.foxnews.com/lifestyle/patagonia-expands-retail-footprint');
+  });
+});
+
+describe('brand mission fallback derivation', () => {
+  it('backfills missing brand mission from positioning/high-level summary using website as guide', () => {
+    const report = applyBrandMissionFallbacks(
+      {
+        analysisObjective: 'Compare brands',
+        ecosystemMethod: 'Evidence-first',
+        results: [
+          {
+            brandName: 'Delta',
+            highLevelSummary: 'Delta emphasizes reliability and premium travel experiences across customer journeys.',
+            brandMission: null,
+            brandPositioning: {
+              taglines: [],
+              keyMessagesAndClaims: [],
+              valueProposition: 'Deliver a premium, human-centered travel experience.',
+              voiceAndTone: 'Confident',
+            },
+            keyOfferingsProductsServices: [],
+            strategicMoatsStrengths: [],
+            potentialThreatsWeaknesses: [],
+            targetAudiences: [],
+            recentCampaigns: [],
+            keyMarketingChannels: [],
+            socialMediaChannels: [],
+            recentNews: [],
+            sources: [],
+          },
+        ],
+        sources: [],
+      },
+      [{ brand: 'Delta', website: 'https://www.delta.com/' }]
+    );
+
+    expect(report.results[0].brandMission).toContain('[INFERRED]');
+    expect(report.results[0].brandMission).toContain('delta.com');
+    expect(report.results[0].brandMission).toContain('premium, human-centered travel experience');
   });
 });
 

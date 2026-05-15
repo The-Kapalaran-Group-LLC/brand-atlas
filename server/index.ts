@@ -22,6 +22,7 @@ import {
   type BrandImagesResult,
   type BrandVisionAnalysis,
 } from './brand-images';
+import { pickTopLogoCandidates, type RawLogoCandidate } from './extract-assets';
 import { extractBrandWebContext, type BrandWebContextResult } from './brand-web-context';
 import {
   buildLanguageMethodologySnapshotDigest,
@@ -576,6 +577,21 @@ const isDisallowedHost = (hostname: string): boolean => {
   return false;
 };
 
+const getPlaywrightChromium = async () => {
+  const moduleName = 'playwright';
+  const playwright = await import(moduleName);
+  return playwright.chromium as {
+    launch: (options?: Record<string, unknown>) => Promise<{
+      newPage: (options?: Record<string, unknown>) => Promise<{
+        goto: (url: string, options?: Record<string, unknown>) => Promise<unknown>;
+        evaluate: <T>(fn: () => T) => Promise<T>;
+        close: () => Promise<void>;
+      }>;
+      close: () => Promise<void>;
+    }>;
+  };
+};
+
 const cleanupImageCache = () => {
   const now = Date.now();
   for (const [key, cached] of imageCache.entries()) {
@@ -724,6 +740,179 @@ app.get('/api/process-image', async (req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(502).json({ error: `Failed to process image: ${message}` });
+  }
+});
+
+app.get('/api/extract-assets', async (req, res) => {
+  const rawUrl = Array.isArray(req.query.url) ? req.query.url[0] : req.query.url;
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing url query parameter. Try /api/extract-assets?url=https://example.com',
+    });
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(rawUrl.trim());
+  } catch {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid URL. Use a full http/https URL such as https://example.com',
+    });
+  }
+
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return res.status(400).json({
+      success: false,
+      error: 'Only http/https URLs are supported.',
+    });
+  }
+
+  if (isDisallowedHost(parsedUrl.hostname)) {
+    return res.status(403).json({
+      success: false,
+      error: 'That host is not allowed. Please use a public website URL.',
+    });
+  }
+
+  console.log('[extract-assets] Starting Playwright extraction.', {
+    url: parsedUrl.toString(),
+    hostname: parsedUrl.hostname,
+  });
+
+  let browser: Awaited<ReturnType<Awaited<ReturnType<typeof getPlaywrightChromium>>['launch']>> | null = null;
+  let page: Awaited<ReturnType<NonNullable<typeof browser>['newPage']>> | null = null;
+
+  try {
+    const chromium = await getPlaywrightChromium();
+    browser = await chromium.launch({ headless: true });
+    page = await browser.newPage();
+
+    await page.goto(parsedUrl.toString(), {
+      waitUntil: 'domcontentloaded',
+      timeout: 30_000,
+    });
+
+    const extractionScript = `(() => {
+      const candidates = [];
+      const baseUrl = document.baseURI || window.location.href;
+
+      const addCandidate = (value, source, width = 0, height = 0) => {
+        const raw = (value || '').trim();
+        if (!raw) return;
+
+        try {
+          if (raw.startsWith('data:image/')) {
+            candidates.push({ url: raw, source, width, height });
+            return;
+          }
+
+          const resolved = new URL(raw, baseUrl);
+          if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') return;
+          candidates.push({ url: resolved.toString(), source, width, height });
+        } catch {}
+      };
+
+      const ogImage = document.querySelector('meta[property="og:image"]');
+      addCandidate(ogImage && ogImage.content, 'og:image');
+
+      const iconLinks = document.querySelectorAll('link[rel*="icon" i], link[rel="apple-touch-icon" i]');
+      iconLinks.forEach((linkEl) => {
+        const rel = String(linkEl.getAttribute('rel') || '').toLowerCase();
+        const source = rel.includes('apple-touch-icon') ? 'apple-touch-icon' : 'icon';
+        const sizesAttr = String(linkEl.getAttribute('sizes') || '').toLowerCase();
+        let width = 0;
+        let height = 0;
+        if (sizesAttr.includes('x')) {
+          const parts = sizesAttr.split('x');
+          width = Number(parts[0]) || 0;
+          height = Number(parts[1]) || 0;
+        }
+        addCandidate(linkEl.href || linkEl.getAttribute('href'), source, width, height);
+      });
+
+      document.querySelectorAll('header img').forEach((img) => {
+        addCandidate(img.currentSrc || img.src || img.getAttribute('src'), 'header-img', img.naturalWidth || img.width || 0, img.naturalHeight || img.height || 0);
+      });
+      document.querySelectorAll('nav img').forEach((img) => {
+        addCandidate(img.currentSrc || img.src || img.getAttribute('src'), 'nav-img', img.naturalWidth || img.width || 0, img.naturalHeight || img.height || 0);
+      });
+      document.querySelectorAll('[class*="logo" i] img, [id*="logo" i] img, img[class*="logo" i], img[id*="logo" i]').forEach((img) => {
+        addCandidate(img.currentSrc || img.src || img.getAttribute('src'), 'logo-img', img.naturalWidth || img.width || 0, img.naturalHeight || img.height || 0);
+      });
+
+      document.querySelectorAll('header svg').forEach((svg) => {
+        const svgString = new XMLSerializer().serializeToString(svg);
+        const encoded = encodeURIComponent(svgString)
+          .replace(/'/g, '%27')
+          .replace(/"/g, '%22');
+        addCandidate('data:image/svg+xml,' + encoded, 'header-svg');
+      });
+      document.querySelectorAll('nav svg').forEach((svg) => {
+        const svgString = new XMLSerializer().serializeToString(svg);
+        const encoded = encodeURIComponent(svgString)
+          .replace(/'/g, '%27')
+          .replace(/"/g, '%22');
+        addCandidate('data:image/svg+xml,' + encoded, 'nav-svg');
+      });
+      document.querySelectorAll('[class*="logo" i] svg, [id*="logo" i] svg, svg[class*="logo" i], svg[id*="logo" i]').forEach((svg) => {
+        const svgString = new XMLSerializer().serializeToString(svg);
+        const encoded = encodeURIComponent(svgString)
+          .replace(/'/g, '%27')
+          .replace(/"/g, '%22');
+        addCandidate('data:image/svg+xml,' + encoded, 'logo-svg');
+      });
+
+      return candidates;
+    })()`;
+    const logosRaw = await page.evaluate(extractionScript as any);
+    const candidates: RawLogoCandidate[] = Array.isArray(logosRaw)
+      ? logosRaw
+        .filter((value): value is RawLogoCandidate => typeof value === 'object' && value !== null && typeof (value as RawLogoCandidate).url === 'string')
+        .map((value) => ({
+          url: value.url,
+          source: value.source,
+          width: typeof value.width === 'number' ? value.width : undefined,
+          height: typeof value.height === 'number' ? value.height : undefined,
+        }))
+      : [];
+    const logos = pickTopLogoCandidates(candidates, 3);
+    console.log('[extract-assets] Extraction completed.', {
+      url: parsedUrl.toString(),
+      candidateCount: candidates.length,
+      selectedCount: logos.length,
+    });
+
+    return res.json({
+      success: true,
+      logos,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown extraction error';
+    console.log('[extract-assets] Extraction failed.', {
+      url: parsedUrl.toString(),
+      error: message,
+    });
+
+    if (message.includes("Cannot find package 'playwright'")) {
+      return res.status(500).json({
+        success: false,
+        error: 'Playwright is not installed in this environment. Install it with: npm install playwright',
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: `Failed to extract logo candidates: ${message}`,
+    });
+  } finally {
+    if (page) {
+      await page.close().catch(() => {});
+    }
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
   }
 });
 
@@ -933,12 +1122,39 @@ app.get('/api/brand-web-context', async (req, res) => {
 app.get('/api/search', async (req, res) => {
   const query = req.query.q as string;
   const mode = String(req.query.mode || '').trim().toLowerCase();
+  const providerRaw = String(req.query.provider || '').trim().toLowerCase();
+  const provider = providerRaw === 'google' || providerRaw === 'bing' ? providerRaw : undefined;
   if (!query) return res.status(400).json({ error: 'Missing query' });
   try {
-    const context = await fetchAudienceContext(query, { behaviorFocus: mode === 'behaviors' });
+    const context = await fetchAudienceContext(query, { behaviorFocus: mode === 'behaviors', provider });
     res.json({ context });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    const primaryMessage = err?.message || 'Search provider unavailable.';
+    console.warn('[search] Primary web search failed, attempting GPT fallback.', {
+      query,
+      mode,
+      provider: provider || 'auto',
+      error: primaryMessage,
+    });
+    try {
+      const gptContext = await fetchAudienceContextWithGptSearch(query, 'current');
+      return res.json({
+        context: gptContext,
+        fallback: 'gpt',
+      });
+    } catch (fallbackErr: any) {
+      const fallbackMessage = fallbackErr?.message || 'GPT fallback unavailable.';
+      console.error('[search] GPT fallback failed.', {
+        query,
+        mode,
+        provider: provider || 'auto',
+        error: fallbackMessage,
+      });
+      return res.json({
+        context: `No web results returned for: "${query}".`,
+        fallback: 'none',
+      });
+    }
   }
 });
 

@@ -917,7 +917,15 @@ export function SplashGrid({
         0,
         1,
       );
-      const gradientT = Math.pow(baseT, 0.6);
+      // Keep the near hemisphere predominantly purple while softly rolling the
+      // far hemisphere toward a subtle pink for depth separation.
+      const frontWeight = Math.pow(frontNorm, 1.15);
+      const purpleForwardT = clamp(0.28 + baseT * 0.46, 0, 1);
+      // Keep a gentle far-side pink cast without pulling too strongly away
+      // from the indigo/purple midpoint.
+      const pinkFarSideT = clamp(0.052 + xNorm * 0.042 + yNorm * 0.022, 0.038, 0.158);
+      const depthBiasedT = lerp(pinkFarSideT, purpleForwardT, frontWeight);
+      const gradientT = Math.pow(depthBiasedT, 0.78);
       if (mode === 'countryFill') return gradientColorAt(gradientT, 1.14);
       if (mode === 'countryOutline') return 'rgb(92 92 255)';
       if (mode === 'continentOutline') return gradientColorAt(gradientT, 1.28);

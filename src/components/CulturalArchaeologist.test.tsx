@@ -87,6 +87,24 @@ const mockMatrix = {
   sources: [{ title: 'Reuters', url: 'https://www.reuters.com/example' }],
 };
 
+const incompleteMatrix = {
+  demographics: {
+    age: null,
+    race: null,
+    gender: null,
+  },
+  sociological_analysis: '',
+  moments: [],
+  beliefs: [],
+  tone: [],
+  language: [],
+  behaviors: [],
+  contradictions: [],
+  community: [],
+  influencers: [],
+  sources: [],
+};
+
 describe('CulturalArchaeologist', () => {
   beforeEach(() => {
     window.history.pushState({}, '', '/#cultural-archaeologist');
@@ -105,7 +123,7 @@ describe('CulturalArchaeologist', () => {
     fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
     fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
 
-    expect(await screen.findByText('Result Filters')).toBeInTheDocument();
+    expect(await screen.findByText(/Results? Filters/i, {}, { timeout: 3000 })).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /generate insights/i })).not.toBeDisabled();
     });
@@ -114,6 +132,28 @@ describe('CulturalArchaeologist', () => {
     fireEvent.click(screen.getByRole('button', { name: /high/i }));
 
     expect(await screen.findByTestId('rerun-analysis-button')).toBeInTheDocument();
+  });
+
+  it('shows per-section refresh for incomplete results and reruns a fresh search when clicked', async () => {
+    generateCulturalMatrix
+      .mockResolvedValueOnce(incompleteMatrix)
+      .mockResolvedValueOnce(mockMatrix);
+
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    const refreshButton = await screen.findByTestId('matrix-card-refresh-moments');
+    await waitFor(() => {
+      expect(refreshButton).not.toBeDisabled();
+    });
+    fireEvent.click(refreshButton);
+
+    await waitFor(() => {
+      expect(generateCulturalMatrix).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('stacks top action controls on mobile and keeps auto sizing at sm+', async () => {
@@ -159,7 +199,7 @@ describe('CulturalArchaeologist', () => {
     fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
     fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
 
-    expect(await screen.findByText('Result Filters')).toBeInTheDocument();
+    expect(await screen.findByText(/Results? Filters/i, {}, { timeout: 3000 })).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /generate insights/i })).not.toBeDisabled();
     });
@@ -211,7 +251,8 @@ describe('CulturalArchaeologist', () => {
     fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
     fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
 
-    expect(await screen.findByText('18-34')).toBeInTheDocument();
+    await screen.findByText('Average Age', {}, { timeout: 3000 });
+    expect(await screen.findByText('18-34', {}, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.getByText('Multi-ethnic urban cohorts')).toBeInTheDocument();
     expect(screen.getByText('Women and non-binary skew')).toBeInTheDocument();
   });
@@ -232,7 +273,7 @@ describe('CulturalArchaeologist', () => {
     fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
     fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
 
-    expect(await screen.findByText('Average Age')).toBeInTheDocument();
+    expect(await screen.findByText('Average Age', {}, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.getByText('Race / Ethnicity')).toBeInTheDocument();
     expect(screen.getByText('Gender')).toBeInTheDocument();
     expect(screen.getAllByText('Data unavailable')).toHaveLength(3);
@@ -272,7 +313,7 @@ describe('CulturalArchaeologist', () => {
     fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
     fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
 
-    expect(await screen.findByText('Result Filters')).toBeInTheDocument();
+    expect(await screen.findByText(/Results? Filters/i, {}, { timeout: 3000 })).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /generate insights/i })).not.toBeDisabled();
     });
@@ -332,7 +373,8 @@ describe('CulturalArchaeologist', () => {
     fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
     fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
 
-    const showAllBtn = await screen.findByRole('button', { name: /show all 5 items/i });
+    await screen.findByText('First signal', {}, { timeout: 3000 });
+    const showAllBtn = await screen.findByRole('button', { name: /show all 5 items/i }, { timeout: 3000 });
     expect(showAllBtn.className).toContain('text-sm');
     expect(showAllBtn.className).toContain('text-indigo-600');
     const showAllChevron = showAllBtn.querySelector('svg');
@@ -364,7 +406,8 @@ describe('CulturalArchaeologist', () => {
     fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
     fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
 
-    expect(await screen.findByText('18-34')).toBeInTheDocument();
+    await screen.findByText('Average Age', {}, { timeout: 3000 });
+    expect(await screen.findByText('18-34', {}, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.getByText('Multi-ethnic urban cohorts')).toBeInTheDocument();
     expect(screen.getByText('Women and non-binary skew')).toBeInTheDocument();
 

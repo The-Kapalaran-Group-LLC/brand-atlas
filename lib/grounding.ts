@@ -23,6 +23,7 @@ type BingSearchResponse = {
 type BingSearchFreshness = 'Day' | 'Week' | 'Month' | 'Year';
 type SearchProvider = 'google' | 'bing';
 type GptMethodology = 'previous' | 'current';
+type SearchProviderPreference = SearchProvider | 'auto';
 
 type GoogleSearchResult = {
   title?: string;
@@ -96,15 +97,31 @@ function getGoogleSearchConfig(): { key: string; engineId: string } | null {
   return { key, engineId };
 }
 
-function resolveSearchProvider(): SearchProvider {
-  // Prefer Bing when available so stale/unauthorized Google CSE credentials
-  // do not block grounding in environments where both are configured.
-  if (hasBingSearchKey()) {
-    return 'bing';
-  }
-  if (getGoogleSearchConfig()) {
+function resolveSearchProvider(preference?: SearchProviderPreference): SearchProvider {
+  const normalizedPreference = (preference || process.env.GROUNDING_SEARCH_PROVIDER || process.env.SEARCH_PROVIDER_PREFERENCE || 'auto')
+    .toString()
+    .trim()
+    .toLowerCase();
+  const preferGoogle = normalizedPreference === 'google';
+  const preferBing = normalizedPreference === 'bing';
+  const hasGoogle = Boolean(getGoogleSearchConfig());
+  const hasBing = hasBingSearchKey();
+
+  if (preferGoogle) {
+    if (hasGoogle) return 'google';
+    if (hasBing) return 'bing';
     return 'google';
   }
+
+  if (preferBing) {
+    if (hasBing) return 'bing';
+    if (hasGoogle) return 'google';
+    return 'bing';
+  }
+
+  // Auto mode: preserve current behavior (Bing-first) unless only Google is configured.
+  if (hasBing) return 'bing';
+  if (hasGoogle) return 'google';
   return 'bing';
 }
 
@@ -295,7 +312,7 @@ async function fetchGoogle(
 
 export async function fetchAudienceContext(
   audience: string,
-  options?: { behaviorFocus?: boolean }
+  options?: { behaviorFocus?: boolean; provider?: SearchProviderPreference }
 ): Promise<string> {
   const normalizedAudience = normalizeWhitespace(audience || '');
   if (!normalizedAudience) {
@@ -310,7 +327,7 @@ export async function fetchAudienceContext(
     ? `${normalizedAudience} ${MACRO_STRUCTURAL_SUFFIX} ${BEHAVIORAL_STABILITY_SUFFIX}`
     : `${normalizedAudience} ${MACRO_STRUCTURAL_SUFFIX}`;
 
-  const provider = resolveSearchProvider();
+  const provider = resolveSearchProvider(options?.provider);
   const fetcher = provider === 'google' ? fetchGoogle : fetchBing;
   console.log('[grounding] Audience context provider selected', { provider, behaviorFocus });
 

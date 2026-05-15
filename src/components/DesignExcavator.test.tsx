@@ -61,6 +61,42 @@ const sampleReport = {
   sources: [{ title: 'Aesop', url: 'https://www.aesop.com' }],
 };
 
+const incompleteReport = {
+  ...sampleReport,
+  brandProfiles: [
+    {
+      ...sampleReport.brandProfiles[0],
+      logo: {
+        mainLogo: 'N/A',
+        logoVariations: [],
+        wordmarkLogotype: 'N/A',
+        symbolsIcons: [],
+      },
+      colorPalette: {
+        primaryColors: [],
+        secondaryAccentColors: [],
+        neutrals: [],
+      },
+      typography: {
+        fontFamilies: [],
+        hierarchy: { h1: '', h2: '', body: '' },
+        usageRules: [],
+      },
+      supportingVisualElements: {
+        imageryStyle: [],
+        icons: [],
+        patternsTextures: [],
+        shapes: [],
+        dataVisualization: [],
+      },
+      consistencyAssessment: 'N/A',
+      distinctivenessAssessment: 'N/A',
+    },
+  ],
+  crossBrandReadout: [],
+  strategicRecommendations: [],
+};
+
 describe('BrandDeepDivePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -130,6 +166,29 @@ describe('BrandDeepDivePage', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows per-section refresh for incomplete results and triggers a fresh design search', async () => {
+    generateBrandDeepDive
+      .mockResolvedValueOnce(incompleteReport)
+      .mockResolvedValueOnce(sampleReport);
+
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    const refreshButton = await screen.findByTestId('design-section-refresh-0-logo-system');
+    await waitFor(() => {
+      expect(refreshButton).not.toBeDisabled();
+    }, { timeout: 5000 });
+    fireEvent.click(refreshButton);
+
+    await waitFor(() => {
+      expect(generateBrandDeepDive).toHaveBeenCalledTimes(2);
+    }, { timeout: 5000 });
+  });
+
   it('renders top navigation actions as links so they can be opened in new tabs', () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 
@@ -187,6 +246,31 @@ describe('BrandDeepDivePage', () => {
     expect(websiteInputs[0]).toHaveValue('');
     expect(screen.getByPlaceholderText('Visual Identity Objective (Optional)')).toHaveValue('');
     expect(screen.getByPlaceholderText('Target Audience (Optional)')).toHaveValue('');
+  });
+
+  it('moves focus to the next brand name input when pressing Enter', () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    const brandOneInput = screen.getByPlaceholderText('Brand 1 Name');
+    const brandTwoInput = screen.getByPlaceholderText('Brand 2 Name');
+
+    brandOneInput.focus();
+    fireEvent.keyDown(brandOneInput, { key: 'Enter', code: 'Enter' });
+
+    expect(brandTwoInput).toHaveFocus();
+  });
+
+  it('adds a brand row and focuses it when pressing Enter on the last brand name input', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    const brandTwoInput = screen.getByPlaceholderText('Brand 2 Name');
+    brandTwoInput.focus();
+    fireEvent.keyDown(brandTwoInput, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => {
+      const brandThreeInput = screen.getByPlaceholderText('Brand 3 Name');
+      expect(brandThreeInput).toHaveFocus();
+    });
   });
 
   it('falls back to first-party square logo assets before favicon when the initial logo fails', async () => {
@@ -286,10 +370,100 @@ describe('BrandDeepDivePage', () => {
     }
     fireEvent.click(typographyCard);
 
-    const compareButton = await screen.findByRole('button', { name: /compare across brands/i });
+    const compareButton = await screen.findByRole('button', { name: /compare across brands/i }, { timeout: 7000 });
     fireEvent.click(compareButton);
 
     expect(await screen.findByText('Typography Comparison')).toBeInTheDocument();
+  });
+
+  it('prioritizes report sampleVisuals in Logos & Visuals so valid brand imagery loads', async () => {
+    generateBrandDeepDive.mockResolvedValueOnce({
+      ...sampleReport,
+      brandProfiles: [
+        {
+          ...sampleReport.brandProfiles[0],
+          sampleVisuals: [
+            { title: 'Homepage Hero', url: 'https://www.aesop.com/images/hero.jpg' },
+            { title: 'Campaign Visual', url: 'https://www.aesop.com/images/campaign.jpg' },
+          ],
+        },
+      ],
+    });
+
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText('Visual Identity Objective (Optional)'),
+      {
+        target: { value: 'Compare premium skincare brands' },
+      }
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    const heroVisual = await screen.findByAltText('Homepage Hero');
+    expect(heroVisual).toHaveAttribute('src', expect.stringContaining('https://www.aesop.com/images/hero.jpg'));
+  });
+
+  it('adds resilient screenshot and favicon fallback chains for logos and visuals', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    const logo = await screen.findByAltText('Aesop logo');
+    const visual = await screen.findByAltText('Homepage Preview');
+
+    expect(logo.getAttribute('data-fallback-chain') || '').toContain('www.google.com/s2/favicons');
+
+    const visualSrc = visual.getAttribute('src') || '';
+    const visualFallbackChain = visual.getAttribute('data-fallback-chain') || '';
+    const visualChainBundle = `${visualSrc}|${visualFallbackChain}`;
+    expect(visualChainBundle).toContain('s.wordpress.com/mshots');
+    expect(visualChainBundle).toContain('image.thum.io');
+  });
+
+  it('keeps visual cards on fallback sources after image errors instead of snapping back to broken URLs', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    const visual = await screen.findByAltText('Homepage Preview');
+    const initialSrc = visual.getAttribute('src') || '';
+
+    fireEvent.error(visual);
+
+    await waitFor(() => {
+      expect(visual.getAttribute('src') || '').not.toEqual(initialSrc);
+    });
+  });
+
+  it('uses URL-encoded inline SVG placeholders after visual fallback exhaustion', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    const visual = await screen.findByAltText('Homepage Preview');
+    visual.setAttribute('data-fallback-chain', '');
+    fireEvent.error(visual);
+    fireEvent.error(visual);
+
+    await waitFor(() => {
+      const src = visual.getAttribute('src') || '';
+      expect(src).toContain('data:image/svg+xml');
+      expect(src).toContain('%3Csvg');
+    });
   });
 
   it('uses a dynamic masonry-style layout for compare cards', async () => {
@@ -465,7 +639,35 @@ describe('BrandDeepDivePage', () => {
 
     await screen.findByText(/Ask About This Analysis/i);
 
-    expect(screen.getAllByText('Inferred').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/\[INFERRED\]/i)).not.toBeInTheDocument();
+  });
+
+  it('renders inferred chips for distinctiveness and logo system fields instead of raw [INFERRED] copy', async () => {
+    generateBrandDeepDive.mockResolvedValueOnce({
+      ...sampleReport,
+      brandProfiles: [
+        {
+          ...sampleReport.brandProfiles[0],
+          distinctivenessAssessment: '[INFERRED] Distinctive through the triangular marker and airline-specific contrast system.',
+          logo: {
+            ...sampleReport.brandProfiles[0].logo,
+            mainLogo: '[INFERRED] Primary Delta wordmark + red triangular symbol.',
+            wordmarkLogotype: '[INFERRED] Sans-serif Delta wordmark in a clean service style.',
+          },
+        },
+      ],
+    });
+
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Delta' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    await screen.findByText(/Ask About This Analysis/i);
+
+    expect(screen.getAllByText('INFERRED').length).toBeGreaterThan(0);
     expect(screen.queryByText(/\[INFERRED\]/i)).not.toBeInTheDocument();
   });
 

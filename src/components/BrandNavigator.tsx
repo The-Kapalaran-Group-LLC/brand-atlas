@@ -126,6 +126,18 @@ const BRAND_RESULT_SECTION_KEYS: BrandResultSectionKey[] = [
   'recentNews',
 ];
 
+const isMissingResultTextValue = (value?: string | null): boolean => {
+  const normalized = (value || '').trim().toLowerCase();
+  return (
+    normalized.length === 0
+    || normalized === 'n/a'
+    || normalized === 'na'
+    || normalized === 'data unavailable'
+    || normalized.endsWith(': n/a')
+    || normalized.endsWith(': na')
+  );
+};
+
 const MAX_BRAND_INPUT_LENGTH = 120;
 const MAX_AUDIENCE_INPUT_LENGTH = 180;
 const MAX_TOPIC_INPUT_LENGTH = 180;
@@ -213,6 +225,7 @@ const renderEvidenceLabelChip = (
   inferredEvidenceUrl?: string,
   claimText?: string
 ): React.ReactNode => {
+  const chipLabel = tag.toUpperCase();
   const chipClass = `inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(tag)}`;
   if (tag === 'inferred' && inferredEvidenceUrl) {
     const deepLinkHref = buildTextFragmentHref(inferredEvidenceUrl, claimText);
@@ -226,14 +239,14 @@ const renderEvidenceLabelChip = (
         className={`${chipClass} hover:underline`}
         title="Open evidence source and highlight related text when supported by your browser"
       >
-        {tag}
+        {chipLabel}
       </a>
     );
   }
 
   return (
     <span key={key} className={chipClass}>
-      {tag}
+      {chipLabel}
     </span>
   );
 };
@@ -255,6 +268,123 @@ const buildBrandNavigatorCustomName = (
 
 const normalizeBrandLookupKey = (brandName: string): string =>
   (brandName || '').trim().toLowerCase();
+
+const getImageProxyBaseUrl = (): string => {
+  const configured = (((import.meta as any).env?.VITE_IMAGE_PROXY_BASE_URL as string) || '').trim();
+  if (configured) return configured.replace(/\/$/, '');
+
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') {
+    return '';
+  }
+
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${protocol}//${hostname}:3001`;
+    }
+    return window.location.origin.replace(/\/$/, '');
+  }
+
+  return '';
+};
+
+const withImageProxy = (rawUrl: string): string => {
+  if (!rawUrl || rawUrl.startsWith('data:image') || rawUrl.includes('/api/image-proxy?url=')) {
+    return rawUrl;
+  }
+
+  const normalized = normalizeExternalHttpUrl(rawUrl);
+  if (!normalized) {
+    return rawUrl;
+  }
+
+  const proxyBase = getImageProxyBaseUrl();
+  if (!proxyBase) {
+    return normalized;
+  }
+
+  return `${proxyBase}/api/image-proxy?url=${encodeURIComponent(normalized)}`;
+};
+
+const getOriginFromUrl = (url?: string | null): string | null => {
+  const normalized = normalizeExternalHttpUrl(url);
+  if (!normalized) return null;
+  try {
+    return new URL(normalized).origin;
+  } catch {
+    return null;
+  }
+};
+
+const dedupeUrls = (urls: Array<string | null | undefined>): string[] => {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  urls.forEach((raw) => {
+    const normalized = normalizeExternalHttpUrl(raw || '');
+    if (!normalized) return;
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    unique.push(normalized);
+  });
+  return unique;
+};
+
+const buildDeterministicLogoUrl = (website?: string | null): string | null => {
+  const origin = getOriginFromUrl(website);
+  if (!origin) return null;
+  return `${origin}/logo.svg`;
+};
+
+const buildWebsiteFaviconCandidateUrls = (website?: string | null): string[] => {
+  const origin = getOriginFromUrl(website);
+  if (!origin) return [];
+  return dedupeUrls([
+    `${origin}/favicon.ico`,
+    `${origin}/favicon.png`,
+    `${origin}/favicon.svg`,
+    `${origin}/apple-touch-icon.png`,
+    `${origin}/apple-touch-icon-precomposed.png`,
+    `${origin}/apple-touch-icon-180x180.png`,
+    `${origin}/android-chrome-192x192.png`,
+  ]);
+};
+
+const buildLargeLogoCandidateUrls = (website?: string | null): string[] => {
+  const origin = getOriginFromUrl(website);
+  const deterministicLogo = buildDeterministicLogoUrl(website);
+  if (!origin && !deterministicLogo) return [];
+
+  return dedupeUrls([
+    origin ? `${origin}/apple-touch-icon.png` : null,
+    origin ? `${origin}/apple-touch-icon-precomposed.png` : null,
+    origin ? `${origin}/android-chrome-192x192.png` : null,
+    origin ? `${origin}/favicon.ico` : null,
+    origin ? `${origin}/favicon.png` : null,
+    origin ? `${origin}/favicon.svg` : null,
+    origin ? `${origin}/logo.svg` : null,
+    origin ? `${origin}/logo.png` : null,
+    origin ? `${origin}/logo.webp` : null,
+    origin ? `${origin}/wordmark.svg` : null,
+    origin ? `${origin}/wordmark.png` : null,
+    origin ? `${origin}/brandmark.svg` : null,
+    origin ? `${origin}/brandmark.png` : null,
+    origin ? `${origin}/assets/logo.png` : null,
+    origin ? `${origin}/assets/logo.svg` : null,
+    origin ? `${origin}/images/logo.png` : null,
+    origin ? `${origin}/images/logo.svg` : null,
+    origin ? `${origin}/android-chrome-512x512.png` : null,
+    deterministicLogo,
+  ]);
+};
+
+const buildBrandLogoFallbackChain = (website?: string | null): string[] => {
+  return dedupeUrls([
+    ...buildLargeLogoCandidateUrls(website),
+    ...buildWebsiteFaviconCandidateUrls(website),
+  ]).map((url) => withImageProxy(url));
+};
+
+const extractedBrandLogoCache = new Map<string, string>();
 
 const EMPTY_BRAND_RESEARCH_MATRIX: BrandResearchMatrix = {
   analysisObjective: '',
@@ -900,31 +1030,31 @@ export default function BrandNavigator() {
     }
   };
 
-  const handleGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const pendingBrand = brandInput.trim();
-    const brandNamesForGenerate = pendingBrand && !normalizedBrands.some((item) => item.toLowerCase() === pendingBrand.toLowerCase())
-      ? [...normalizedBrands, pendingBrand]
-      : normalizedBrands;
-
-    if (pendingBrand) {
-      logger.debug('Auto-committing pending brand on generate', { pendingBrand });
-      setSelectedBrands(brandNamesForGenerate);
-      setBrandInput('');
-    }
-
-    const brandsForGenerate = brandNamesForGenerate
-      .map((name) => ({
-        name: (name || '').trim(),
-        website: resolvedBrandWebsites[normalizeBrandLookupKey(name)] || '',
-      }))
-      .filter((brand) => brand.name.length > 0)
-      .slice(0, 6);
-
-    setShowValidation(true);
-    if (brandsForGenerate.length === 0) return;
+  const runBrandGeneration = async ({
+    actionName,
+    audienceValue,
+    brandsForGenerate,
+    generationsValue,
+    topicFocusValue,
+    filesValue,
+    sourcesTypeValue,
+  }: {
+    actionName: string;
+    audienceValue: string;
+    brandsForGenerate: Array<{ name: string; website: string }>;
+    generationsValue: string[];
+    topicFocusValue: string;
+    filesValue: UploadedFile[];
+    sourcesTypeValue: string[];
+  }) => {
     const brandContext = brandsForGenerate.map((brand) => brand.name).join(', ');
-    logger.info('Generating Brand Analysis', { audience, brands: brandsForGenerate, brandContext });
+    logger.info('Generating Brand Analysis', {
+      actionName,
+      audience: audienceValue,
+      brands: brandsForGenerate,
+      brandContext,
+      sourcesTypeValue,
+    });
 
     setFakeProgress(5);
     setIsLoading(true);
@@ -932,30 +1062,45 @@ export default function BrandNavigator() {
     setError(null);
     setSaveWarning(null);
     setShowValidation(false);
-    const hasUploadedDocuments = files.length > 0;
+    const hasUploadedDocuments = filesValue.length > 0;
     try {
       const result = await runUserAction({
-        actionName: 'brand-generate-report',
-        action: async () => generateBrandResearchMatrix(audience, brandsForGenerate, selectedGenerations, topicFocus, files, sourcesType),
+        actionName,
+        action: async () =>
+          generateBrandResearchMatrix(
+            audienceValue,
+            brandsForGenerate,
+            generationsValue,
+            topicFocusValue,
+            filesValue,
+            sourcesTypeValue
+          ),
         onError: (normalized) => {
           setError(normalized.message);
         },
       });
       const sanitizedResult = sanitizeBrandResearchMatrix(result);
       setMatrix(sanitizedResult);
-      setMatrixMeta({ audience, brand: brandContext, generations: selectedGenerations, topicFocus, sourcesType, hasUploadedDocuments });
-      const generatedRecentId = `generated:${brandContext.toLowerCase()}|${audience.toLowerCase()}|${topicFocus.toLowerCase()}`;
+      setMatrixMeta({
+        audience: audienceValue,
+        brand: brandContext,
+        generations: generationsValue,
+        topicFocus: topicFocusValue,
+        sourcesType: sourcesTypeValue,
+        hasUploadedDocuments,
+      });
+      const generatedRecentId = `generated:${brandContext.toLowerCase()}|${audienceValue.toLowerCase()}|${topicFocusValue.toLowerCase()}`;
       const generatedRecentItem: BrandNavigatorRecentResult = {
         id: generatedRecentId,
         title: (brandContext || 'Generated Brand Analysis').trim(),
-        description: `Audience: ${(audience || 'Not specified').trim()}`,
+        description: `Audience: ${(audienceValue || 'Not specified').trim()}`,
         matrix: sanitizedResult,
         matrixMeta: {
-          audience,
+          audience: audienceValue,
           brand: brandContext,
-          generations: selectedGenerations,
-          topicFocus,
-          sourcesType,
+          generations: generationsValue,
+          topicFocus: topicFocusValue,
+          sourcesType: sourcesTypeValue,
           hasUploadedDocuments,
         },
       };
@@ -972,15 +1117,19 @@ export default function BrandNavigator() {
         const { device, location, ip_address } = await getUserTelemetry();
 
         // 2. Inject it into the database payload
-        const customName = buildBrandNavigatorCustomName(brandsForGenerate.map((brand) => brand.name), audience, topicFocus);
+        const customName = buildBrandNavigatorCustomName(
+          brandsForGenerate.map((brand) => brand.name),
+          audienceValue,
+          topicFocusValue
+        );
         const { error: saveError } = await supabase.from(BRAND_NAVIGATOR_TABLE).insert([
           {
             custom_name: customName,
             brand: brandContext || null,
-            audience: audience || null,
-            topic_focus: topicFocus || null,
-            generations: selectedGenerations,
-            sources_type: sourcesType,
+            audience: audienceValue || null,
+            topic_focus: topicFocusValue || null,
+            generations: generationsValue,
+            sources_type: sourcesTypeValue,
             has_uploaded_documents: hasUploadedDocuments,
             matrix: sanitizedResult,
             device,
@@ -1043,6 +1192,82 @@ export default function BrandNavigator() {
       await new Promise((resolve) => setTimeout(resolve, 220));
       setIsLoading(false);
     }
+  };
+
+  const handleGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const pendingBrand = brandInput.trim();
+    const brandNamesForGenerate = pendingBrand && !normalizedBrands.some((item) => item.toLowerCase() === pendingBrand.toLowerCase())
+      ? [...normalizedBrands, pendingBrand]
+      : normalizedBrands;
+
+    if (pendingBrand) {
+      logger.debug('Auto-committing pending brand on generate', { pendingBrand });
+      setSelectedBrands(brandNamesForGenerate);
+      setBrandInput('');
+    }
+
+    const brandsForGenerate = brandNamesForGenerate
+      .map((name) => ({
+        name: (name || '').trim(),
+        website: resolvedBrandWebsites[normalizeBrandLookupKey(name)] || '',
+      }))
+      .filter((brand) => brand.name.length > 0)
+      .slice(0, 6);
+
+    setShowValidation(true);
+    if (brandsForGenerate.length === 0) return;
+
+    await runBrandGeneration({
+      actionName: 'brand-generate-report',
+      audienceValue: audience,
+      brandsForGenerate,
+      generationsValue: selectedGenerations,
+      topicFocusValue: topicFocus,
+      filesValue: files,
+      sourcesTypeValue: sourcesType,
+    });
+  };
+
+  const handleRefreshBrandSection = async (brandName: string, sectionKey: BrandResultSectionKey) => {
+    const sectionLabel = sectionTitleMap[sectionKey] || sectionKey;
+    const rerunBrands = normalizeBrandTokens(parseBrandsInput(matrixMeta?.brand || normalizedBrands.join(', ')))
+      .map((name) => ({
+        name,
+        website: resolvedBrandWebsites[normalizeBrandLookupKey(name)] || '',
+      }))
+      .filter((brand) => brand.name.length > 0)
+      .slice(0, 6);
+    if (rerunBrands.length === 0 || !matrix) return;
+
+    const rerunAudience = matrixMeta?.audience ?? audience;
+    const rerunGenerations = matrixMeta?.generations ?? selectedGenerations;
+    const baseTopic = matrixMeta?.topicFocus ?? topicFocus;
+    const rerunTopic = [baseTopic, `Refresh focus: ${brandName} ${sectionLabel}`]
+      .filter((value) => (value || '').trim().length > 0)
+      .join(' | ');
+    const rerunSources = matrixMeta?.sourcesType ?? sourcesType;
+
+    console.log('[BrandNavigator] Refreshing individual section with new GPT search.', {
+      brandName,
+      sectionKey,
+      sectionLabel,
+      rerunAudience,
+      rerunGenerations,
+      rerunTopic,
+      rerunSources,
+    });
+    setToast(`Refreshing ${sectionLabel} for ${brandName}...`);
+
+    await runBrandGeneration({
+      actionName: `brand-refresh-section-${sectionKey}`,
+      audienceValue: rerunAudience,
+      brandsForGenerate: rerunBrands,
+      generationsValue: rerunGenerations,
+      topicFocusValue: rerunTopic,
+      filesValue: files,
+      sourcesTypeValue: rerunSources,
+    });
   };
 
   const deleteSavedMatrix = async (id: string) => {
@@ -1174,6 +1399,11 @@ export default function BrandNavigator() {
       default:
         return ['N/A'];
     }
+  };
+
+  const isBrandSectionMissing = (brand: BrandResultEntry, sectionKey: BrandResultSectionKey): boolean => {
+    const lines = sectionLinesForBrand(brand, sectionKey);
+    return lines.length === 0 || lines.every((line) => isMissingResultTextValue(line));
   };
 
   const generatePPTX = () => {
@@ -2304,9 +2534,15 @@ export default function BrandNavigator() {
                 <SectionErrorBoundary title="Brand Results">
                   <BrandResultsGrid
                     results={brandResults}
+                    resolvedBrandWebsites={resolvedBrandWebsites}
                     highlightedSections={highlightedBrandSections}
                     sectionTitleMap={sectionTitleMap}
                     sectionLinesForBrand={sectionLinesForBrand}
+                    isBrandSectionMissing={isBrandSectionMissing}
+                    onRefreshBrandSection={(brandName, sectionKey) => {
+                      void handleRefreshBrandSection(brandName, sectionKey);
+                    }}
+                    isRefreshing={isLoading}
                     onAudienceDeepDive={(audienceLabel, brandName) => {
                       const audienceFromCard = (audienceLabel || '').trim();
                       const brandFromCard = (brandName || '').trim();
@@ -2965,15 +3201,23 @@ const sanitizeBrandResearchMatrix = (rawMatrix: BrandResearchMatrix): BrandResea
 
 function BrandResultsGrid({
   results,
+  resolvedBrandWebsites,
   highlightedSections,
   sectionTitleMap,
   sectionLinesForBrand,
+  isBrandSectionMissing,
+  onRefreshBrandSection,
+  isRefreshing,
   onAudienceDeepDive,
 }: {
   results: BrandResultEntry[];
+  resolvedBrandWebsites: Record<string, string>;
   highlightedSections: BrandResultSectionKey[];
   sectionTitleMap: Record<BrandResultSectionKey, string>;
   sectionLinesForBrand: (brand: BrandResultEntry, key: BrandResultSectionKey) => string[];
+  isBrandSectionMissing: (brand: BrandResultEntry, key: BrandResultSectionKey) => boolean;
+  onRefreshBrandSection: (brandName: string, sectionKey: BrandResultSectionKey) => void;
+  isRefreshing: boolean;
   onAudienceDeepDive: (audienceLabel: string, brandName: string) => void;
 }) {
   const isMultiBrandCompareEnabled = results.length > 1;
@@ -3093,10 +3337,14 @@ function BrandResultsGrid({
           key={`${brandResult.brandName || 'brand'}-${brandIndex}`}
           brandResult={brandResult}
           brandIndex={brandIndex}
+          brandWebsite={resolvedBrandWebsites[normalizeBrandLookupKey(brandResult.brandName || '')] || ''}
           visualDeepDiveBrands={brandNamesForVisualDeepDive}
           highlightedSections={highlightedSections}
           canCompareAcrossBrands={isMultiBrandCompareEnabled}
           onRequestCompareAcrossBrands={openComparePopup}
+          isSectionMissing={(sectionKey) => isBrandSectionMissing(brandResult, sectionKey)}
+          onRefreshSection={(sectionKey) => onRefreshBrandSection(brandResult.brandName || `Brand ${brandIndex + 1}`, sectionKey)}
+          isRefreshing={isRefreshing}
           onAudienceDeepDive={onAudienceDeepDive}
         />
       ))}
@@ -3127,21 +3375,33 @@ function BrandResultsGrid({
 function BrandResultCard({
   brandResult,
   brandIndex,
+  brandWebsite,
   visualDeepDiveBrands,
   highlightedSections,
   canCompareAcrossBrands,
   onRequestCompareAcrossBrands,
+  isSectionMissing,
+  onRefreshSection,
+  isRefreshing,
   onAudienceDeepDive,
 }: {
   brandResult: BrandResultEntry;
   brandIndex: number;
+  brandWebsite: string;
   visualDeepDiveBrands: string[];
   highlightedSections: BrandResultSectionKey[];
   canCompareAcrossBrands: boolean;
   onRequestCompareAcrossBrands: (event: React.MouseEvent<HTMLElement>, section: BrandResultSectionKey) => void;
+  isSectionMissing: (section: BrandResultSectionKey) => boolean;
+  onRefreshSection: (section: BrandResultSectionKey) => void;
+  isRefreshing: boolean;
   onAudienceDeepDive: (audienceLabel: string, brandName: string) => void;
 }) {
   const brandName = brandResult.brandName || `Brand ${brandIndex + 1}`;
+  const normalizedBrandWebsite = normalizeExternalHttpUrl(brandWebsite);
+  const cachedExtractedLogo = normalizedBrandWebsite
+    ? extractedBrandLogoCache.get(normalizedBrandWebsite) || ''
+    : '';
   const positioning = brandResult.brandPositioning || {};
   const sanitizedSocialChannels = sanitizeSocialChannels(brandResult.socialMediaChannels, brandName);
   const recentNewsItems = buildRecentHeadlines(brandResult);
@@ -3150,9 +3410,77 @@ function BrandResultCard({
     : null;
   const displayNewsItems = fallbackPressRelease ? [fallbackPressRelease] : recentNewsItems;
   const inferredEvidenceUrl = getPrimaryInferredEvidenceUrl(brandResult, displayNewsItems);
+  const [extractedBrandLogoUrl, setExtractedBrandLogoUrl] = useState<string>(cachedExtractedLogo);
+  const brandWebsiteForLogo = extractedBrandLogoUrl || normalizedBrandWebsite || inferredEvidenceUrl;
+  const brandLogoFallbackChain = buildBrandLogoFallbackChain(brandWebsiteForLogo);
+  const primaryBrandLogo = brandLogoFallbackChain[0] || null;
+  const brandLogoRemainingFallbacks = brandLogoFallbackChain.slice(1);
+
+  useEffect(() => {
+    let isCancelled = false;
+    setExtractedBrandLogoUrl(cachedExtractedLogo);
+
+    if (cachedExtractedLogo) {
+      logger.debug('[BrandNavigator] Using cached extracted brand logo URL.', {
+        brandName,
+        normalizedBrandWebsite,
+      });
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    if (!normalizedBrandWebsite || typeof fetch !== 'function') {
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    const apiBase = getImageProxyBaseUrl();
+    if (!apiBase) {
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    const lookupTarget = `${apiBase}/api/brand-images?domain=${encodeURIComponent(normalizedBrandWebsite)}`;
+    logger.debug('[BrandNavigator] Requesting brand logo from brand-images endpoint.', {
+      brandName,
+      normalizedBrandWebsite,
+      lookupTarget,
+    });
+
+    fetch(lookupTarget)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json() as Promise<{ logoUrl?: string | null }>;
+      })
+      .then((payload) => {
+        if (isCancelled) return;
+        const resolved = normalizeExternalHttpUrl(payload?.logoUrl || '');
+        if (!resolved) return;
+        extractedBrandLogoCache.set(normalizedBrandWebsite, resolved);
+        setExtractedBrandLogoUrl(resolved);
+      })
+      .catch((error) => {
+        logger.debug('[BrandNavigator] Brand logo extraction request failed; using fallback logo chain.', {
+          brandName,
+          normalizedBrandWebsite,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [brandName, cachedExtractedLogo, normalizedBrandWebsite]);
 
   logger.debug('[BrandNavigator] Rendering brand result card with validated links.', {
     brandName,
+    brandWebsiteForLogo,
+    logoCandidates: brandLogoFallbackChain.slice(0, 6),
     socialMediaBefore: (brandResult.socialMediaChannels || []).length,
     socialMediaAfter: sanitizedSocialChannels.length,
     recentHeadlinesCount: recentNewsItems.length,
@@ -3171,7 +3499,7 @@ function BrandResultCard({
     });
 
     const targetUrl = `${window.location.origin}/#design-excavator`;
-    console.log('[BrandNavigator] Opening Design Excavator in new tab from Analyze Visual Identities.', {
+    console.log('[BrandNavigator] Opening Design Excavator in new tab from Analyze Visual Identity.', {
       targetUrl,
       selectedBrands: normalizedBrands.map((brand) => brand.name),
     });
@@ -3184,17 +3512,52 @@ function BrandResultCard({
     }
   };
 
+  const handleBrandLogoError = (event: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = event.currentTarget;
+    const fallbackAttr = img.dataset.fallbackChain || '';
+    const fallbacks = fallbackAttr.split('|').map((item) => item.trim()).filter(Boolean);
+    if (fallbacks.length > 0) {
+      const [next, ...rest] = fallbacks;
+      img.src = next;
+      img.dataset.fallbackChain = rest.join('|');
+      return;
+    }
+    img.style.display = 'none';
+  };
+
   return (
     <section className="bg-zinc-50/60 p-6 rounded-3xl border border-zinc-200 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-shadow duration-300 w-full">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-2xl font-bold text-zinc-900">{brandName}</h3>
+        <div data-testid={`brand-result-identity-${brandIndex}`} className="flex items-center gap-3 min-w-0">
+          <span className="w-11 h-11 rounded-xl flex items-center justify-center overflow-hidden shrink-0 relative border border-zinc-200 bg-white">
+            {!primaryBrandLogo && (
+              <span data-testid={`brand-result-logo-placeholder-${brandIndex}`} className="text-zinc-400 font-semibold text-base">
+                {brandName[0] || '?'}
+              </span>
+            )}
+            {primaryBrandLogo && (
+              <img
+                data-testid={`brand-result-logo-${brandIndex}`}
+                src={primaryBrandLogo}
+                alt={`${brandName} logo`}
+                data-fallback-chain={brandLogoRemainingFallbacks.join('|')}
+                className="w-full h-full object-contain p-1 absolute inset-0 z-10 bg-transparent"
+                loading="eager"
+                fetchPriority="high"
+                decoding="async"
+                onError={handleBrandLogoError}
+              />
+            )}
+          </span>
+          <h3 className="text-2xl font-bold text-zinc-900 truncate">{brandName}</h3>
+        </div>
         <button
           type="button"
           onClick={handleAnalyzeVisualIdentities}
           className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-indigo-200 bg-white text-indigo-700 text-sm font-medium hover:bg-indigo-50 transition-colors"
         >
           <Palette className="w-4 h-4" />
-          Analyze Visual Identities
+          Analyze Visual Identity
         </button>
       </div>
 
@@ -3202,15 +3565,15 @@ function BrandResultCard({
         data-testid="brand-result-sections-layout"
         className="columns-1 lg:columns-2 gap-6 text-sm text-zinc-700"
       >
-        <BrandCriteriaSection title="High-level summary" sectionKey="highLevelSummary" highlighted={highlightedSections.includes('highLevelSummary')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth>
+        <BrandCriteriaSection title="High-level summary" sectionKey="highLevelSummary" highlighted={highlightedSections.includes('highLevelSummary')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth showRefresh={isSectionMissing('highLevelSummary')} onRefresh={() => onRefreshSection('highLevelSummary')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-highLevelSummary`}>
           <BrandResultRichText value={brandResult.highLevelSummary} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Brand mission" sectionKey="brandMission" highlighted={highlightedSections.includes('brandMission')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands}>
+        <BrandCriteriaSection title="Brand mission" sectionKey="brandMission" highlighted={highlightedSections.includes('brandMission')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('brandMission')} onRefresh={() => onRefreshSection('brandMission')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-brandMission`}>
           <BrandResultRichText value={brandResult.brandMission} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Brand positioning" sectionKey="brandPositioning" highlighted={highlightedSections.includes('brandPositioning')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth>
+        <BrandCriteriaSection title="Brand positioning" sectionKey="brandPositioning" highlighted={highlightedSections.includes('brandPositioning')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth showRefresh={isSectionMissing('brandPositioning')} onRefresh={() => onRefreshSection('brandPositioning')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-brandPositioning`}>
           <div className="space-y-2">
             <BrandResultLabeledBulletList label="Taglines" items={positioning.taglines || []} inferredEvidenceUrl={inferredEvidenceUrl} />
             <BrandResultLabeledBulletList label="Key messages and claims" items={positioning.keyMessagesAndClaims || []} inferredEvidenceUrl={inferredEvidenceUrl} />
@@ -3219,19 +3582,19 @@ function BrandResultCard({
           </div>
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Key offerings/products/services" sectionKey="keyOfferingsProductsServices" highlighted={highlightedSections.includes('keyOfferingsProductsServices')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands}>
+        <BrandCriteriaSection title="Key offerings/products/services" sectionKey="keyOfferingsProductsServices" highlighted={highlightedSections.includes('keyOfferingsProductsServices')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('keyOfferingsProductsServices')} onRefresh={() => onRefreshSection('keyOfferingsProductsServices')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-keyOfferingsProductsServices`}>
           <BrandResultBulletList items={brandResult.keyOfferingsProductsServices || []} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Strategic moats (strengths)" sectionKey="strategicMoatsStrengths" highlighted={highlightedSections.includes('strategicMoatsStrengths')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands}>
+        <BrandCriteriaSection title="Strategic moats (strengths)" sectionKey="strategicMoatsStrengths" highlighted={highlightedSections.includes('strategicMoatsStrengths')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('strategicMoatsStrengths')} onRefresh={() => onRefreshSection('strategicMoatsStrengths')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-strategicMoatsStrengths`}>
           <BrandResultBulletList items={brandResult.strategicMoatsStrengths || []} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Potential threats (weaknesses)" sectionKey="potentialThreatsWeaknesses" highlighted={highlightedSections.includes('potentialThreatsWeaknesses')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands}>
+        <BrandCriteriaSection title="Potential threats (weaknesses)" sectionKey="potentialThreatsWeaknesses" highlighted={highlightedSections.includes('potentialThreatsWeaknesses')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('potentialThreatsWeaknesses')} onRefresh={() => onRefreshSection('potentialThreatsWeaknesses')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-potentialThreatsWeaknesses`}>
           <BrandResultBulletList items={brandResult.potentialThreatsWeaknesses || []} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Target audiences" sectionKey="targetAudiences" highlighted={highlightedSections.includes('targetAudiences')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth>
+        <BrandCriteriaSection title="Target audiences" sectionKey="targetAudiences" highlighted={highlightedSections.includes('targetAudiences')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth showRefresh={isSectionMissing('targetAudiences')} onRefresh={() => onRefreshSection('targetAudiences')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-targetAudiences`}>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
             {(brandResult.targetAudiences || []).map((aud, audIndex) => (
               <TargetAudienceCard
@@ -3247,15 +3610,15 @@ function BrandResultCard({
           </div>
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Recent campaigns" sectionKey="recentCampaigns" highlighted={highlightedSections.includes('recentCampaigns')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands}>
+        <BrandCriteriaSection title="Recent campaigns" sectionKey="recentCampaigns" highlighted={highlightedSections.includes('recentCampaigns')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('recentCampaigns')} onRefresh={() => onRefreshSection('recentCampaigns')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-recentCampaigns`}>
           <BrandResultBulletList items={brandResult.recentCampaigns || []} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Key marketing channels" sectionKey="keyMarketingChannels" highlighted={highlightedSections.includes('keyMarketingChannels')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands}>
+        <BrandCriteriaSection title="Key marketing channels" sectionKey="keyMarketingChannels" highlighted={highlightedSections.includes('keyMarketingChannels')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('keyMarketingChannels')} onRefresh={() => onRefreshSection('keyMarketingChannels')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-keyMarketingChannels`}>
           <BrandResultBulletList items={brandResult.keyMarketingChannels || []} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Social media channels" sectionKey="socialMediaChannels" highlighted={highlightedSections.includes('socialMediaChannels')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands}>
+        <BrandCriteriaSection title="Social media channels" sectionKey="socialMediaChannels" highlighted={highlightedSections.includes('socialMediaChannels')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('socialMediaChannels')} onRefresh={() => onRefreshSection('socialMediaChannels')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-socialMediaChannels`}>
           <div className="flex flex-wrap gap-2">
             {sanitizedSocialChannels.map((channel, channelIndex) => (
               <a
@@ -3273,7 +3636,7 @@ function BrandResultCard({
           </div>
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Recent news" sectionKey="recentNews" highlighted={highlightedSections.includes('recentNews')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth>
+        <BrandCriteriaSection title="Recent news" sectionKey="recentNews" highlighted={highlightedSections.includes('recentNews')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth showRefresh={isSectionMissing('recentNews')} onRefresh={() => onRefreshSection('recentNews')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-recentNews`}>
           <ul className="space-y-1">
             {displayNewsItems.length > 0 ? (
               displayNewsItems.map((item, idx) => (
@@ -3359,6 +3722,10 @@ function BrandCriteriaSection({
   onRequestCompareAcrossBrands,
   className = '',
   fullWidth = false,
+  showRefresh = false,
+  isRefreshing = false,
+  onRefresh,
+  refreshTestId,
   children,
 }: {
   title: string;
@@ -3368,6 +3735,10 @@ function BrandCriteriaSection({
   onRequestCompareAcrossBrands?: (event: React.MouseEvent<HTMLElement>, section: BrandResultSectionKey) => void;
   className?: string;
   fullWidth?: boolean;
+  showRefresh?: boolean;
+  isRefreshing?: boolean;
+  onRefresh?: () => void;
+  refreshTestId?: string;
   children: React.ReactNode;
 }) {
   const sectionTestId = `brand-result-section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
@@ -3384,6 +3755,20 @@ function BrandCriteriaSection({
     >
       <h4 className="text-sm font-semibold text-zinc-900 mb-3 uppercase tracking-wider inline-flex items-center gap-3">
         <span>{title}</span>
+        {showRefresh && onRefresh ? (
+          <button
+            type="button"
+            data-testid={refreshTestId}
+            onClick={(event) => {
+              event.stopPropagation();
+              onRefresh();
+            }}
+            className="relative z-10 pointer-events-auto inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-zinc-600 cursor-pointer focus:outline-none"
+            title={`Refresh ${title}`}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
+        ) : null}
         {compareEnabled ? (
           <span className="inline-flex items-center rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold text-indigo-700 normal-case tracking-normal">
             Compare

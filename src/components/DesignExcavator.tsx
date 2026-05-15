@@ -134,6 +134,11 @@ type ResultTab = 'profiles' | 'compare';
 type CompareElement = 'primaryColors' | 'accentColors' | 'neutrals' | 'typography' | 'imageryStyle';
 type EvidenceTagLabel = 'known' | 'inferred' | 'speculative' | 'analogy';
 
+const isMissingResultTextValue = (value?: string | null): boolean => {
+  const normalized = (value || '').trim().toLowerCase();
+  return normalized.length === 0 || normalized === 'n/a' || normalized === 'na' || normalized === 'data unavailable';
+};
+
 const MAX_EXCAVATOR_BRAND_NAME_LENGTH = 120;
 const MAX_EXCAVATOR_BRAND_WEBSITE_LENGTH = 200;
 const MAX_EXCAVATOR_OBJECTIVE_LENGTH = 240;
@@ -185,6 +190,9 @@ const evidenceLabelChipClass = (label: EvidenceTagLabel): string => {
   return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
 };
 
+const renderEvidenceLabel = (label: EvidenceTagLabel): string =>
+  label.toUpperCase();
+
 function isDevilsAdvocateLine(value: string): boolean {
   return /devil'?s advocate/i.test(value || '');
 }
@@ -198,6 +206,18 @@ const getImageProxyBaseUrl = (): string => {
   const configured = (((import.meta as any).env?.VITE_IMAGE_PROXY_BASE_URL as string) || '').trim();
   if (configured) {
     return configured.replace(/\/$/, '');
+  }
+
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') {
+    return '';
+  }
+
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${protocol}//${hostname}:3001`;
+    }
+    return window.location.origin.replace(/\/$/, '');
   }
 
   return '';
@@ -274,9 +294,10 @@ function buildDeterministicLogoUrl(website?: string | null): string | null {
 
 function buildWebsiteFaviconCandidateUrls(website?: string | null): string[] {
   const origin = getOriginFromUrl(website);
+  const hostname = getDomainFromUrl(website);
   if (!origin) return [];
 
-  return dedupeVisualCards([
+  const localCandidates = dedupeVisualCards([
     { label: 'Favicon ICO', url: `${origin}/favicon.ico` },
     { label: 'Favicon PNG', url: `${origin}/favicon.png` },
     { label: 'Favicon SVG', url: `${origin}/favicon.svg` },
@@ -285,6 +306,18 @@ function buildWebsiteFaviconCandidateUrls(website?: string | null): string[] {
     { label: 'Apple Icon 180', url: `${origin}/apple-touch-icon-180x180.png` },
     { label: 'Android Chrome Icon 192', url: `${origin}/android-chrome-192x192.png` },
   ]).map((card) => card.url);
+
+  const externalCandidates = hostname
+    ? [
+        `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=256`,
+        `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=128`,
+        `https://icons.duckduckgo.com/ip3/${hostname}.ico`,
+      ]
+    : [];
+
+  return dedupeVisualCards(
+    [...localCandidates, ...externalCandidates].map((url) => ({ label: 'favicon-fallback', url }))
+  ).map((card) => card.url);
 }
 
 function buildSquareLogoCandidateUrls(website?: string | null): string[] {
@@ -361,6 +394,18 @@ function buildLargeVisualCandidateUrls(website?: string | null): string[] {
     { label: 'Share Image PNG', url: `${origin}/images/share.png` },
     { label: 'Homepage Image', url: `${origin}/images/homepage.jpg` },
     { label: 'Homepage Image PNG', url: `${origin}/images/homepage.png` },
+    { label: 'Open Graph Image Root', url: `${origin}/images/og-image.jpg` },
+    { label: 'Open Graph Image Root PNG', url: `${origin}/images/og-image.png` },
+    { label: 'Twitter Card Image', url: `${origin}/images/twitter-card.jpg` },
+    { label: 'Twitter Card Image PNG', url: `${origin}/images/twitter-card.png` },
+    { label: 'Homepage Cover', url: `${origin}/images/cover.jpg` },
+    { label: 'Homepage Cover PNG', url: `${origin}/images/cover.png` },
+    { label: 'Hero Assets JPG', url: `${origin}/assets/hero.jpg` },
+    { label: 'Hero Assets PNG', url: `${origin}/assets/hero.png` },
+    { label: 'Homepage Assets JPG', url: `${origin}/assets/homepage.jpg` },
+    { label: 'Homepage Assets PNG', url: `${origin}/assets/homepage.png` },
+    { label: 'Banner Assets JPG', url: `${origin}/assets/banner.jpg` },
+    { label: 'Banner Assets PNG', url: `${origin}/assets/banner.png` },
   ]).map((card) => card.url);
 }
 
@@ -375,19 +420,46 @@ function buildVisualPreviewFallbackChain(primaryUrl: string, website?: string | 
   const normalizedPrimary = normalizeHttpUrl(primaryUrl);
   const normalizedWebsite = normalizeHttpUrl(website);
   const screenshotFallbacks = normalizedWebsite
-    ? [buildWordpressScreenshotUrl(normalizedWebsite)]
+    ? [buildWordpressScreenshotUrl(normalizedWebsite), buildScreenshotPreviewUrl(normalizedWebsite)]
     : [];
   const visualAssetFallbacks = buildLargeVisualCandidateUrls(website);
 
   return dedupeVisualCards(
     [
-      ...buildImageFallbackChain(primaryUrl, website).map((url) => ({ label: 'fallback', url })),
-      ...screenshotFallbacks.map((url) => ({ label: 'preview', url })),
       ...visualAssetFallbacks.map((url) => ({ label: 'visual', url })),
+      ...screenshotFallbacks.map((url) => ({ label: 'preview', url })),
     ]
   )
     .map((card) => withImageProxy(card.url))
     .filter((url) => normalizeHttpUrl(url) !== normalizedPrimary);
+}
+
+function buildContextualSiteTargets(website?: string | null): string[] {
+  const origin = getOriginFromUrl(website);
+  if (!origin) return [];
+
+  return dedupeVisualCards([
+    { label: 'Homepage Preview', url: `${origin}/` },
+    { label: 'About Page Preview', url: `${origin}/about` },
+    { label: 'Company Page Preview', url: `${origin}/company` },
+    { label: 'Products Page Preview', url: `${origin}/products` },
+    { label: 'Services Page Preview', url: `${origin}/services` },
+    { label: 'Features Page Preview', url: `${origin}/features` },
+    { label: 'Collections Page Preview', url: `${origin}/collections` },
+    { label: 'Work Page Preview', url: `${origin}/work` },
+  ]).map((card) => card.url);
+}
+
+function prioritizeLogoAndVisualCards(cards: BrandVisualCard[], maxCards = 8): BrandVisualCard[] {
+  const deduped = dedupeVisualCards(cards);
+  const nonLogoCards = deduped.filter((card) => !isLogoLikeAsset(card.originalUrl || card.url, card.label));
+  const logoCards = deduped.filter((card) => isLogoLikeAsset(card.originalUrl || card.url, card.label));
+
+  if (nonLogoCards.length === 0) {
+    return deduped.slice(0, maxCards);
+  }
+
+  return [...nonLogoCards, ...logoCards.slice(0, 1)].slice(0, maxCards);
 }
 
 function buildBrandBadgeFallbackChain(primaryUrl?: string | null, website?: string | null): string[] {
@@ -477,8 +549,15 @@ function advanceImageFallbackOrHide(event: React.SyntheticEvent<HTMLImageElement
 }
 
 function buildInlineFallbackImageSvg(label: string): string {
-  const safeLabel = encodeURIComponent(label || 'Preview unavailable');
-  return `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360'><rect width='100%' height='100%' fill='%23F4F4F5'/><rect x='24' y='24' width='592' height='312' rx='16' ry='16' fill='%23FFFFFF' stroke='%23D4D4D8'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%236B7280' font-family='Arial, sans-serif' font-size='20'>${safeLabel}</text></svg>`;
+  const safeLabel = (label || 'Preview unavailable').replace(/\s+/g, ' ').trim();
+  const svg = [
+    "<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360'>",
+    "<rect width='100%' height='100%' fill='#F4F4F5'/>",
+    "<rect x='24' y='24' width='592' height='312' rx='16' ry='16' fill='#FFFFFF' stroke='#D4D4D8'/>",
+    `<text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='#6B7280' font-family='Arial, sans-serif' font-size='20'>${safeLabel}</text>`,
+    '</svg>',
+  ].join('');
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function buildDeterministicPlaceholderCards(brandName: string): BrandVisualCard[] {
@@ -599,6 +678,8 @@ function dedupeVisualCards(cards: BrandVisualCard[]): BrandVisualCard[] {
 }
 
 export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
+  const brandNameInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const pendingBrandNameFocusIndexRef = useRef<number | null>(null);
   const [brands, setBrands] = useState<Array<{ id: string; name: string; website: string }>>([
     { id: 'brand-1', name: '', website: '' },
     { id: 'brand-2', name: '', website: '' },
@@ -941,27 +1022,17 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     };
   }, []);
 
-
-
-  const handleSubmit = async () => {
-    setShowValidation(true);
-
-    const normalizedBrands = brands
-      .map((brand) => ({
-        name: (brand.name || '').trim(),
-        website: (brand.website || '').trim(),
-      }))
-      .filter((brand) => brand.name.length > 0)
-      .slice(0, 6);
-
-    if (normalizedBrands.length === 0) {
-      setError('Please add at least one brand.');
-      return;
-    }
-
-    const resolvedAnalysisObjective =
-      (analysisObjective || '').trim() || 'Compare visual identity systems across selected brands.';
-
+  const runDesignGeneration = async ({
+    actionName,
+    normalizedBrands,
+    resolvedAnalysisObjective,
+    targetAudienceValue,
+  }: {
+    actionName: string;
+    normalizedBrands: Array<{ name: string; website: string }>;
+    resolvedAnalysisObjective: string;
+    targetAudienceValue: string;
+  }) => {
     setFakeProgress(5);
     setIsLoading(true);
     setError(null);
@@ -974,12 +1045,12 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
     try {
       const result = await runUserAction({
-        actionName: 'generate-design-report',
+        actionName,
         action: () =>
           generateVisualDesign({
             brands: normalizedBrands,
             analysisObjective: resolvedAnalysisObjective,
-            targetAudience,
+            targetAudience: targetAudienceValue,
           }),
         onError: (normalized) => setError(normalized.message),
       });
@@ -992,15 +1063,15 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
       setReport(result);
       setIsSearchControlsMinimized(true);
-      const generatedRecentId = `generated:${normalizedBrands.map((brand) => brand.name.toLowerCase()).join('|')}|${targetAudience.toLowerCase()}`;
+      const generatedRecentId = `generated:${normalizedBrands.map((brand) => brand.name.toLowerCase()).join('|')}|${targetAudienceValue.toLowerCase()}`;
       const generatedRecentItem: DesignExcavatorRecentResult = {
         id: generatedRecentId,
         title: normalizedBrands.map((brand) => brand.name).join(' vs ') || 'Generated Visual Analysis',
-        description: (targetAudience || 'No audience provided').trim(),
+        description: (targetAudienceValue || 'No audience provided').trim(),
         report: result,
         brands: normalizedBrands,
-        analysisObjective,
-        targetAudience,
+        analysisObjective: resolvedAnalysisObjective,
+        targetAudience: targetAudienceValue,
       };
       console.log('[DesignExcavator] Tracking generated result in recent results library.', {
         id: generatedRecentId,
@@ -1013,8 +1084,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         id: `deep-dive-${Date.now()}`,
         date: new Date().toISOString(),
         brands: normalizedBrands,
-        analysisObjective,
-        targetAudience,
+        analysisObjective: resolvedAnalysisObjective,
+        targetAudience: targetAudienceValue,
         report: result,
       };
       // Persist to Supabase
@@ -1023,8 +1094,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
           {
             id: nextSaved.id,
             brands: normalizedBrands,
-            analysis_objective: analysisObjective,
-            target_audience: targetAudience,
+            analysis_objective: resolvedAnalysisObjective,
+            target_audience: targetAudienceValue,
             report: result,
             created_at: nextSaved.date,
           },
@@ -1048,6 +1119,56 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       await new Promise((resolve) => setTimeout(resolve, 220));
       setIsLoading(false);
     }
+  };
+
+  const handleSubmit = async () => {
+    setShowValidation(true);
+
+    const normalizedBrands = brands
+      .map((brand) => ({
+        name: (brand.name || '').trim(),
+        website: (brand.website || '').trim(),
+      }))
+      .filter((brand) => brand.name.length > 0)
+      .slice(0, 6);
+
+    if (normalizedBrands.length === 0) {
+      setError('Please add at least one brand.');
+      return;
+    }
+
+    const resolvedAnalysisObjective =
+      (analysisObjective || '').trim() || 'Compare visual identity systems across selected brands.';
+
+    await runDesignGeneration({
+      actionName: 'generate-design-report',
+      normalizedBrands,
+      resolvedAnalysisObjective,
+      targetAudienceValue: targetAudience,
+    });
+  };
+
+  const handleRefreshDesignComponent = async (brandName: string, sectionName: string) => {
+    if (!report) return;
+    const normalizedBrands = getNormalizedBrands();
+    if (normalizedBrands.length === 0) return;
+    const baseObjective = (analysisObjective || '').trim() || report.analysisObjective || 'Compare visual identity systems across selected brands.';
+    const resolvedAnalysisObjective = `${baseObjective} | Refresh focus: ${brandName} ${sectionName}`;
+    const rerunTargetAudience = (targetAudience || '').trim();
+    console.log('[DesignExcavator] Running component refresh search for incomplete results.', {
+      brandName,
+      sectionName,
+      normalizedBrands,
+      resolvedAnalysisObjective,
+      rerunTargetAudience,
+    });
+    setToast(`Refreshing ${sectionName} for ${brandName}...`);
+    await runDesignGeneration({
+      actionName: `refresh-design-component-${sectionName.toLowerCase().replace(/\s+/g, '-')}`,
+      normalizedBrands,
+      resolvedAnalysisObjective,
+      targetAudienceValue: rerunTargetAudience,
+    });
   };
 
   const getNormalizedBrands = () =>
@@ -1160,11 +1281,25 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     }
   }, [showCompareTab, resultTab]);
 
-  const addBrandRow = () => {
+  const addBrandRow = (options?: { focusNewBrandName?: boolean }) => {
     if (!canAddBrand) return;
     const nextId = `brand-${Date.now()}`;
-    setBrands((prev) => [...prev, { id: nextId, name: '', website: '' }]);
+    setBrands((prev) => {
+      if (options?.focusNewBrandName) {
+        pendingBrandNameFocusIndexRef.current = prev.length;
+      }
+      return [...prev, { id: nextId, name: '', website: '' }];
+    });
   };
+
+  useEffect(() => {
+    const pendingIndex = pendingBrandNameFocusIndexRef.current;
+    if (pendingIndex === null) return;
+    const input = brandNameInputRefs.current[pendingIndex];
+    if (!input) return;
+    input.focus();
+    pendingBrandNameFocusIndexRef.current = null;
+  }, [brands.length]);
 
   const removeBrandRow = (id: string) => {
     if (brands.length <= 1) {
@@ -1186,6 +1321,20 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     setBrands((prev) => prev.map((brand) => (brand.id === id ? { ...brand, [key]: boundedValue } : brand)));
   };
 
+  const handleBrandNameEnter = (index: number, event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const nextInput = brandNameInputRefs.current[index + 1];
+    if (nextInput) {
+      nextInput.focus();
+      return;
+    }
+
+    if (canAddBrand) {
+      addBrandRow({ focusNewBrandName: true });
+    }
+  };
+
   const renderColorSwatch = (color: BrandColorSpec) => {
     const normalizedHex = color.hex.startsWith('#') ? color.hex : `#${color.hex}`;
     const renderColorMetaRow = (label: string, value: string) => {
@@ -1198,7 +1347,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
               key={`${label}-${color.name}-${evidenceLabel}`}
               className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(evidenceLabel)}`}
             >
-              {evidenceLabel.charAt(0).toUpperCase() + evidenceLabel.slice(1)}
+              {renderEvidenceLabel(evidenceLabel)}
             </span>
           ))}
         </p>
@@ -1517,19 +1666,37 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         }))
       ).slice(0, 3);
 
-      const websiteOrigin = getOriginFromUrl(profile.website);
-      const contextualSiteTargets = websiteOrigin
-        ? [
-            `${websiteOrigin}/`,
-            `${websiteOrigin}/products`,
-            `${websiteOrigin}/solutions`,
-            `${websiteOrigin}/pricing`,
-            `${websiteOrigin}/about`,
-            `${websiteOrigin}/blog`,
-            `${websiteOrigin}/contact`,
-            `${websiteOrigin}/careers`,
-          ]
-        : [];
+      const contextualSiteTargets = buildContextualSiteTargets(profile.website);
+
+      const reportSampleVisualCards = dedupeVisualCards(
+        (profile.sampleVisuals || [])
+          .flatMap((visual, idx) => {
+            const normalized = normalizeHttpUrl(visual?.url || '');
+            if (!normalized || isKnownBrokenVisualAssetUrl(normalized)) {
+              return [];
+            }
+
+            return [{
+              label: (visual?.title || '').trim() || `Sample Visual ${idx + 1}`,
+              url: withImageProxy(normalized),
+              originalUrl: normalized,
+              status: 'ok' as const,
+            }];
+          })
+      ).slice(0, 4);
+
+      const apiHeroVisualCards = dedupeVisualCards(
+        [heroImages[profile.brandName]]
+          .map((url) => normalizeHttpUrl(url || ''))
+          .filter((url): url is string => typeof url === 'string' && url.length > 0)
+          .filter((url) => !isKnownBrokenVisualAssetUrl(url))
+          .map((url) => ({
+            label: 'Website Hero',
+            url: withImageProxy(url),
+            originalUrl: url,
+            status: 'ok' as const,
+          }))
+      ).slice(0, 1);
 
       const screenshotTargets = dedupeVisualCards(
         [
@@ -1560,8 +1727,10 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
           }))
       ).slice(0, 4);
 
-      const screenshotCards = dedupeVisualCards(
+      const screenshotCards = prioritizeLogoAndVisualCards(
         [
+          ...reportSampleVisualCards,
+          ...apiHeroVisualCards,
           ...screenshotTargets
             .filter((target) => !isKnownBrokenVisualAssetUrl(target.url))
             .map((target) => ({
@@ -1572,7 +1741,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             })),
           ...directVisualCards,
         ]
-      ).slice(0, 8);
+      , 8);
 
       const candidates: Array<{ method: VisualMethod; images: BrandVisualCard[]; score: number }> = [];
 
@@ -1602,7 +1771,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     });
 
     setBestVisualsByBrand(resolvedMap);
-  }, [logoImages, report]);
+  }, [heroImages, logoImages, report]);
 
   const getFailureSourceLabel = (value: string): string => {
     if (!value) return 'unknown source';
@@ -1643,7 +1812,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     setVisualFailuresByCard((prev) => {
       const current = prev[cardKey];
       const effectiveNextSource = target.currentSrc || target.src;
-      const shouldHide = effectiveNextSource.startsWith('data:image/svg+xml') && retryAttempted;
+      // Keep a visible placeholder instead of removing cards; blank tiles are harder to debug for users.
+      const shouldHide = false;
 
       return {
         ...prev,
@@ -2095,7 +2265,12 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                     type="text"
                     value={brand.name}
                     onChange={(e) => updateBrandRow(brand.id, 'name', e.target.value)}
+                    onKeyDown={(e) => handleBrandNameEnter(idx, e)}
+                    ref={(el) => {
+                      brandNameInputRefs.current[idx] = el;
+                    }}
                     placeholder={`Brand ${idx + 1} Name`}
+                    data-testid={`design-excavator-brand-name-${idx + 1}`}
                     className="w-full bg-white pl-12 pr-4 py-3 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-left"
                     disabled={isLoading}
                   />
@@ -2133,7 +2308,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
           <div className="mt-3">
             <button
               type="button"
-              onClick={addBrandRow}
+              onClick={() => addBrandRow()}
               disabled={!canAddBrand || isLoading}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
             >
@@ -2448,6 +2623,28 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                       const failureState = visualFailuresByCard[`${profile.brandName}-visual-${idx}`];
                       return !failureState?.hidden;
                     });
+                    const isLogosAndVisualsMissing = visibleVisualCards.length === 0;
+                    const isLogoSystemMissing =
+                      isMissingResultTextValue(profile.logo?.mainLogo)
+                      && isMissingResultTextValue(profile.logo?.wordmarkLogotype)
+                      && (profile.logo?.logoVariations?.length || 0) === 0
+                      && (profile.logo?.symbolsIcons?.length || 0) === 0;
+                    const isColorPaletteMissing =
+                      (profile.colorPalette?.primaryColors?.length || 0) === 0
+                      && (profile.colorPalette?.secondaryAccentColors?.length || 0) === 0
+                      && (profile.colorPalette?.neutrals?.length || 0) === 0;
+                    const isTypographyMissing =
+                      (profile.typography?.fontFamilies?.length || 0) === 0
+                      && isMissingResultTextValue(profile.typography?.hierarchy?.h1)
+                      && isMissingResultTextValue(profile.typography?.hierarchy?.h2)
+                      && isMissingResultTextValue(profile.typography?.hierarchy?.body)
+                      && (profile.typography?.usageRules?.length || 0) === 0;
+                    const isSupportingVisualElementsMissing =
+                      (profile.supportingVisualElements?.imageryStyle?.length || 0) === 0
+                      && (profile.supportingVisualElements?.icons?.length || 0) === 0
+                      && (profile.supportingVisualElements?.patternsTextures?.length || 0) === 0
+                      && (profile.supportingVisualElements?.shapes?.length || 0) === 0
+                      && (profile.supportingVisualElements?.dataVisualization?.length || 0) === 0;
 
                     return (
                       <section
@@ -2494,14 +2691,32 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
                         {/* Logos & Visuals Box */}
                         <div className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4">
-                          <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                            <ImageIcon className="w-3.5 h-3.5" /> Logos & Visuals
-                          </p>
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <ImageIcon className="w-3.5 h-3.5" /> Logos & Visuals
+                            </p>
+                            {isLogosAndVisualsMissing && (
+                              <button
+                                type="button"
+                                data-testid={`design-section-refresh-${idx}-logos-visuals`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleRefreshDesignComponent(profile.brandName, 'Logos & Visuals');
+                                }}
+                                className="relative z-10 pointer-events-auto inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-zinc-600 cursor-pointer focus:outline-none"
+                                title={`Refresh Logos & Visuals for ${profile.brandName}`}
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                              </button>
+                            )}
+                          </div>
                           {visibleVisualCards.length > 0 && (
                             <div className="flex gap-2 overflow-x-auto pb-1">
                               {visibleVisualCards.slice(0, 4).map((card, idx) => {
                                 const cardKey = `${profile.brandName}-visual-${idx}`;
-                                const fallbackChain = buildVisualPreviewFallbackChain(card.url, profile.website);
+                                const fallbackChain = isLogoLikeAsset(card.originalUrl || card.url, card.label)
+                                  ? buildImageFallbackChain(card.url, profile.website)
+                                  : buildVisualPreviewFallbackChain(card.url, profile.website);
                                 return (
                                   <div key={cardKey} className="shrink-0 w-40 h-24 rounded-xl border border-zinc-100 overflow-hidden bg-zinc-50">
                                     <img
@@ -2525,7 +2740,22 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                         {profile.distinctivenessAssessment && (
                           <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 mb-4">
                             <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider mb-1.5">Distinctiveness Assessment</p>
-                            <p className="text-sm text-indigo-900 leading-relaxed">{profile.distinctivenessAssessment}</p>
+                            {(() => {
+                              const parsedDistinctiveness = extractEvidenceTags(profile.distinctivenessAssessment || '');
+                              return (
+                                <p className="text-sm text-indigo-900 leading-relaxed">
+                                  {parsedDistinctiveness.cleanText || profile.distinctivenessAssessment}
+                                  {parsedDistinctiveness.labels.map((label) => (
+                                    <span
+                                      key={`distinctiveness-${profile.brandName}-${label}`}
+                                      className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}
+                                    >
+                                      {renderEvidenceLabel(label)}
+                                    </span>
+                                  ))}
+                                </p>
+                              );
+                            })()}
                           </div>
                         )}
 
@@ -2533,16 +2763,58 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                         <div className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4 cursor-pointer"
                           onClick={(e) => openComparePopup(e, 'primaryColors')}
                         >
-                          <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                            <ImageIcon className="w-3.5 h-3.5" /> Logo System
-                          </p>
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <ImageIcon className="w-3.5 h-3.5" /> Logo System
+                            </p>
+                            {isLogoSystemMissing && (
+                              <button
+                                type="button"
+                                data-testid={`design-section-refresh-${idx}-logo-system`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleRefreshDesignComponent(profile.brandName, 'Logo System');
+                                }}
+                                className="relative z-10 pointer-events-auto inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-zinc-600 cursor-pointer focus:outline-none"
+                                title={`Refresh Logo System for ${profile.brandName}`}
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                              </button>
+                            )}
+                          </div>
                           <div className="space-y-1">
-                            {profile.logo.mainLogo && (
-                              <p className="text-sm text-zinc-700"><span className="font-medium text-zinc-900">Primary:</span> {profile.logo.mainLogo}</p>
-                            )}
-                            {profile.logo.wordmarkLogotype && (
-                              <p className="text-sm text-zinc-700"><span className="font-medium text-zinc-900">Wordmark:</span> {profile.logo.wordmarkLogotype}</p>
-                            )}
+                            {profile.logo.mainLogo && (() => {
+                              const parsedMainLogo = extractEvidenceTags(profile.logo.mainLogo || '');
+                              return (
+                                <p className="text-sm text-zinc-700">
+                                  <span className="font-medium text-zinc-900">Primary:</span> {parsedMainLogo.cleanText || profile.logo.mainLogo}
+                                  {parsedMainLogo.labels.map((label) => (
+                                    <span
+                                      key={`main-logo-${profile.brandName}-${label}`}
+                                      className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}
+                                    >
+                                      {renderEvidenceLabel(label)}
+                                    </span>
+                                  ))}
+                                </p>
+                              );
+                            })()}
+                            {profile.logo.wordmarkLogotype && (() => {
+                              const parsedWordmark = extractEvidenceTags(profile.logo.wordmarkLogotype || '');
+                              return (
+                                <p className="text-sm text-zinc-700">
+                                  <span className="font-medium text-zinc-900">Wordmark:</span> {parsedWordmark.cleanText || profile.logo.wordmarkLogotype}
+                                  {parsedWordmark.labels.map((label) => (
+                                    <span
+                                      key={`wordmark-${profile.brandName}-${label}`}
+                                      className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}
+                                    >
+                                      {renderEvidenceLabel(label)}
+                                    </span>
+                                  ))}
+                                </p>
+                              );
+                            })()}
                             {profile.logo.logoVariations.length > 0 && (
                               <div>
                                 <p className="text-xs font-medium text-zinc-500 mt-2 mb-1">Variations</p>
@@ -2560,9 +2832,25 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
                         {/* Color Palette Box */}
                         <div className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4">
-                          <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                            <Palette className="w-3.5 h-3.5" /> Color Palette
-                          </p>
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <Palette className="w-3.5 h-3.5" /> Color Palette
+                            </p>
+                            {isColorPaletteMissing && (
+                              <button
+                                type="button"
+                                data-testid={`design-section-refresh-${idx}-color-palette`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleRefreshDesignComponent(profile.brandName, 'Color Palette');
+                                }}
+                                className="relative z-10 pointer-events-auto inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-zinc-600 cursor-pointer focus:outline-none"
+                                title={`Refresh Color Palette for ${profile.brandName}`}
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                              </button>
+                            )}
+                          </div>
                           {profile.colorPalette.primaryColors.length > 0 ? (
                             <div
                               className="cursor-pointer hover:bg-zinc-50 rounded-xl p-2 -mx-2 transition-colors"
@@ -2602,9 +2890,25 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                         <div className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4 cursor-pointer hover:bg-zinc-50"
                           onClick={(e) => openComparePopup(e, 'typography')}
                         >
-                          <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                            <Type className="w-3.5 h-3.5" /> Typography
-                          </p>
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <Type className="w-3.5 h-3.5" /> Typography
+                            </p>
+                            {isTypographyMissing && (
+                              <button
+                                type="button"
+                                data-testid={`design-section-refresh-${idx}-typography`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleRefreshDesignComponent(profile.brandName, 'Typography');
+                                }}
+                                className="relative z-10 pointer-events-auto inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-zinc-600 cursor-pointer focus:outline-none"
+                                title={`Refresh Typography for ${profile.brandName}`}
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                              </button>
+                            )}
+                          </div>
                           {profile.typography.fontFamilies.length > 0 ? (
                             <p className="text-sm text-zinc-700">
                               <span className="font-medium text-zinc-900">Families:</span>{' '}
@@ -2641,7 +2945,23 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
                         {/* Supporting Visual Elements Box */}
                         <div className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4">
-                          <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">Supporting Visual Elements</p>
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Supporting Visual Elements</p>
+                            {isSupportingVisualElementsMissing && (
+                              <button
+                                type="button"
+                                data-testid={`design-section-refresh-${idx}-supporting-visual-elements`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleRefreshDesignComponent(profile.brandName, 'Supporting Visual Elements');
+                                }}
+                                className="relative z-10 pointer-events-auto inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-zinc-600 cursor-pointer focus:outline-none"
+                                title={`Refresh Supporting Visual Elements for ${profile.brandName}`}
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                              </button>
+                            )}
+                          </div>
                           {profile.supportingVisualElements.imageryStyle.length > 0 && (
                             <div
                               className="cursor-pointer hover:bg-zinc-50 rounded-xl p-2 -mx-2 transition-colors"

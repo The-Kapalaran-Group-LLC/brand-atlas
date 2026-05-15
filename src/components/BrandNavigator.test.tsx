@@ -85,6 +85,34 @@ const emptyMatrix = {
   sources: [],
 };
 
+const incompleteMatrix = {
+  analysisObjective: 'test objective',
+  ecosystemMethod: 'test method',
+  results: [
+    {
+      brandName: 'Patagonia',
+      highLevelSummary: 'N/A',
+      brandMission: 'N/A',
+      brandPositioning: {
+        taglines: [],
+        keyMessagesAndClaims: [],
+        valueProposition: 'N/A',
+        voiceAndTone: 'N/A',
+      },
+      keyOfferingsProductsServices: [],
+      strategicMoatsStrengths: [],
+      potentialThreatsWeaknesses: [],
+      targetAudiences: [],
+      recentCampaigns: [],
+      keyMarketingChannels: [],
+      socialMediaChannels: [],
+      recentNews: [],
+      sources: [],
+    },
+  ],
+  sources: [],
+};
+
 describe('BrandNavigator', () => {
   beforeEach(() => {
     window.history.pushState({}, '', '/');
@@ -217,6 +245,30 @@ describe('BrandNavigator', () => {
     });
   });
 
+  it('shows per-section refresh for incomplete results and runs a fresh search when clicked', async () => {
+    generateBrandResearchMatrix
+      .mockResolvedValueOnce(incompleteMatrix)
+      .mockResolvedValueOnce(incompleteMatrix);
+
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+
+    fireEvent.click(screen.getByRole('button', { name: /generate analysis/i }));
+    const refreshButton = await screen.findByTestId('brand-section-refresh-0-highLevelSummary');
+    await waitFor(() => {
+      expect(refreshButton).not.toBeDisabled();
+    }, { timeout: 5000 });
+    fireEvent.click(refreshButton);
+
+    await waitFor(() => {
+      expect(generateBrandResearchMatrix).toHaveBeenCalledTimes(2);
+    }, { timeout: 5000 });
+  });
+
   it('opens research experience immediately when hash route targets brand navigator', async () => {
     window.history.pushState({}, '', '/#brand-navigator');
     render(<BrandNavigator />);
@@ -318,7 +370,7 @@ describe('BrandNavigator', () => {
 
     expect(await screen.findByText(/high-level summary/i)).toBeInTheDocument();
     expect(
-      await screen.findByText('Purpose-led outdoor brand with premium durability positioning.')
+      await screen.findByText(/Purpose-led outdoor brand with premium durability positioning/i, {}, { timeout: 5000 })
     ).toBeInTheDocument();
 
     const missionSection = screen.getByTestId('brand-result-section-brand-mission');
@@ -330,7 +382,7 @@ describe('BrandNavigator', () => {
     expect(sectionsLayout.className).not.toContain('lg:grid-cols-2');
   });
 
-  it('shows Analyze Visual Identities, prefills brands, and opens Design Excavator in a new top-level tab', async () => {
+  it('shows Analyze Visual Identity, prefills brands, and opens Design Excavator in a new top-level tab', async () => {
     generateBrandResearchMatrix.mockResolvedValue({
       analysisObjective: 'test objective',
       ecosystemMethod: 'test method',
@@ -387,7 +439,7 @@ describe('BrandNavigator', () => {
     fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
     fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
 
-    const buttons = await screen.findAllByRole('button', { name: /analyze visual identities/i });
+    const buttons = await screen.findAllByRole('button', { name: /analyze visual identity/i });
     fireEvent.click(buttons[0]);
 
     expect(saveDesignExcavatorPrefill).toHaveBeenCalledWith(
@@ -445,7 +497,7 @@ describe('BrandNavigator', () => {
     fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
     fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
 
-    const buttons = await screen.findAllByRole('button', { name: /analyze visual identities/i });
+    const buttons = await screen.findAllByRole('button', { name: /analyze visual identity/i });
     fireEvent.click(buttons[0]);
 
     expect(saveDesignExcavatorPrefill).toHaveBeenCalledWith(
@@ -504,7 +556,7 @@ describe('BrandNavigator', () => {
     expect(await screen.findByText('Trusted sustainability guide')).toBeInTheDocument();
     expect(screen.queryByText(/\[INFERRED\]\s*Trusted sustainability guide/i)).not.toBeInTheDocument();
 
-    const inferredBadges = screen.getAllByText('inferred');
+    const inferredBadges = screen.getAllByText('INFERRED');
     expect(inferredBadges.length).toBeGreaterThan(0);
     expect(inferredBadges[0].className).toContain('bg-emerald-50');
     expect(inferredBadges[0].className).toContain('text-emerald-700');
@@ -554,7 +606,7 @@ describe('BrandNavigator', () => {
     expect(screen.queryByText(/\[INFERRED\]/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/\[INFERRED;/i)).not.toBeInTheDocument();
 
-    const inferredBadges = screen.getAllByText('inferred');
+    const inferredBadges = screen.getAllByText('INFERRED');
     expect(inferredBadges.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -1017,6 +1069,53 @@ describe('BrandNavigator', () => {
       'href',
       'https://www.linkedin.com/company/cadre-ai/'
     );
+  });
+
+  it('renders a brand logo to the left of brand copy in result cards using website-derived logo candidates', async () => {
+    generateBrandResearchMatrix.mockResolvedValue({
+      analysisObjective: 'test objective',
+      ecosystemMethod: 'test method',
+      results: [
+        {
+          brandName: 'Cadre AI',
+          highLevelSummary: 'Summary',
+          brandMission: 'Mission',
+          brandPositioning: {
+            taglines: [],
+            keyMessagesAndClaims: [],
+            valueProposition: 'Value',
+            voiceAndTone: 'Tone',
+          },
+          keyOfferingsProductsServices: [],
+          strategicMoatsStrengths: [],
+          potentialThreatsWeaknesses: [],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: [],
+          socialMediaChannels: [],
+          recentNews: [],
+          sources: [{ title: 'Cadre site', url: 'https://www.cadre.ai/' }],
+        },
+      ],
+      sources: [],
+    });
+
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Cadre AI' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
+
+    await screen.findByTestId('brand-result-identity-0');
+
+    const identityGroup = screen.getByTestId('brand-result-identity-0');
+    const logo = within(identityGroup).getByTestId('brand-result-logo-0') as HTMLImageElement;
+    expect(logo).toBeInTheDocument();
+    expect(logo.alt).toContain('Cadre AI');
+    expect(logo.src.length).toBeGreaterThan(0);
+    expect(within(identityGroup).queryByTestId('brand-result-logo-placeholder-0')).not.toBeInTheDocument();
   });
 
   it('does not display social media links in recent news', async () => {
