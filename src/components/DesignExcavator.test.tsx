@@ -428,6 +428,30 @@ describe('BrandDeepDivePage', () => {
     expect(visualChainBundle).toContain('image.thum.io');
   });
 
+  it('renders a brand logo from report.logoImageUrl even when website is missing', async () => {
+    generateBrandDeepDive.mockResolvedValueOnce({
+      ...sampleReport,
+      brandProfiles: [
+        {
+          ...sampleReport.brandProfiles[0],
+          website: '',
+          logoImageUrl: 'https://cdn.aesop.com/assets/aesop-logo.svg',
+        },
+      ],
+    });
+
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    const logo = await screen.findByAltText('Aesop logo');
+    const src = logo.getAttribute('src') || '';
+    expect(decodeURIComponent(src)).toContain('https://cdn.aesop.com/assets/aesop-logo.svg');
+  });
+
   it('renders both WordPress and Thum.io screenshot providers when direct visuals are unavailable', async () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 

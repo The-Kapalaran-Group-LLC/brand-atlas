@@ -26,7 +26,7 @@ const useAllVisualsLoaded = (
     }
     // Count all logo + visual images for all brands
     let count = 0;
-    report.brandProfiles.forEach((profile: any) => {
+    report.brandProfiles.forEach((profile) => {
       const visuals = bestVisualsByBrand[profile.brandName];
       if (visuals) {
         if (visuals.deterministicLogoUrl) count += 1;
@@ -251,6 +251,14 @@ const getImageProxyBaseUrl = (): string => {
   return '';
 };
 
+function pickFirstNonEmptyUrl(...candidates: Array<string | null | undefined>): string | null {
+  for (const candidate of candidates) {
+    const value = (candidate || '').trim();
+    if (value) return value;
+  }
+  return null;
+}
+
 function withImageProxy(rawUrl: string): string {
   if (!rawUrl || rawUrl.startsWith('data:image')) {
     return rawUrl;
@@ -337,6 +345,7 @@ function buildWebsiteFaviconCandidateUrls(website?: string | null): string[] {
 
   const externalCandidates = hostname
     ? [
+        `https://logo.clearbit.com/${hostname}`,
         `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=256`,
         `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=128`,
         `https://icons.duckduckgo.com/ip3/${hostname}.ico`,
@@ -1959,8 +1968,10 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     const resolvedMap: Record<string, BrandVisualSelection> = {};
 
     report.brandProfiles.forEach((profile) => {
+      const reportLogoImageUrl = normalizeHttpUrl(profile.logoImageUrl || '');
 
       const prioritizedLogoCandidates = [
+        reportLogoImageUrl,
         logoImages[profile.brandName],
         ...buildLargeLogoCandidateUrls(profile.website),
       ].filter((url): url is string => Boolean(url));
@@ -2090,7 +2101,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       resolvedMap[profile.brandName] = {
         method: candidates[0].method,
         images: candidates[0].images,
-        deterministicLogoUrl: withImageProxy(prioritizedLogoCandidates[0] || ''),
+        deterministicLogoUrl: prioritizedLogoCandidates[0] || undefined,
       };
     });
 
@@ -2894,10 +2905,12 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                   <nav className="flex gap-2 mb-4 overflow-x-auto pb-2 border-b border-zinc-100">
                     {report.brandProfiles.map((profile, idx) => {
                       const visuals = bestVisualsByBrand[profile.brandName];
-                      const navPrimaryLogoUrl = processedLogos[profile.brandName]?.base64Placeholder
-                        || visuals?.deterministicLogoUrl
-                        || logoImages[profile.brandName]
-                        || null;
+                      const navPrimaryLogoUrl = pickFirstNonEmptyUrl(
+                        processedLogos[profile.brandName]?.base64Placeholder,
+                        normalizeHttpUrl(profile.logoImageUrl || ''),
+                        visuals?.deterministicLogoUrl,
+                        logoImages[profile.brandName],
+                      );
                       const navFallbackChain = buildFaviconPreferredBadgeChain(profile.website, navPrimaryLogoUrl);
                       const navBadgeUrl = navFallbackChain[0] || (navPrimaryLogoUrl ? withImageProxy(navPrimaryLogoUrl) : null);
                       const navRemainingFallbacks = navFallbackChain.slice(1);
@@ -2935,10 +2948,12 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                 <div className="flex flex-col gap-8">
                   {report.brandProfiles.map((profile, idx) => {
                     const visuals = bestVisualsByBrand[profile.brandName];
-                    const logoUrl = processedLogos[profile.brandName]?.base64Placeholder
-                      || visuals?.deterministicLogoUrl
-                      || logoImages[profile.brandName]
-                      || null;
+                    const logoUrl = pickFirstNonEmptyUrl(
+                      processedLogos[profile.brandName]?.base64Placeholder,
+                      normalizeHttpUrl(profile.logoImageUrl || ''),
+                      visuals?.deterministicLogoUrl,
+                      logoImages[profile.brandName],
+                    );
                     const brandBadgeFallbackChain = buildSquareLogoPreferredBadgeChain(profile.website, logoUrl);
                     const brandBadgeUrl = brandBadgeFallbackChain[0] || (logoUrl ? withImageProxy(logoUrl) : null);
                     const brandBadgeRemainingFallbacks = brandBadgeFallbackChain.slice(1);
