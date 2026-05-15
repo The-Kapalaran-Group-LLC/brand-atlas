@@ -49,8 +49,8 @@ const AUTO_ROTATE_SPEED = 0.176;
 const AXIS_TILT_DEG = 23.4;
 const DEPTH = 600;
 const INDIGO_GRADIENT_STOPS: Array<[number, number, number]> = [
-  [255, 86, 210],
-  [176, 78, 255],
+  [126, 191, 255],
+  [138, 122, 255],
   [76, 40, 232],
   [24, 12, 156],
 ];
@@ -902,6 +902,12 @@ export function SplashGrid({
     ) => {
       if (mode === 'ocean') return 'rgb(156 182 238)';
       const continentIndex = getContinentIndex(point.lat, point.lon);
+      if (continentIndex === 6) {
+        if (mode === 'countryOutline') return 'rgb(102 142 230)';
+        if (mode === 'continentOutline') return 'rgb(134 176 246)';
+        if (mode === 'countryFill') return 'rgb(184 221 255)';
+        return 'rgb(203 233 255)';
+      }
       const xNorm = (rotatedX / GLOBE_RADIUS + 1) * 0.5;
       const yNorm = 1 - (rotatedY / GLOBE_RADIUS + 1) * 0.5;
       const frontNorm = clamp((rotatedZ / GLOBE_RADIUS + 1) * 0.5, 0, 1);
@@ -918,13 +924,13 @@ export function SplashGrid({
         1,
       );
       // Keep the near hemisphere predominantly purple while softly rolling the
-      // far hemisphere toward a subtle pink for depth separation.
+      // far hemisphere toward a subtle cool-blue for depth separation.
       const frontWeight = Math.pow(frontNorm, 1.15);
       const purpleForwardT = clamp(0.28 + baseT * 0.46, 0, 1);
-      // Keep a gentle far-side pink cast without pulling too strongly away
+      // Keep a gentle far-side cool cast without pulling too strongly away
       // from the indigo/purple midpoint.
-      const pinkFarSideT = clamp(0.052 + xNorm * 0.042 + yNorm * 0.022, 0.038, 0.158);
-      const depthBiasedT = lerp(pinkFarSideT, purpleForwardT, frontWeight);
+      const coolFarSideT = clamp(0.058 + xNorm * 0.042 + yNorm * 0.022, 0.045, 0.165);
+      const depthBiasedT = lerp(coolFarSideT, purpleForwardT, frontWeight);
       const gradientT = Math.pow(depthBiasedT, 0.78);
       if (mode === 'countryFill') return gradientColorAt(gradientT, 1.14);
       if (mode === 'countryOutline') return 'rgb(92 92 255)';
