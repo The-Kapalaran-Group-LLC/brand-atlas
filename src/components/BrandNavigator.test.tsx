@@ -44,6 +44,18 @@ vi.mock('../services/telemetry', () => ({
   }),
 }));
 
+const { saveDesignExcavatorPrefill } = vi.hoisted(() => ({
+  saveDesignExcavatorPrefill: vi.fn(),
+}));
+
+const { openWindowInNewTab } = vi.hoisted(() => ({
+  openWindowInNewTab: vi.fn(),
+}));
+
+vi.mock('../services/design-excavator-prefill', () => ({
+  saveDesignExcavatorPrefill,
+}));
+
 vi.mock('../services/supabase-client', () => ({
   supabase: {
     from: supabaseFrom.mockImplementation(() => {
@@ -77,6 +89,8 @@ describe('BrandNavigator', () => {
   beforeEach(() => {
     window.history.pushState({}, '', '/');
     vi.clearAllMocks();
+    openWindowInNewTab.mockReset();
+    window.open = openWindowInNewTab as unknown as Window['open'];
     supabaseFrom.mockClear();
     supabaseInsert.mockClear();
     supabaseLimit.mockClear();
@@ -314,6 +328,132 @@ describe('BrandNavigator', () => {
     const sectionsLayout = screen.getByTestId('brand-result-sections-layout');
     expect(sectionsLayout.className).toContain('lg:columns-2');
     expect(sectionsLayout.className).not.toContain('lg:grid-cols-2');
+  });
+
+  it('shows Analyze Visual Identities, prefills brands, and opens Design Excavator in a new top-level tab', async () => {
+    generateBrandResearchMatrix.mockResolvedValue({
+      analysisObjective: 'test objective',
+      ecosystemMethod: 'test method',
+      results: [
+        {
+          brandName: 'Delta',
+          highLevelSummary: 'Summary A',
+          brandMission: 'Mission',
+          brandPositioning: {
+            taglines: [],
+            keyMessagesAndClaims: [],
+            valueProposition: 'Value',
+            voiceAndTone: 'Tone',
+          },
+          keyOfferingsProductsServices: [],
+          strategicMoatsStrengths: [],
+          potentialThreatsWeaknesses: [],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: [],
+          socialMediaChannels: [],
+          recentNews: [],
+          sources: [],
+        },
+        {
+          brandName: 'United Airlines',
+          highLevelSummary: 'Summary B',
+          brandMission: 'Mission',
+          brandPositioning: {
+            taglines: [],
+            keyMessagesAndClaims: [],
+            valueProposition: 'Value',
+            voiceAndTone: 'Tone',
+          },
+          keyOfferingsProductsServices: [],
+          strategicMoatsStrengths: [],
+          potentialThreatsWeaknesses: [],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: [],
+          socialMediaChannels: [],
+          recentNews: [],
+          sources: [],
+        },
+      ],
+      sources: [],
+    });
+
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Delta, United Airlines' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
+
+    const buttons = await screen.findAllByRole('button', { name: /analyze visual identities/i });
+    fireEvent.click(buttons[0]);
+
+    expect(saveDesignExcavatorPrefill).toHaveBeenCalledWith(
+      expect.objectContaining({
+        brands: [
+          { name: 'Delta', website: '' },
+          { name: 'United Airlines', website: '' },
+        ],
+      })
+    );
+    expect(saveDesignExcavatorPrefill.mock.calls[0]?.[0]).not.toHaveProperty('analysisObjective');
+    expect(openWindowInNewTab).toHaveBeenCalledWith(
+      `${window.location.origin}/#design-excavator`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  });
+
+  it('keeps the current Brand Navigator tab unchanged when popup is blocked', async () => {
+    openWindowInNewTab.mockReturnValueOnce(null);
+
+    generateBrandResearchMatrix.mockResolvedValue({
+      analysisObjective: 'test objective',
+      ecosystemMethod: 'test method',
+      results: [
+        {
+          brandName: 'Delta',
+          highLevelSummary: 'Summary A',
+          brandMission: 'Mission',
+          brandPositioning: {
+            taglines: [],
+            keyMessagesAndClaims: [],
+            valueProposition: 'Value',
+            voiceAndTone: 'Tone',
+          },
+          keyOfferingsProductsServices: [],
+          strategicMoatsStrengths: [],
+          potentialThreatsWeaknesses: [],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: [],
+          socialMediaChannels: [],
+          recentNews: [],
+          sources: [],
+        },
+      ],
+      sources: [],
+    });
+
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Delta' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
+
+    const buttons = await screen.findAllByRole('button', { name: /analyze visual identities/i });
+    fireEvent.click(buttons[0]);
+
+    expect(saveDesignExcavatorPrefill).toHaveBeenCalledWith(
+      expect.objectContaining({
+        brands: [{ name: 'Delta', website: '' }],
+      }),
+    );
+    expect(window.location.hash).toBe('');
   });
 
   it('renders inferred labels as Cultural Archaeologist-style chips in brand audience fields', async () => {

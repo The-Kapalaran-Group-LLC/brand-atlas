@@ -74,6 +74,21 @@ describe('BrandDeepDivePage', () => {
     suggestBrandWebsite.mockResolvedValue(null);
   });
 
+  it('prefills brand names from Design Excavator prefill storage payload', async () => {
+    localStorage.setItem('design_excavator_prefill_payload', JSON.stringify({
+      brands: [
+        { name: 'Delta', website: '' },
+        { name: 'United Airlines', website: '' },
+      ],
+    }));
+
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    expect(await screen.findByDisplayValue('Delta')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('United Airlines')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Visual Identity Objective (Optional)')).toHaveValue('');
+  });
+
   it('removes the Scan & Fix button and routes corrective prompts through Ask', async () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 
@@ -141,13 +156,40 @@ describe('BrandDeepDivePage', () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 
     const generateButton = screen.getByRole('button', { name: /generate visual analysis/i });
-    expect(generateButton.className).toContain('w-[288px]');
+    expect(generateButton.className).toContain('w-[360px]');
     expect(generateButton.className).toContain('px-4');
     expect(generateButton.className).toContain('py-4');
     expect(generateButton.className).toContain('text-sm');
   });
 
-  it('falls back to larger logo assets instead of favicons', async () => {
+  it('clears search fields when removing the only brand row', () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Spotify' },
+    });
+    fireEvent.change(screen.getAllByPlaceholderText('Website URL (optional)')[0], {
+      target: { value: 'https://www.spotify.com/' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Visual Identity Objective (Optional)'), {
+      target: { value: 'Compare premium audio brands' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Target Audience (Optional)'), {
+      target: { value: 'Music streamers' },
+    });
+
+    const removeOnlyBrandButton = screen.getByRole('button', { name: /remove brand 1/i });
+    fireEvent.click(removeOnlyBrandButton);
+
+    expect(screen.getByPlaceholderText('Brand 1 Name')).toHaveValue('');
+    const websiteInputs = screen.getAllByPlaceholderText('Website URL (optional)');
+    expect(websiteInputs).toHaveLength(1);
+    expect(websiteInputs[0]).toHaveValue('');
+    expect(screen.getByPlaceholderText('Visual Identity Objective (Optional)')).toHaveValue('');
+    expect(screen.getByPlaceholderText('Target Audience (Optional)')).toHaveValue('');
+  });
+
+  it('falls back to first-party square logo assets before favicon when the initial logo fails', async () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 
     fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
@@ -168,8 +210,35 @@ describe('BrandDeepDivePage', () => {
 
     fireEvent.error(logo);
 
-    expect(logo).toHaveAttribute('src', expect.stringMatching(/logo\.png|logo\.svg|apple-touch-icon\.png|logo%2Epng|logo%2Esvg|apple-touch-icon%2Epng|apple-touch-icon%2Fpng/i));
+    expect(logo).toHaveAttribute(
+      'src',
+      expect.stringMatching(/brandmark\.png|brandmark\.svg|logo-icon\.png|logo-icon\.svg|icon\.png|icon\.svg|mark\.png|mark\.svg|symbol\.png|symbol\.svg|logo\.png|logo\.svg|apple-touch-icon\.png|favicon\.ico|favicon\.png|favicon\.svg|brandmark%2Epng|brandmark%2Esvg|logo-icon%2Epng|logo-icon%2Esvg|icon%2Epng|icon%2Esvg|mark%2Epng|mark%2Esvg|symbol%2Epng|symbol%2Esvg|logo%2Epng|logo%2Esvg|apple-touch-icon%2Epng|apple-touch-icon%2Fpng|favicon%2Eico|favicon%2Epng|favicon%2Esvg/i)
+    );
     expect(logo.getAttribute('src')).not.toContain('google.com/s2/favicons');
+  });
+
+  it('prioritizes square logo assets and then favicon in the brand header fallback chain', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText('Visual Identity Objective (Optional)'),
+      {
+        target: { value: 'Compare premium skincare brands' },
+      }
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    const [logo] = await screen.findAllByAltText('Aesop logo');
+    fireEvent.error(logo);
+
+    expect(logo).toHaveAttribute(
+      'src',
+      expect.stringMatching(/brandmark\.png|brandmark\.svg|logo-icon\.png|logo-icon\.svg|icon\.png|icon\.svg|mark\.png|mark\.svg|symbol\.png|symbol\.svg|favicon\.ico|favicon\.png|favicon\.svg|brandmark%2Epng|brandmark%2Esvg|logo-icon%2Epng|logo-icon%2Esvg|icon%2Epng|icon%2Esvg|mark%2Epng|mark%2Esvg|symbol%2Epng|symbol%2Esvg|favicon%2Eico|favicon%2Epng|favicon%2Esvg/i)
+    );
   });
 
   it('shows Compare Across Brands popup when clicking a result box', async () => {

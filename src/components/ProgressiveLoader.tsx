@@ -101,7 +101,7 @@ export function ProgressiveLoader({
   return (
     <span className={`inline-flex flex-col items-center gap-1 ${className}`.trim()}>
       <span className="flex items-center gap-2">
-        <span>{currentMessage}</span>
+        <span className="whitespace-nowrap">{currentMessage}</span>
         {showProgress && <span className="tabular-nums font-mono relative">{Math.round(displayedProgress)}%</span>}
       </span>
       {showProgress && (

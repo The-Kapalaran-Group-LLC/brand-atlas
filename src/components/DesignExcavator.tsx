@@ -88,6 +88,10 @@ import {
   type RecentResultRecord,
 } from '../services/recent-results-storage';
 import { SourceLinkRow } from './SourceLinkRow';
+import {
+  clearDesignExcavatorPrefill,
+  readDesignExcavatorPrefill,
+} from '../services/design-excavator-prefill';
 
 interface VisualDesignPageProps {
   onBack: () => void;
@@ -268,6 +272,44 @@ function buildDeterministicLogoUrl(website?: string | null): string | null {
   return `${origin}/logo.svg`;
 }
 
+function buildWebsiteFaviconCandidateUrls(website?: string | null): string[] {
+  const origin = getOriginFromUrl(website);
+  if (!origin) return [];
+
+  return dedupeVisualCards([
+    { label: 'Favicon ICO', url: `${origin}/favicon.ico` },
+    { label: 'Favicon PNG', url: `${origin}/favicon.png` },
+    { label: 'Favicon SVG', url: `${origin}/favicon.svg` },
+    { label: 'Apple Touch Icon', url: `${origin}/apple-touch-icon.png` },
+    { label: 'Apple Touch Icon Precomposed', url: `${origin}/apple-touch-icon-precomposed.png` },
+    { label: 'Apple Icon 180', url: `${origin}/apple-touch-icon-180x180.png` },
+    { label: 'Android Chrome Icon 192', url: `${origin}/android-chrome-192x192.png` },
+  ]).map((card) => card.url);
+}
+
+function buildSquareLogoCandidateUrls(website?: string | null): string[] {
+  const origin = getOriginFromUrl(website);
+  if (!origin) return [];
+
+  return dedupeVisualCards([
+    { label: 'Brand Mark', url: `${origin}/brandmark.svg` },
+    { label: 'Brand Mark PNG', url: `${origin}/brandmark.png` },
+    { label: 'Logo Icon', url: `${origin}/logo-icon.svg` },
+    { label: 'Logo Icon PNG', url: `${origin}/logo-icon.png` },
+    { label: 'Icon SVG', url: `${origin}/icon.svg` },
+    { label: 'Icon PNG', url: `${origin}/icon.png` },
+    { label: 'Mark SVG', url: `${origin}/mark.svg` },
+    { label: 'Mark PNG', url: `${origin}/mark.png` },
+    { label: 'Symbol SVG', url: `${origin}/symbol.svg` },
+    { label: 'Symbol PNG', url: `${origin}/symbol.png` },
+    { label: 'Assets Icon', url: `${origin}/assets/icon.png` },
+    { label: 'Images Icon', url: `${origin}/images/icon.png` },
+    { label: 'Square Logo 512', url: `${origin}/logo-512x512.png` },
+    { label: 'Square Logo 256', url: `${origin}/logo-256x256.png` },
+    { label: 'Square Logo 192', url: `${origin}/logo-192x192.png` },
+  ]).map((card) => card.url);
+}
+
 function buildLargeLogoCandidateUrls(website?: string | null): string[] {
   const origin = getOriginFromUrl(website);
   const deterministicLogo = buildDeterministicLogoUrl(website);
@@ -348,6 +390,92 @@ function buildVisualPreviewFallbackChain(primaryUrl: string, website?: string | 
     .filter((url) => normalizeHttpUrl(url) !== normalizedPrimary);
 }
 
+function buildBrandBadgeFallbackChain(primaryUrl?: string | null, website?: string | null): string[] {
+  const primary = primaryUrl ? withImageProxy(primaryUrl) : null;
+
+  return dedupeVisualCards(
+    [
+      ...buildWebsiteFaviconCandidateUrls(website).map((url) => ({ label: 'favicon', url })),
+      ...buildLargeLogoCandidateUrls(website).map((url) => ({ label: 'logo', url })),
+    ]
+  )
+    .map((card) => withImageProxy(card.url))
+    .filter((url) => url !== primary);
+}
+
+function buildSquareLogoPreferredBadgeChain(website?: string | null, primaryUrl?: string | null): string[] {
+  const primary = primaryUrl ? withImageProxy(primaryUrl) : null;
+
+  return dedupeVisualCards(
+    [
+      ...buildSquareLogoCandidateUrls(website).map((url) => ({ label: 'square-logo', url })),
+      ...(primaryUrl ? [{ label: 'primary', url: primaryUrl }] : []),
+      ...buildLargeLogoCandidateUrls(website)
+        .filter((url) => !isFaviconLikeAssetUrl(url))
+        .map((url) => ({ label: 'logo', url })),
+      ...buildWebsiteFaviconCandidateUrls(website).map((url) => ({ label: 'favicon', url })),
+    ]
+  )
+    .map((card) => withImageProxy(card.url))
+    .filter((url) => url !== primary);
+}
+
+function buildFaviconPreferredBadgeChain(website?: string | null, primaryUrl?: string | null): string[] {
+  const primary = primaryUrl ? withImageProxy(primaryUrl) : null;
+
+  return dedupeVisualCards(
+    [
+      ...buildWebsiteFaviconCandidateUrls(website).map((url) => ({ label: 'favicon', url })),
+      ...buildSquareLogoCandidateUrls(website).map((url) => ({ label: 'square-logo', url })),
+      ...(primaryUrl ? [{ label: 'primary', url: primaryUrl }] : []),
+      ...buildLargeLogoCandidateUrls(website)
+        .filter((url) => !isFaviconLikeAssetUrl(url))
+        .map((url) => ({ label: 'logo', url })),
+    ]
+  )
+    .map((card) => withImageProxy(card.url))
+    .filter((url) => url !== primary);
+}
+
+function isFaviconLikeAssetUrl(url?: string | null): boolean {
+  if (!url) return false;
+  let value = url.toLowerCase();
+  try {
+    value = decodeURIComponent(value);
+  } catch {
+    // Keep original string if decode fails.
+  }
+  return (
+    value.includes('favicon') ||
+    value.includes('apple-touch-icon') ||
+    value.includes('android-chrome') ||
+    value.includes('mstile') ||
+    value.includes('mask-icon')
+  );
+}
+
+function advanceImageFallbackOrHide(event: React.SyntheticEvent<HTMLImageElement>) {
+  const target = event.currentTarget;
+  const fallbackChain = (target.dataset.fallbackChain || '')
+    .split('|')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  let nextFallback = fallbackChain.shift();
+  while (nextFallback && target.src === nextFallback) {
+    nextFallback = fallbackChain.shift();
+  }
+
+  if (nextFallback && target.src !== nextFallback) {
+    target.dataset.fallbackChain = fallbackChain.join('|');
+    target.src = nextFallback;
+    return;
+  }
+
+  target.onerror = null;
+  target.style.display = 'none';
+}
+
 function buildInlineFallbackImageSvg(label: string): string {
   const safeLabel = encodeURIComponent(label || 'Preview unavailable');
   return `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360'><rect width='100%' height='100%' fill='%23F4F4F5'/><rect x='24' y='24' width='592' height='312' rx='16' ry='16' fill='%23FFFFFF' stroke='%23D4D4D8'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%236B7280' font-family='Arial, sans-serif' font-size='20'>${safeLabel}</text></svg>`;
@@ -413,6 +541,21 @@ function canonicalizeVisualUrl(rawUrl: string): string {
   } catch {
     return normalized.toLowerCase();
   }
+}
+
+function isKnownBrokenVisualAssetUrl(rawUrl: string): boolean {
+  const value = (rawUrl || '').toLowerCase();
+  return (
+    /(^|[\/_.-])404([\/_.-]|$)/.test(value) ||
+    value.includes('not-found') ||
+    value.includes('not_found') ||
+    value.includes('missing-image') ||
+    value.includes('missing_image') ||
+    value.includes('placeholder-image') ||
+    value.includes('placeholder_image') ||
+    value.includes('default-image') ||
+    value.includes('default_image')
+  );
 }
 
 function isLogoLikeAsset(url: string, label: string): boolean {
@@ -498,11 +641,15 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   // Loader for all visuals (now after report and bestVisualsByBrand)
   const { allVisualsLoaded, handleImageLoad, handleImageError, expectedCount } = useAllVisualsLoaded(report, bestVisualsByBrand);
 
-  const clearExcavatorSearch = () => {
-    setBrands([
-      { id: 'brand-1', name: '', website: '' },
-      { id: 'brand-2', name: '', website: '' },
-    ]);
+  const clearExcavatorSearch = (options?: { singleRow?: boolean }) => {
+    if (options?.singleRow) {
+      setBrands([{ id: brands[0]?.id || 'brand-1', name: '', website: '' }]);
+    } else {
+      setBrands([
+        { id: 'brand-1', name: '', website: '' },
+        { id: 'brand-2', name: '', website: '' },
+      ]);
+    }
     setAnalysisObjective('');
     setTargetAudience('');
     setResultTab('profiles');
@@ -521,7 +668,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     setHeroImages({});
     setLogoImages({});
     requestedHeroRef.current.clear();
-    setToast('Started a new search.');
+    setToast(options?.singleRow ? 'Cleared search fields.' : 'Started a new search.');
   };
 
   const shouldKeepDefaultLinkBehavior = (event: React.MouseEvent<HTMLAnchorElement>): boolean => {
@@ -1020,6 +1167,11 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   };
 
   const removeBrandRow = (id: string) => {
+    if (brands.length <= 1) {
+      clearExcavatorSearch({ singleRow: true });
+      return;
+    }
+
     setBrands((prev) => {
       if (prev.length <= 1) return prev;
       return prev.filter((brand) => brand.id !== id);
@@ -1196,6 +1348,22 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     );
   };
 
+  const handleBrandNavJump = useCallback((event: React.MouseEvent<HTMLAnchorElement>, index: number) => {
+    event.preventDefault();
+    const targetId = `brand-${index}`;
+    const target = document.getElementById(targetId);
+
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (window.location.hash !== `#${targetId}`) {
+        window.history.replaceState(null, '', `#${targetId}`);
+      }
+      return;
+    }
+
+    window.location.hash = `#${targetId}`;
+  }, []);
+
   useEffect(() => {
     if (!isLoading) {
       setFakeProgress(0);
@@ -1290,6 +1458,39 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   }, [brands]);
 
   useEffect(() => {
+    const prefill = readDesignExcavatorPrefill();
+    if (!prefill) return;
+
+    const prefillBrands = (prefill.brands || [])
+      .map((brand) => ({
+        name: (brand.name || '').trim(),
+        website: (brand.website || '').trim(),
+      }))
+      .filter((brand) => brand.name.length > 0)
+      .slice(0, 6);
+
+    if (prefillBrands.length > 0) {
+      setBrands(
+        prefillBrands.map((brand, idx) => ({
+          id: `brand-prefill-${Date.now()}-${idx}`,
+          name: brand.name,
+          website: brand.website,
+        }))
+      );
+    }
+
+    if ((prefill.analysisObjective || '').trim()) {
+      setAnalysisObjective((prefill.analysisObjective || '').trim().slice(0, MAX_EXCAVATOR_OBJECTIVE_LENGTH));
+    }
+
+    if ((prefill.targetAudience || '').trim()) {
+      setTargetAudience((prefill.targetAudience || '').trim().slice(0, MAX_EXCAVATOR_AUDIENCE_LENGTH));
+    }
+
+    clearDesignExcavatorPrefill();
+  }, []);
+
+  useEffect(() => {
     if (!report) {
       setBestVisualsByBrand({});
       setVisualFailuresByCard({});
@@ -1349,22 +1550,26 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       ).slice(0, 4);
 
       const directVisualCards = dedupeVisualCards(
-        buildLargeVisualCandidateUrls(profile.website).map((url, idx) => ({
-          label: idx === 0 ? 'Website Visual' : `Website Visual ${idx + 1}`,
-          url: withImageProxy(url),
-          originalUrl: url,
-          status: 'fallback' as const,
-        }))
+        buildLargeVisualCandidateUrls(profile.website)
+          .filter((url) => !isKnownBrokenVisualAssetUrl(url))
+          .map((url, idx) => ({
+            label: idx === 0 ? 'Website Visual' : `Website Visual ${idx + 1}`,
+            url: withImageProxy(url),
+            originalUrl: url,
+            status: 'fallback' as const,
+          }))
       ).slice(0, 4);
 
       const screenshotCards = dedupeVisualCards(
         [
-          ...screenshotTargets.map((target) => ({
-            label: target.label,
-            url: withImageProxy(buildWordpressScreenshotUrl(target.url)),
-            originalUrl: buildWordpressScreenshotUrl(target.url),
-            status: 'ok' as const,
-          })),
+          ...screenshotTargets
+            .filter((target) => !isKnownBrokenVisualAssetUrl(target.url))
+            .map((target) => ({
+              label: target.label,
+              url: withImageProxy(buildWordpressScreenshotUrl(target.url)),
+              originalUrl: buildWordpressScreenshotUrl(target.url),
+              status: 'ok' as const,
+            })),
           ...directVisualCards,
         ]
       ).slice(0, 8);
@@ -1908,9 +2113,15 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => removeBrandRow(brand.id)}
+                  onClick={() => {
+                    if (idx === 0) {
+                      clearExcavatorSearch({ singleRow: true });
+                      return;
+                    }
+                    removeBrandRow(brand.id);
+                  }}
                   className="col-start-2 row-start-1 self-start md:col-start-auto md:row-start-auto md:self-auto px-3 py-3 rounded-2xl border border-zinc-200 bg-white text-zinc-500 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors"
-                  disabled={isLoading || brands.length === 1}
+                  disabled={isLoading}
                   aria-label={`Remove brand ${idx + 1}`}
                 >
                   <Trash2 className="w-4 h-4" />
@@ -1975,7 +2186,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                 void handleSubmit();
               }}
               disabled={isLoading}
-              className="w-[288px] mx-auto px-4 py-4 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-zinc-900/50 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all inline-flex items-center justify-center gap-2 text-sm mt-2 select-none relative overflow-hidden"
+              className="w-[360px] mx-auto px-4 py-4 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-zinc-900/50 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all inline-flex items-center justify-center gap-2 text-sm mt-2 select-none relative overflow-hidden"
             >
               {isLoading ? (
                 <ProgressiveLoader
@@ -2180,27 +2391,47 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                   )}
                 </section>
                 {/* Brand Navigation Tab Bar */}
-                <nav className="flex gap-2 mb-4 overflow-x-auto pb-2 border-b border-zinc-100">
-                  {report.brandProfiles.map((profile, idx) => (
-                    <a
-                      key={profile.brandName}
-                      href={`#brand-${idx}`}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-200 bg-white text-sm font-semibold text-zinc-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors whitespace-nowrap"
-                      style={{ scrollMarginTop: '80px' }}
-                    >
-                      {processedLogos[profile.brandName]?.base64Placeholder ? (
-                        <img
-                          src={processedLogos[profile.brandName]?.base64Placeholder}
-                          alt="logo"
-                          className="w-6 h-6 rounded-lg object-contain border border-zinc-100 bg-zinc-50"
-                        />
-                      ) : (
-                        <span className="w-6 h-6 flex items-center justify-center bg-zinc-100 rounded-lg text-zinc-400 font-bold text-xs">{profile.brandName[0]}</span>
-                      )}
-                      {profile.brandName}
-                    </a>
-                  ))}
-                </nav>
+                {report.brandProfiles.length > 1 && (
+                  <nav className="flex gap-2 mb-4 overflow-x-auto pb-2 border-b border-zinc-100">
+                    {report.brandProfiles.map((profile, idx) => {
+                      const visuals = bestVisualsByBrand[profile.brandName];
+                      const navPrimaryLogoUrl = processedLogos[profile.brandName]?.base64Placeholder
+                        || visuals?.deterministicLogoUrl
+                        || logoImages[profile.brandName]
+                        || null;
+                      const navFallbackChain = buildFaviconPreferredBadgeChain(profile.website, navPrimaryLogoUrl);
+                      const navBadgeUrl = navFallbackChain[0] || (navPrimaryLogoUrl ? withImageProxy(navPrimaryLogoUrl) : null);
+                      const navRemainingFallbacks = navFallbackChain.slice(1);
+                      const hasBadgeImage = Boolean(navBadgeUrl);
+
+                      return (
+                        <a
+                          key={profile.brandName}
+                          href={`#brand-${idx}`}
+                          onClick={(event) => handleBrandNavJump(event, idx)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-200 bg-white text-sm font-semibold text-zinc-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors whitespace-nowrap"
+                          style={{ scrollMarginTop: '80px' }}
+                        >
+                          <span
+                            className={`w-6 h-6 flex items-center justify-center rounded-lg text-zinc-400 font-bold text-xs relative shrink-0 ${hasBadgeImage ? 'bg-transparent border border-transparent' : 'bg-zinc-100 border border-zinc-100'}`}
+                          >
+                            <span>{profile.brandName[0]}</span>
+                            {navBadgeUrl && (
+                              <img
+                                src={navBadgeUrl}
+                                alt={`${profile.brandName} navigation logo`}
+                                data-fallback-chain={navRemainingFallbacks.join('|')}
+                                className="w-full h-full rounded-lg object-contain p-0.5 absolute inset-0 bg-transparent"
+                                onError={advanceImageFallbackOrHide}
+                              />
+                            )}
+                          </span>
+                          {profile.brandName}
+                        </a>
+                      );
+                    })}
+                  </nav>
+                )}
                 {/* Brand Profiles Full Width */}
                 <div className="flex flex-col gap-8">
                   {report.brandProfiles.map((profile, idx) => {
@@ -2209,6 +2440,10 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                       || visuals?.deterministicLogoUrl
                       || logoImages[profile.brandName]
                       || null;
+                    const brandBadgeFallbackChain = buildSquareLogoPreferredBadgeChain(profile.website, logoUrl);
+                    const brandBadgeUrl = brandBadgeFallbackChain[0] || (logoUrl ? withImageProxy(logoUrl) : null);
+                    const brandBadgeRemainingFallbacks = brandBadgeFallbackChain.slice(1);
+                    const hasBrandBadgeImage = Boolean(brandBadgeUrl);
                     const visibleVisualCards = (visuals?.images || []).filter((_, idx) => {
                       const failureState = visualFailuresByCard[`${profile.brandName}-visual-${idx}`];
                       return !failureState?.hidden;
@@ -2224,20 +2459,23 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
                         {/* Brand Header */}
                         <div className="flex items-start gap-4 mb-4">
-                          {logoUrl && (
-                            <div className="w-14 h-14 rounded-xl border border-zinc-100 bg-zinc-50 flex items-center justify-center overflow-hidden shrink-0">
+                          <div
+                            className={`w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden shrink-0 relative ${hasBrandBadgeImage ? 'border border-transparent bg-transparent' : 'border border-zinc-100 bg-zinc-50'}`}
+                          >
+                            {!brandBadgeUrl && (
+                              <span className="text-zinc-400 font-semibold text-lg">{profile.brandName[0] || '?'}</span>
+                            )}
+                            {brandBadgeUrl && (
                               <img
-                                src={logoUrl}
+                                src={brandBadgeUrl}
                                 alt={`${profile.brandName} logo`}
-                                className="w-full h-full object-contain p-1"
+                                data-fallback-chain={brandBadgeRemainingFallbacks.join('|')}
+                                className="w-full h-full object-contain p-1 absolute inset-0 z-10 bg-transparent"
                                 onLoad={handleImageLoad}
-                                onError={(e) => {
-                                  handleImageError();
-                                  (e.currentTarget as HTMLImageElement).style.display = 'none';
-                                }}
+                                onError={(e) => { handleImageError(); advanceImageFallback(e); }}
                               />
-                            </div>
-                          )}
+                            )}
+                          </div>
                           <div className="flex-1 min-w-0">
                             <h3 className="text-xl font-bold text-zinc-900">{profile.brandName}</h3>
                             {profile.website && (

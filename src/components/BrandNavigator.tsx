@@ -65,6 +65,7 @@ import {
   saveRecentResult,
   type RecentResultRecord,
 } from '../services/recent-results-storage';
+import { saveDesignExcavatorPrefill } from '../services/design-excavator-prefill';
 
 const BRAND_NAVIGATOR_TABLE = 'BrandNavigator';
 
@@ -2976,6 +2977,9 @@ function BrandResultsGrid({
   onAudienceDeepDive: (audienceLabel: string, brandName: string) => void;
 }) {
   const isMultiBrandCompareEnabled = results.length > 1;
+  const brandNamesForVisualDeepDive = results
+    .map((result) => (result.brandName || '').trim())
+    .filter((name) => name.length > 0);
   const [compareSection, setCompareSection] = useState<BrandResultSectionKey | null>(null);
   const [comparePopup, setComparePopup] = useState<{ x: number; y: number; section: BrandResultSectionKey } | null>(null);
   const comparePanelRef = useRef<HTMLElement | null>(null);
@@ -3089,6 +3093,7 @@ function BrandResultsGrid({
           key={`${brandResult.brandName || 'brand'}-${brandIndex}`}
           brandResult={brandResult}
           brandIndex={brandIndex}
+          visualDeepDiveBrands={brandNamesForVisualDeepDive}
           highlightedSections={highlightedSections}
           canCompareAcrossBrands={isMultiBrandCompareEnabled}
           onRequestCompareAcrossBrands={openComparePopup}
@@ -3122,6 +3127,7 @@ function BrandResultsGrid({
 function BrandResultCard({
   brandResult,
   brandIndex,
+  visualDeepDiveBrands,
   highlightedSections,
   canCompareAcrossBrands,
   onRequestCompareAcrossBrands,
@@ -3129,6 +3135,7 @@ function BrandResultCard({
 }: {
   brandResult: BrandResultEntry;
   brandIndex: number;
+  visualDeepDiveBrands: string[];
   highlightedSections: BrandResultSectionKey[];
   canCompareAcrossBrands: boolean;
   onRequestCompareAcrossBrands: (event: React.MouseEvent<HTMLElement>, section: BrandResultSectionKey) => void;
@@ -3152,9 +3159,44 @@ function BrandResultCard({
     fallbackPressReleaseUsed: Boolean(fallbackPressRelease),
   });
 
+  const handleAnalyzeVisualIdentities = () => {
+    const normalizedBrands = (visualDeepDiveBrands.length > 0 ? visualDeepDiveBrands : [brandName])
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0)
+      .slice(0, 6)
+      .map((name) => ({ name, website: '' }));
+
+    saveDesignExcavatorPrefill({
+      brands: normalizedBrands,
+    });
+
+    const targetUrl = `${window.location.origin}/#design-excavator`;
+    console.log('[BrandNavigator] Opening Design Excavator in new tab from Analyze Visual Identities.', {
+      targetUrl,
+      selectedBrands: normalizedBrands.map((brand) => brand.name),
+    });
+
+    const openedWindow = window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    if (!openedWindow) {
+      console.warn('[BrandNavigator] Popup blocked while opening Design Excavator. Keeping user on current Brand Navigator tab.', {
+        targetUrl,
+      });
+    }
+  };
+
   return (
     <section className="bg-zinc-50/60 p-6 rounded-3xl border border-zinc-200 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-shadow duration-300 w-full">
-      <h3 className="text-2xl font-bold text-zinc-900 mb-3">{brandName}</h3>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-2xl font-bold text-zinc-900">{brandName}</h3>
+        <button
+          type="button"
+          onClick={handleAnalyzeVisualIdentities}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-indigo-200 bg-white text-indigo-700 text-sm font-medium hover:bg-indigo-50 transition-colors"
+        >
+          <Palette className="w-4 h-4" />
+          Analyze Visual Identities
+        </button>
+      </div>
 
       <div
         data-testid="brand-result-sections-layout"
