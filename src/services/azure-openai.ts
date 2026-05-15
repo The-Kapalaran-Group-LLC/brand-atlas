@@ -1570,6 +1570,28 @@ function normalizeHexColor(value?: string | null): string | null {
   return `#${trimmed}`;
 }
 
+function hexToRgb(value: string): { r: number; g: number; b: number } | null {
+  const normalized = normalizeHexColor(value);
+  if (!normalized) return null;
+  const raw = normalized.replace('#', '');
+  if (raw.length !== 6) return null;
+  const r = Number.parseInt(raw.slice(0, 2), 16);
+  const g = Number.parseInt(raw.slice(2, 4), 16);
+  const b = Number.parseInt(raw.slice(4, 6), 16);
+  if ([r, g, b].some((channel) => Number.isNaN(channel))) return null;
+  return { r, g, b };
+}
+
+function colorDistance(a: string, b: string): number {
+  const aRgb = hexToRgb(a);
+  const bRgb = hexToRgb(b);
+  if (!aRgb || !bRgb) return Number.POSITIVE_INFINITY;
+  const dr = aRgb.r - bRgb.r;
+  const dg = aRgb.g - bRgb.g;
+  const db = aRgb.b - bRgb.b;
+  return Math.sqrt((dr * dr) + (dg * dg) + (db * db));
+}
+
 function isOfficialSourceForWebsite(sourceUrl?: string | null, websiteUrl?: string | null): boolean {
   const sourceHost = getHostname(sourceUrl);
   const websiteHost = getHostname(websiteUrl);
@@ -1606,8 +1628,11 @@ function sanitizeBrandDeepDiveReport(report: BrandDeepDiveReport): BrandDeepDive
         isOfficialSourceForWebsite(source.url, normalizedWebsite)
       );
 
-      const sanitizeColors = (colors: BrandColorSpec[] = []): BrandColorSpec[] =>
-        colors
+      const sanitizeColors = (
+        colors: BrandColorSpec[] = [],
+        options?: { max?: number; minDistance?: number }
+      ): BrandColorSpec[] => {
+        const normalized = colors
           .map((color) => {
             const hex = normalizeHexColor(color.hex);
             if (!hex) return null;
@@ -1619,9 +1644,25 @@ function sanitizeBrandDeepDiveReport(report: BrandDeepDiveReport): BrandDeepDive
           })
           .filter((color): color is BrandColorSpec => Boolean(color));
 
-      const verifiedPrimaryColors = sanitizeColors(profile.colorPalette?.primaryColors || []);
-      const verifiedAccentColors = sanitizeColors(profile.colorPalette?.secondaryAccentColors || []);
-      const verifiedNeutrals = sanitizeColors(profile.colorPalette?.neutrals || []);
+        const dedupedByHex = Array.from(
+          new Map(normalized.map((color) => [color.hex, color])).values()
+        );
+
+        const distanceThreshold = Math.max(0, Number(options?.minDistance || 0));
+        const similarityFiltered = distanceThreshold > 0
+          ? dedupedByHex.filter((color, index, all) => {
+              const hasEarlierSimilar = all.slice(0, index).some((existing) => colorDistance(existing.hex, color.hex) < distanceThreshold);
+              return !hasEarlierSimilar;
+            })
+          : dedupedByHex;
+
+        const max = Math.max(1, Number(options?.max || similarityFiltered.length));
+        return similarityFiltered.slice(0, max);
+      };
+
+      const verifiedPrimaryColors = sanitizeColors(profile.colorPalette?.primaryColors || [], { max: 5, minDistance: 18 });
+      const verifiedAccentColors = sanitizeColors(profile.colorPalette?.secondaryAccentColors || [], { max: 3, minDistance: 28 });
+      const verifiedNeutrals = sanitizeColors(profile.colorPalette?.neutrals || [], { max: 5, minDistance: 12 });
 
       const consistencyAssessment = (profile.consistencyAssessment || 'Not provided').trim();
       const verificationSuffix = '[INFERRED] Color values were not fully verifiable from official same-domain sources and should be treated as directional/estimated.';
@@ -1935,6 +1976,13 @@ type ScrapedBrandDesignTokens = {
   logoUrl?: string | null;
   heroImageUrl?: string | null;
   screenshotUrl?: string | null;
+  liveTypography?: {
+    h1: string[];
+    h2: string[];
+    h3: string[];
+    p: string[];
+    body: string[];
+  } | null;
 };
 
 function buildWebsiteScreenshotUrl(websiteUrl: string): string | null {
@@ -1949,6 +1997,7 @@ async function fetchDesignTokensForBrand(brandName: string, website?: string): P
 
   try {
     const baseUrl = getApiBaseUrl();
+    const normalizedWebsiteUrl = normalizeHttpsUrl(trimmedWebsite) || trimmedWebsite;
     const fetchTokens = async (path: string) => {
       const response = await fetch(`${baseUrl}${path}?domain=${encodeURIComponent(trimmedWebsite)}`);
       if (!response.ok) return null;
@@ -1959,6 +2008,90 @@ async function fetchDesignTokensForBrand(brandName: string, website?: string): P
           colors?: string[];
           fonts?: string[];
         } | null;
+      };
+    };
+    const fetchTypography = async () => {
+      const response = await fetch(
+        `${baseUrl}/api/extract-typography?url=${encodeURIComponent(normalizedWebsiteUrl)}&maxSamplesPerTag=3`
+      );
+      if (!response.ok) return null;
+      const payload = await response.json() as {
+        success?: boolean;
+        typography?: {
+          h1?: Array<{
+            fontFamily?: string;
+            fontWeight?: string;
+            fontSize?: string;
+            lineHeight?: string;
+            color?: string;
+          }>;
+          h2?: Array<{
+            fontFamily?: string;
+            fontWeight?: string;
+            fontSize?: string;
+            lineHeight?: string;
+            color?: string;
+          }>;
+          h3?: Array<{
+            fontFamily?: string;
+            fontWeight?: string;
+            fontSize?: string;
+            lineHeight?: string;
+            color?: string;
+          }>;
+          p?: Array<{
+            fontFamily?: string;
+            fontWeight?: string;
+            fontSize?: string;
+            lineHeight?: string;
+            color?: string;
+          }>;
+          body?: Array<{
+            fontFamily?: string;
+            fontWeight?: string;
+            fontSize?: string;
+            lineHeight?: string;
+            color?: string;
+          }>;
+        };
+      };
+      if (!payload.success || !payload.typography) return null;
+
+      const serializeTypographyStyle = (style: {
+        fontFamily?: string;
+        fontWeight?: string;
+        fontSize?: string;
+        lineHeight?: string;
+        color?: string;
+      }): string => {
+        const family = (style.fontFamily || '').trim();
+        const weight = (style.fontWeight || '').trim();
+        const size = (style.fontSize || '').trim();
+        const lineHeight = (style.lineHeight || '').trim();
+        const color = (style.color || '').trim();
+        return `font-family=${family || 'N/A'}; font-weight=${weight || 'N/A'}; font-size=${size || 'N/A'}; line-height=${lineHeight || 'N/A'}; color=${color || 'N/A'}`;
+      };
+
+      const dedupeAndSerialize = (styles: Array<{
+        fontFamily?: string;
+        fontWeight?: string;
+        fontSize?: string;
+        lineHeight?: string;
+        color?: string;
+      }> = []): string[] => Array.from(
+        new Set(
+          styles
+            .map((style) => serializeTypographyStyle(style))
+            .filter(Boolean)
+        )
+      ).slice(0, 3);
+
+      return {
+        h1: dedupeAndSerialize(payload.typography.h1 || []),
+        h2: dedupeAndSerialize(payload.typography.h2 || []),
+        h3: dedupeAndSerialize(payload.typography.h3 || []),
+        p: dedupeAndSerialize(payload.typography.p || []),
+        body: dedupeAndSerialize(payload.typography.body || []),
       };
     };
 
@@ -1987,6 +2120,7 @@ async function fetchDesignTokensForBrand(brandName: string, website?: string): P
           .filter(Boolean)
       )
     ).slice(0, 5);
+    const liveTypography = await fetchTypography();
 
     return {
       brandName,
@@ -1996,6 +2130,7 @@ async function fetchDesignTokensForBrand(brandName: string, website?: string): P
       logoUrl: normalizeHttpsUrl(activePayload.logoUrl || '') || null,
       heroImageUrl: normalizeHttpsUrl(activePayload.heroImageUrl || '') || null,
       screenshotUrl: buildWebsiteScreenshotUrl(trimmedWebsite),
+      liveTypography,
     };
   } catch (error) {
     console.warn('[brand-deep-dive] Failed to fetch scraped design tokens.', { brandName, website: trimmedWebsite, error });
@@ -2041,6 +2176,24 @@ export function buildHardDesignTokenRulesBlock(hasHardTokens: boolean): string {
 - Do not fabricate precision when confidence is low.`;
 }
 
+export function buildLiveTypographyEvidenceBlock(tokens: ScrapedBrandDesignTokens[]): string {
+  if (!tokens.length) {
+    return `LIVE TYPOGRAPHY EVIDENCE (Computed styles via Playwright):
+- Not available for the selected brands.`;
+  }
+
+  return [
+    'LIVE TYPOGRAPHY EVIDENCE (Computed styles via Playwright):',
+    ...tokens.map((token, index) => {
+      const h1 = token.liveTypography?.h1?.length ? token.liveTypography.h1.join(' | ') : 'Not available';
+      const h2 = token.liveTypography?.h2?.length ? token.liveTypography.h2.join(' | ') : 'Not available';
+      const h3 = token.liveTypography?.h3?.length ? token.liveTypography.h3.join(' | ') : 'Not available';
+      const p = token.liveTypography?.p?.length ? token.liveTypography.p.join(' | ') : 'Not available';
+      return `${index + 1}. ${token.brandName} (${token.website})\n   - h1: ${h1}\n   - h2: ${h2}\n   - h3: ${h3}\n   - p/body: ${p}`;
+    }),
+  ].join('\n');
+}
+
 export async function generateBrandDeepDive(input: {
   brands: { name: string; website?: string }[];
   analysisObjective: string;
@@ -2064,12 +2217,15 @@ export async function generateBrandDeepDive(input: {
   });
   const hardDesignTokensBlock = buildHardDesignTokensBlock(scrapedDesignTokenList);
   const hardDesignTokenRulesBlock = buildHardDesignTokenRulesBlock(scrapedDesignTokenList.length > 0);
+  const liveTypographyEvidenceBlock = buildLiveTypographyEvidenceBlock(scrapedDesignTokenList);
 
   const prompt = `You are a senior brand design strategist and visual identity analyst.
 
 ${hardDesignTokensBlock}
 
 ${hardDesignTokenRulesBlock}
+
+${liveTypographyEvidenceBlock}
 
 Analyze up to 6 brands by assessing their visual identity systems using this framework:
 1) Logo (primary mark, variations, wordmark/logotype, symbols/icons)
@@ -2102,6 +2258,9 @@ Output requirements:
   - sampleVisuals: 2-4 direct image URLs (homepage hero, campaign visual, product visual, etc.) with short titles.
 - Prefer stable, first-party image URLs. If no reliable direct image URL is available, return null for logoImageUrl and an empty sampleVisuals list.
 - For colorPalette values, prefer exact HEX values verified on official same-domain sources when available.
+- Do not over-index on one campaign/gradient image. Prioritize recurring brand-system colors seen across persistent surfaces (header/nav, buttons, product UI, docs/help, footer, app UI).
+- Keep color lists tight and strategic. Target roughly: primary (2-5), accent (1-3), neutrals (2-5). Avoid returning many near-duplicate shades from a single gradient.
+- For typography fields (font families + hierarchy), prioritize LIVE TYPOGRAPHY EVIDENCE computed from rendered page styles when available.
 - If same-domain verification is unavailable, still provide best-estimate HEX values inferred from observable brand visuals and mark usage clearly as estimated/unverified.
 - In logo.logoVariations and logo.symbolsIcons, include concrete environment context notes (where and how marks are deployed across the site ecosystem).
 
@@ -2180,12 +2339,15 @@ export async function regenerateBrandDeepDiveWithFeedback(input: {
   });
   const hardDesignTokensBlock = buildHardDesignTokensBlock(scrapedDesignTokenList);
   const hardDesignTokenRulesBlock = buildHardDesignTokenRulesBlock(scrapedDesignTokenList.length > 0);
+  const liveTypographyEvidenceBlock = buildLiveTypographyEvidenceBlock(scrapedDesignTokenList);
 
   const prompt = `You are a senior brand design strategist and visual identity analyst.
 
 ${hardDesignTokensBlock}
 
 ${hardDesignTokenRulesBlock}
+
+${liveTypographyEvidenceBlock}
 
 Re-audit and correct the brand deep dive below. Treat the feedback as a request to rescan the listed brand websites and fix inaccuracies.
 
@@ -2223,6 +2385,9 @@ Output requirements:
   - sampleVisuals: 2-4 direct image URLs (homepage hero, campaign visual, product visual, etc.) with short titles.
 - Prefer stable, first-party image URLs. If no reliable direct image URL is available, return null for logoImageUrl and an empty sampleVisuals list.
 - For colorPalette values, prefer exact HEX values verified on official same-domain sources when available.
+- Do not over-index on one campaign/gradient image. Prioritize recurring brand-system colors seen across persistent surfaces (header/nav, buttons, product UI, docs/help, footer, app UI).
+- Keep color lists tight and strategic. Target roughly: primary (2-5), accent (1-3), neutrals (2-5). Avoid returning many near-duplicate shades from a single gradient.
+- For typography fields (font families + hierarchy), prioritize LIVE TYPOGRAPHY EVIDENCE computed from rendered page styles when available.
 - If same-domain verification is unavailable, still provide best-estimate HEX values inferred from observable brand visuals and mark usage clearly as estimated/unverified.
 - In logo.logoVariations and logo.symbolsIcons, include concrete environment context notes (where and how marks are deployed across the site ecosystem).
 

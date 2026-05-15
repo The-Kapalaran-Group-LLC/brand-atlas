@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   evaluateBrandLogoCandidates,
+  extractColorPalette,
+  extractTypography,
   pickTopLogoCandidates,
   type RawLogoCandidate,
 } from './extract-assets';
@@ -99,5 +101,115 @@ describe('pickTopLogoCandidates', () => {
       'https://example.com/logo.svg',
     ]);
     expect(result).not.toContain('https://example.com/favicon.ico');
+  });
+});
+
+describe('extractTypography', () => {
+  it('extracts and deduplicates computed typography samples by tag', async () => {
+    const close = vi.fn(async () => {});
+    const goto = vi.fn(async () => {});
+    const screenshot = vi.fn(async () => Buffer.from('unused'));
+    const evaluate = vi.fn(async () => ({
+      h1: [
+        { fontFamily: 'Inter, sans-serif', fontWeight: '700', fontSize: '48px', lineHeight: '56px', color: 'rgb(0, 0, 0)' },
+        { fontFamily: 'Inter, sans-serif', fontWeight: '700', fontSize: '48px', lineHeight: '56px', color: 'rgb(0, 0, 0)' },
+      ],
+      h2: [],
+      h3: [
+        { fontFamily: 'Inter, sans-serif', fontWeight: '600', fontSize: '28px', lineHeight: '36px', color: 'rgb(25, 25, 25)' },
+      ],
+      p: [
+        { fontFamily: 'Inter, sans-serif', fontWeight: '400', fontSize: '16px', lineHeight: '24px', color: 'rgb(51, 51, 51)' },
+        { fontFamily: 'Inter, sans-serif', fontWeight: '400', fontSize: '16px', lineHeight: '24px', color: 'rgb(51, 51, 51)' },
+      ],
+    }));
+    const newPage = vi.fn(async () => ({ goto, evaluate, screenshot }));
+    const launchBrowser = vi.fn(async () => ({ newPage, close }));
+
+    const result = await extractTypography('https://example.com', { launchBrowser, maxSamplesPerTag: 3 });
+
+    expect(goto).toHaveBeenCalledWith('https://example.com', expect.objectContaining({ waitUntil: 'networkidle' }));
+    expect(result.h1).toHaveLength(1);
+    expect(result.h2).toHaveLength(0);
+    expect(result.h3).toHaveLength(1);
+    expect(result.p).toHaveLength(1);
+    expect(result.body).toEqual(result.p);
+    expect(close).toHaveBeenCalled();
+  });
+
+  it('returns empty arrays for missing tags and still provides a stable shape', async () => {
+    const close = vi.fn(async () => {});
+    const goto = vi.fn(async () => {});
+    const screenshot = vi.fn(async () => Buffer.from('unused'));
+    const evaluate = vi.fn(async () => ({}));
+    const newPage = vi.fn(async () => ({ goto, evaluate, screenshot }));
+    const launchBrowser = vi.fn(async () => ({ newPage, close }));
+
+    const result = await extractTypography('https://example.com', { launchBrowser });
+
+    expect(result).toEqual({
+      h1: [],
+      h2: [],
+      h3: [],
+      p: [],
+      body: [],
+    });
+    expect(close).toHaveBeenCalled();
+  });
+});
+
+describe('extractColorPalette', () => {
+  it('maps node-vibrant swatches into custom accent/neutral keys', async () => {
+    const close = vi.fn(async () => {});
+    const goto = vi.fn(async () => {});
+    const screenshot = vi.fn(async () => Buffer.from('fake-png-buffer'));
+    const evaluate = vi.fn(async () => ({}));
+    const newPage = vi.fn(async () => ({ goto, screenshot, evaluate }));
+    const launchBrowser = vi.fn(async () => ({ newPage, close }));
+    const extractPalette = vi.fn(async () => ({
+      Vibrant: { hex: '#0A66FA' },
+      Muted: { hex: '#6C7A89' },
+      DarkVibrant: { hex: '#0B2F7F' },
+      DarkMuted: { hex: '#334455' },
+      LightVibrant: { hex: '#8CC4FF' },
+      LightMuted: { hex: '#D8DEE6' },
+    }));
+
+    const result = await extractColorPalette('https://example.com', { launchBrowser, extractPalette });
+
+    expect(goto).toHaveBeenCalledWith('https://example.com/', expect.objectContaining({ waitUntil: 'networkidle' }));
+    expect(screenshot).toHaveBeenCalledWith(expect.objectContaining({ fullPage: false, type: 'png' }));
+    expect(result).toEqual({
+      primaryAccent: '#0A66FA',
+      secondaryAccent: '#8CC4FF',
+      darkNeutral: '#334455',
+      lightNeutral: '#D8DEE6',
+      swatches: {
+        Vibrant: '#0A66FA',
+        Muted: '#6C7A89',
+        DarkVibrant: '#0B2F7F',
+        DarkMuted: '#334455',
+        LightVibrant: '#8CC4FF',
+        LightMuted: '#D8DEE6',
+      },
+    });
+    expect(close).toHaveBeenCalled();
+  });
+
+  it('returns null when node-vibrant throws', async () => {
+    const close = vi.fn(async () => {});
+    const goto = vi.fn(async () => {});
+    const screenshot = vi.fn(async () => Buffer.from('fake-png-buffer'));
+    const evaluate = vi.fn(async () => ({}));
+    const newPage = vi.fn(async () => ({ goto, screenshot, evaluate }));
+    const launchBrowser = vi.fn(async () => ({ newPage, close }));
+    const extractPalette = vi.fn(async () => {
+      throw new Error('palette parse failed');
+    });
+
+    const result = await extractColorPalette('https://example.com', { launchBrowser, extractPalette });
+
+    expect(result).toBeNull();
+    expect(close).toHaveBeenCalled();
   });
 });

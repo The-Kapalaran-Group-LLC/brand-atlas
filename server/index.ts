@@ -22,7 +22,12 @@ import {
   type BrandImagesResult,
   type BrandVisionAnalysis,
 } from './brand-images';
-import { pickTopLogoCandidates, type RawLogoCandidate } from './extract-assets';
+import {
+  extractColorPalette,
+  extractTypography,
+  pickTopLogoCandidates,
+  type RawLogoCandidate,
+} from './extract-assets';
 import { extractBrandWebContext, type BrandWebContextResult } from './brand-web-context';
 import {
   buildLanguageMethodologySnapshotDigest,
@@ -913,6 +918,160 @@ app.get('/api/extract-assets', async (req, res) => {
     if (browser) {
       await browser.close().catch(() => {});
     }
+  }
+});
+
+app.get('/api/extract-typography', async (req, res) => {
+  const rawUrl = Array.isArray(req.query.url) ? req.query.url[0] : req.query.url;
+  const rawMaxSamples = Array.isArray(req.query.maxSamplesPerTag) ? req.query.maxSamplesPerTag[0] : req.query.maxSamplesPerTag;
+
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing url query parameter. Try /api/extract-typography?url=https://example.com',
+    });
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(rawUrl.trim());
+  } catch {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid URL. Use a full http/https URL such as https://example.com',
+    });
+  }
+
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return res.status(400).json({
+      success: false,
+      error: 'Only http/https URLs are supported.',
+    });
+  }
+
+  if (isDisallowedHost(parsedUrl.hostname)) {
+    return res.status(403).json({
+      success: false,
+      error: 'That host is not allowed. Please use a public website URL.',
+    });
+  }
+
+  const maxSamplesPerTag = Math.max(1, Math.min(10, Number(rawMaxSamples || 3)));
+
+  console.log('[extract-typography] Starting Playwright computed-style extraction.', {
+    url: parsedUrl.toString(),
+    hostname: parsedUrl.hostname,
+    maxSamplesPerTag,
+  });
+
+  try {
+    const typography = await extractTypography(parsedUrl.toString(), { maxSamplesPerTag });
+    console.log('[extract-typography] Extraction completed.', {
+      url: parsedUrl.toString(),
+      h1: typography.h1.length,
+      h2: typography.h2.length,
+      h3: typography.h3.length,
+      p: typography.p.length,
+    });
+
+    return res.json({
+      success: true,
+      url: parsedUrl.toString(),
+      typography,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown extraction error';
+    console.log('[extract-typography] Extraction failed.', {
+      url: parsedUrl.toString(),
+      error: message,
+    });
+
+    if (message.includes("Cannot find package 'playwright'")) {
+      return res.status(500).json({
+        success: false,
+        error: 'Playwright is not installed in this environment. Install it with: npm install playwright',
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: `Failed to extract typography: ${message}`,
+    });
+  }
+});
+
+app.get('/api/extract-color-palette', async (req, res) => {
+  const rawUrl = Array.isArray(req.query.url) ? req.query.url[0] : req.query.url;
+
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing url query parameter. Try /api/extract-color-palette?url=https://example.com',
+    });
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(rawUrl.trim());
+  } catch {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid URL. Use a full http/https URL such as https://example.com',
+    });
+  }
+
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return res.status(400).json({
+      success: false,
+      error: 'Only http/https URLs are supported.',
+    });
+  }
+
+  if (isDisallowedHost(parsedUrl.hostname)) {
+    return res.status(403).json({
+      success: false,
+      error: 'That host is not allowed. Please use a public website URL.',
+    });
+  }
+
+  console.log('[extract-color-palette] Starting Playwright + node-vibrant extraction.', {
+    url: parsedUrl.toString(),
+    hostname: parsedUrl.hostname,
+  });
+
+  try {
+    const colors = await extractColorPalette(parsedUrl.toString());
+    if (!colors) {
+      return res.status(502).json({
+        success: false,
+        error: 'Color clustering failed for this URL.',
+      });
+    }
+
+    console.log('[extract-color-palette] Extraction completed.', {
+      url: parsedUrl.toString(),
+      primaryAccent: colors.primaryAccent,
+      secondaryAccent: colors.secondaryAccent,
+      darkNeutral: colors.darkNeutral,
+      lightNeutral: colors.lightNeutral,
+    });
+
+    return res.json({
+      success: true,
+      url: parsedUrl.toString(),
+      colors,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown extraction error';
+    console.log('[extract-color-palette] Extraction failed.', {
+      url: parsedUrl.toString(),
+      error: message,
+    });
+
+    return res.status(500).json({
+      success: false,
+      error: `Failed to extract color palette: ${message}`,
+    });
   }
 });
 

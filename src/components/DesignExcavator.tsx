@@ -112,6 +112,22 @@ interface BrandVisualSelection {
   deterministicLogoUrl?: string;
 }
 
+interface LiveTypographyStyleSample {
+  fontFamily: string;
+  fontWeight: string;
+  fontSize: string;
+  lineHeight: string;
+  color: string;
+}
+
+interface LiveTypographyByTag {
+  h1: LiveTypographyStyleSample[];
+  h2: LiveTypographyStyleSample[];
+  h3: LiveTypographyStyleSample[];
+  p: LiveTypographyStyleSample[];
+  body: LiveTypographyStyleSample[];
+}
+
 interface SavedDeepDiveSearch {
   id: string;
   date: string;
@@ -762,6 +778,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   const [heroImages, setHeroImages] = useState<Record<string, string | null>>({});
   const [logoImages, setLogoImages] = useState<Record<string, string | null>>({});
   const requestedHeroRef = useRef<Set<string>>(new Set());
+  const [liveTypographyByBrand, setLiveTypographyByBrand] = useState<Record<string, LiveTypographyByTag | null>>({});
+  const requestedTypographyRef = useRef<Set<string>>(new Set());
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [recentResultsRefreshNonce, setRecentResultsRefreshNonce] = useState(0);
@@ -799,6 +817,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     setHeroImages({});
     setLogoImages({});
     requestedHeroRef.current.clear();
+    setLiveTypographyByBrand({});
+    requestedTypographyRef.current.clear();
     setToast(options?.singleRow ? 'Cleared search fields.' : 'Started a new search.');
     setActiveColorOverride(null);
     setIsPickingColor(false);
@@ -878,6 +898,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     setHeroImages({});
     setLogoImages({});
     requestedHeroRef.current.clear();
+    setLiveTypographyByBrand({});
+    requestedTypographyRef.current.clear();
     setToast('Loaded saved search.');
     const recentItem: DesignExcavatorRecentResult = {
       id: saved.id,
@@ -1055,6 +1077,46 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         .catch(() => {
           setLogoImages((prev) => ({ ...prev, [profile.brandName]: null }));
           setHeroImages((prev) => ({ ...prev, [profile.brandName]: null }));
+        });
+    });
+
+    report.brandProfiles.forEach((profile) => {
+      const website = profile.website;
+      if (!website || requestedTypographyRef.current.has(profile.brandName)) return;
+
+      requestedTypographyRef.current.add(profile.brandName);
+      const endpoint = `${proxyBase}/api/extract-typography?url=${encodeURIComponent(website)}&maxSamplesPerTag=3`;
+      console.log('[DesignExcavator] Requesting live typography extraction.', {
+        brandName: profile.brandName,
+        website,
+        endpoint,
+      });
+      fetch(endpoint)
+        .then((response) => (response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))))
+        .then((payload: {
+          success?: boolean;
+          typography?: LiveTypographyByTag;
+        }) => {
+          if (!payload?.success || !payload.typography) {
+            setLiveTypographyByBrand((prev) => ({ ...prev, [profile.brandName]: null }));
+            return;
+          }
+          setLiveTypographyByBrand((prev) => ({ ...prev, [profile.brandName]: payload.typography || null }));
+          console.log('[DesignExcavator] Received live typography extraction.', {
+            brandName: profile.brandName,
+            h1: payload.typography.h1?.length || 0,
+            h2: payload.typography.h2?.length || 0,
+            h3: payload.typography.h3?.length || 0,
+            p: payload.typography.p?.length || 0,
+          });
+        })
+        .catch((error) => {
+          console.log('[DesignExcavator] Live typography extraction failed; keeping fallback UI.', {
+            brandName: profile.brandName,
+            website,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          setLiveTypographyByBrand((prev) => ({ ...prev, [profile.brandName]: null }));
         });
     });
   }, [bestVisualsByBrand, report]);
@@ -1666,10 +1728,50 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             {report.brandProfiles.map((profile) => (
               <div key={`${profile.brandName}-typography`} className="inline-block w-full mb-4 break-inside-avoid rounded-2xl border border-zinc-200 p-4">
                 <p className="text-sm font-semibold text-zinc-900 mb-2">{profile.brandName}</p>
-                <p className="text-sm text-zinc-700 mb-1"><span className="font-medium">Families:</span> {profile.typography.fontFamilies.join(', ') || 'Not provided'}</p>
-                <p className="text-sm text-zinc-700"><span className="font-medium">H1:</span> {profile.typography.hierarchy.h1}</p>
-                <p className="text-sm text-zinc-700"><span className="font-medium">H2:</span> {profile.typography.hierarchy.h2}</p>
-                <p className="text-sm text-zinc-700"><span className="font-medium">Body:</span> {profile.typography.hierarchy.body}</p>
+                {profile.typography.fontFamilies.length > 0 ? (
+                  <p className="text-sm text-zinc-700 mb-1">
+                    <span className="font-medium">Families:</span>{' '}
+                    {profile.typography.fontFamilies.map((family, familyIndex) => {
+                      const parsedFamily = extractEvidenceTags(family || '');
+                      return (
+                        <span key={`${profile.brandName}-compare-family-${familyIndex}`} className="inline">
+                          {familyIndex > 0 ? ', ' : ''}
+                          {parsedFamily.cleanText || family}
+                          {parsedFamily.labels.map((label) => (
+                            <span
+                              key={`${profile.brandName}-compare-family-${familyIndex}-${label}`}
+                              className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}
+                            >
+                              {renderEvidenceLabel(label)}
+                            </span>
+                          ))}
+                        </span>
+                      );
+                    })}
+                  </p>
+                ) : (
+                  <p className="text-sm text-zinc-500 mb-1"><span className="font-medium">Families:</span> Not provided</p>
+                )}
+                {[
+                  { label: 'H1', value: profile.typography.hierarchy.h1 },
+                  { label: 'H2', value: profile.typography.hierarchy.h2 },
+                  { label: 'Body', value: profile.typography.hierarchy.body },
+                ].map(({ label, value }) => {
+                  const parsedValue = extractEvidenceTags(value || '');
+                  return (
+                    <p key={`${profile.brandName}-compare-${label}`} className="text-sm text-zinc-700">
+                      <span className="font-medium">{label}:</span> {parsedValue.cleanText || value || 'Not provided'}
+                      {parsedValue.labels.map((chipLabel) => (
+                        <span
+                          key={`${profile.brandName}-compare-${label}-${chipLabel}`}
+                          className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(chipLabel)}`}
+                        >
+                          {renderEvidenceLabel(chipLabel)}
+                        </span>
+                      ))}
+                    </p>
+                  );
+                })}
               </div>
             ))}
           </div>
@@ -3157,7 +3259,23 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                           {profile.typography.fontFamilies.length > 0 ? (
                             <p className="text-sm text-zinc-700">
                               <span className="font-medium text-zinc-900">Families:</span>{' '}
-                              {profile.typography.fontFamilies.join(', ')}
+                              {profile.typography.fontFamilies.map((family, familyIndex) => {
+                                const parsedFamily = extractEvidenceTags(family || '');
+                                return (
+                                  <span key={`${profile.brandName}-family-${familyIndex}`} className="inline">
+                                    {familyIndex > 0 ? ', ' : ''}
+                                    {parsedFamily.cleanText || family}
+                                    {parsedFamily.labels.map((label) => (
+                                      <span
+                                        key={`${profile.brandName}-family-${familyIndex}-${label}`}
+                                        className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}
+                                      >
+                                        {renderEvidenceLabel(label)}
+                                      </span>
+                                    ))}
+                                  </span>
+                                );
+                              })}
                             </p>
                           ) : (
                             <p className="text-sm text-zinc-500">No typography families documented.</p>
@@ -3167,12 +3285,26 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                               { label: 'H1', value: profile.typography.hierarchy.h1 },
                               { label: 'H2', value: profile.typography.hierarchy.h2 },
                               { label: 'Body', value: profile.typography.hierarchy.body },
-                            ].map(({ label, value }) => value && (
-                              <div key={label} className="bg-white rounded-lg p-2 border border-zinc-100">
-                                <p className="text-[10px] font-bold text-zinc-400 uppercase mb-0.5">{label}</p>
-                                <p className="text-xs text-zinc-700 leading-tight">{value}</p>
-                              </div>
-                            ))}
+                            ].map(({ label, value }) => {
+                              if (!value) return null;
+                              const parsedValue = extractEvidenceTags(value);
+                              return (
+                                <div key={label} className="bg-white rounded-lg p-2 border border-zinc-100">
+                                  <p className="text-[10px] font-bold text-zinc-400 uppercase mb-0.5">{label}</p>
+                                  <p className="text-xs text-zinc-700 leading-tight">
+                                    {parsedValue.cleanText || value}
+                                    {parsedValue.labels.map((chipLabel) => (
+                                      <span
+                                        key={`${profile.brandName}-${label}-${chipLabel}`}
+                                        className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(chipLabel)}`}
+                                      >
+                                        {renderEvidenceLabel(chipLabel)}
+                                      </span>
+                                    ))}
+                                  </p>
+                                </div>
+                              );
+                            })}
                           </div>
                           {!profile.typography.hierarchy.h1 && !profile.typography.hierarchy.h2 && !profile.typography.hierarchy.body && (
                             <p className="text-sm text-zinc-500 mt-2">No typography hierarchy documented.</p>
@@ -3186,6 +3318,50 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                           {profile.typography.usageRules.length === 0 && (
                             <p className="text-sm text-zinc-500 mt-2">No typography usage rules documented.</p>
                           )}
+                          <div className="mt-3">
+                            <p className="text-xs font-medium text-zinc-500 mb-1">Live Website Styles</p>
+                            {(() => {
+                              const liveTypography = liveTypographyByBrand[profile.brandName];
+                              const samplesByTag: Array<{ tag: 'h1' | 'h2' | 'h3' | 'p'; label: string; samples: LiveTypographyStyleSample[] }> = [
+                                { tag: 'h1', label: 'H1', samples: liveTypography?.h1 || [] },
+                                { tag: 'h2', label: 'H2', samples: liveTypography?.h2 || [] },
+                                { tag: 'h3', label: 'H3', samples: liveTypography?.h3 || [] },
+                                { tag: 'p', label: 'Body', samples: liveTypography?.p || [] },
+                              ];
+                              const hasAnyLiveSamples = samplesByTag.some((entry) => entry.samples.length > 0);
+
+                              if (!hasAnyLiveSamples) {
+                                return (
+                                  <p className="text-xs text-zinc-500" data-testid={`live-typography-empty-${idx}`}>
+                                    No live website typography samples available.
+                                  </p>
+                                );
+                              }
+
+                              return (
+                                <div className="space-y-1.5">
+                                  {samplesByTag.map((entry) => (
+                                    <div key={`${profile.brandName}-live-typography-${entry.tag}`} className="text-xs text-zinc-600">
+                                      <span className="font-semibold text-zinc-700">{entry.label}:</span>{' '}
+                                      {entry.samples.slice(0, 2).map((sample, sampleIndex) => (
+                                        <span
+                                          key={`${profile.brandName}-live-typography-${entry.tag}-${sampleIndex}`}
+                                          className="inline-flex items-center gap-1 mr-2 mb-1 px-2 py-1 rounded-md bg-white border border-zinc-200"
+                                        >
+                                          <span className="truncate max-w-[160px]" title={sample.fontFamily}>{sample.fontFamily || 'N/A'}</span>
+                                          <span className="text-zinc-400">•</span>
+                                          <span>{sample.fontWeight || 'N/A'}</span>
+                                          <span className="text-zinc-400">•</span>
+                                          <span>{sample.fontSize || 'N/A'}/{sample.lineHeight || 'N/A'}</span>
+                                          <span className="inline-block w-3 h-3 rounded border border-zinc-300" style={{ backgroundColor: sample.color || 'transparent' }} />
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                          </div>
                         </div>
 
                         {/* Supporting Visual Elements Box */}

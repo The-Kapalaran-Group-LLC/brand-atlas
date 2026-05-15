@@ -6,6 +6,7 @@ import {
   buildBrandDeepDiveQuestionSearchTopic,
   computeRetryDelayMs,
   buildHardDesignTokenRulesBlock,
+  buildLiveTypographyEvidenceBlock,
   buildMatrixQuestionSearchTopic,
   buildBrandModeSubQueries,
   deriveRecentNewsFromSources,
@@ -298,6 +299,14 @@ describe('brand evidence query helpers', () => {
     expect(queries[0]).toContain('"brand identity"');
     expect(queries[1]).toContain('site:sec.gov');
     expect(queries[2]).toContain('site:adweek.com');
+  });
+});
+
+describe('live typography evidence block', () => {
+  it('renders stable fallback text when no typography evidence is available', () => {
+    const block = buildLiveTypographyEvidenceBlock([]);
+    expect(block).toContain('LIVE TYPOGRAPHY EVIDENCE');
+    expect(block).toContain('Not available');
   });
 });
 

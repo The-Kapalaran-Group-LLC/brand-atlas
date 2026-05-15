@@ -583,6 +583,7 @@ describe('BrandDeepDivePage', () => {
     expect(screen.getByText('No accent colors documented.')).toBeInTheDocument();
     expect(screen.getByText('No neutral colors documented.')).toBeInTheDocument();
     expect(screen.getByText('No typography families documented.')).toBeInTheDocument();
+    expect(screen.getByText('No live website typography samples available.')).toBeInTheDocument();
   });
 
   it('shows the Compare tab when multiple brands are entered', async () => {
@@ -665,6 +666,15 @@ describe('BrandDeepDivePage', () => {
             ...sampleReport.brandProfiles[0].logo,
             mainLogo: '[INFERRED] Primary Delta wordmark + red triangular symbol.',
             wordmarkLogotype: '[INFERRED] Sans-serif Delta wordmark in a clean service style.',
+          },
+          typography: {
+            ...sampleReport.brandProfiles[0].typography,
+            fontFamilies: ['[INFERRED] Neue Haas Grotesk Display Pro'],
+            hierarchy: {
+              h1: '[INFERRED] Heavy display style for hero headlines.',
+              h2: '[INFERRED] Medium-to-semibold subheads.',
+              body: '[INFERRED] Clean sans serif for body copy.',
+            },
           },
         },
       ],
