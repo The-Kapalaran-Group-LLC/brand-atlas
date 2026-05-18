@@ -1810,7 +1810,7 @@ export default function BrandNavigator() {
               )}
             </AnimatePresence>
             <div className="mt-4 mb-3 px-2 sm:hidden">
-              <p data-testid="mobile-page-subcopy" className="text-left text-lg text-zinc-500">
+              <p data-testid="mobile-page-subcopy" className="text-center text-lg font-semibold text-zinc-600">
                 Audit any brand or competitive landscape.
               </p>
             </div>

@@ -2645,7 +2645,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
           )}
         </AnimatePresence>
         <div className="mt-16 mb-6 px-2 sm:hidden">
-          <p data-testid="mobile-page-subcopy" className="text-left text-lg text-zinc-500">
+          <p data-testid="mobile-page-subcopy" className="text-center text-lg font-semibold text-zinc-600">
             Compare visual identity systems across 1-6 brands.
           </p>
         </div>

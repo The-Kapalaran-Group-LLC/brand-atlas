@@ -2130,7 +2130,7 @@ export default function CulturalArchaeologist() {
               )}
             </AnimatePresence>
             <div className="mt-16 mb-6 px-2 sm:hidden">
-              <p data-testid="mobile-page-subcopy" className="text-left text-lg text-zinc-500">
+              <p data-testid="mobile-page-subcopy" className="text-center text-lg font-semibold text-zinc-600">
                 Deep dive into any culture or audience.
               </p>
             </div>
