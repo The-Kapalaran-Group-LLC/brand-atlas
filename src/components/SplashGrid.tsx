@@ -386,6 +386,7 @@ export function SplashGrid({
     let elapsedSeconds = 0;
     let lastFrameNow = 0;
     let adaptiveQualityStep = qualityMode === 'fast' ? 2 : 0;
+    let isMobileViewport = false;
     let dragYaw = 0;
     let dragPitch = 0;
     let isPointerDown = false;
@@ -410,6 +411,7 @@ export function SplashGrid({
       dpr = Math.min(dprCap, window.devicePixelRatio || 1);
       width = canvas.clientWidth || window.innerWidth;
       height = canvas.clientHeight || window.innerHeight;
+      isMobileViewport = width <= 640;
       canvas.width = Math.floor(width * dpr);
       canvas.height = Math.floor(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1037,7 +1039,7 @@ export function SplashGrid({
         const scale = DEPTH / (DEPTH - z2);
         return { x: x1, y: y2, z: z2, scale };
       };
-      const snapToPixel = (value: number) => Math.round(value) + 0.5;
+      const snapToPixel = (value: number) => (isMobileViewport ? value : Math.round(value) + 0.5);
 
       // Keep geopolitical outlines intentionally very thin so they read as subtle structure.
       const lineWidthBase = mode === 'countryOutline' ? 0.66 : 0.13;
@@ -1108,7 +1110,10 @@ export function SplashGrid({
       lastFrameNow = now;
       const frameDeltaMs = getFrameDeltaMs(rawDeltaMs);
       elapsedSeconds += frameDeltaMs * 0.001;
-      adaptiveQualityStep = getNextQualityStep(adaptiveQualityStep, rawDeltaMs);
+      const qualityDeltaMs = isMobileViewport
+        ? Math.min(rawDeltaMs, 30)
+        : rawDeltaMs;
+      adaptiveQualityStep = getNextQualityStep(adaptiveQualityStep, qualityDeltaMs);
 
       ctx.clearRect(0, 0, width, height);
 
