@@ -1809,7 +1809,7 @@ export default function BrandNavigator() {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div className="mt-16 mb-6 px-2 sm:hidden">
+            <div className="mt-4 mb-3 px-2 sm:hidden">
               <p data-testid="mobile-page-subcopy" className="text-left text-lg text-zinc-500">
                 Audit any brand or competitive landscape.
               </p>
@@ -1889,7 +1889,7 @@ export default function BrandNavigator() {
 
         {/* Google Slides export and modal removed for Supabase-only version */}
 
-        <div className="mb-16 flex flex-col items-center text-center no-print pt-20 sm:pt-14">
+        <div className="mb-16 flex flex-col items-center text-center no-print pt-6 sm:pt-14">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1939,7 +1939,7 @@ export default function BrandNavigator() {
             transition={{ duration: 0.5, delay: 0.1 }}
             onSubmit={handleGenerate}
             noValidate
-            className={`w-full max-w-4xl mt-10 relative flex flex-col gap-4 pb-24 sm:pb-0 ${isResearchControlsMinimized ? 'hidden' : ''}`}
+            className={`w-full max-w-4xl mt-4 sm:mt-10 relative flex flex-col gap-4 pb-24 sm:pb-0 ${isResearchControlsMinimized ? 'hidden' : ''}`}
           >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start content-start">
               <div className="relative flex flex-col w-full self-start" ref={brandDropdownRef}>
