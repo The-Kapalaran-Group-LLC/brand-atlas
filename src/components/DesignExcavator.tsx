@@ -2645,11 +2645,12 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             </motion.div>
           )}
         </AnimatePresence>
-        <div className="mt-[2px] mb-[2px] px-2 sm:hidden">
+        <div className="mt-[2px] mb-0 px-2 sm:hidden">
           <MobileTwoLineSubcopy>
             Compare visual identity systems across brands.
           </MobileTwoLineSubcopy>
         </div>
+        <div data-testid="mobile-subcopy-spacer" className="h-[2px] sm:hidden" aria-hidden="true" />
         <div className="absolute top-6 left-6 z-50 no-print hidden sm:block">
           <a
             href="/?home=1"
@@ -2775,7 +2776,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         className={`w-full relative flex flex-col gap-4 space-y-4 ${isSearchControlsMinimized ? 'hidden' : ''}`}
       >
         <div>
-          <div className="mt-[2px] sm:mt-0 flex items-center justify-between mb-3">
+          <div className="mt-0 sm:mt-0 flex items-center justify-between mb-3">
             <h3 className="m-0 text-sm font-semibold uppercase tracking-wider text-zinc-500">Brands To Analyze</h3>
             <span className="text-xs text-zinc-400">{brandCount}/6 brands </span>
           </div>
