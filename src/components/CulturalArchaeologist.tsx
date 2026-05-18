@@ -2129,8 +2129,8 @@ export default function CulturalArchaeologist() {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div className="mt-16 mb-6 px-2 sm:hidden">
-              <p data-testid="mobile-page-subcopy" className="text-center text-lg font-semibold text-zinc-600">
+            <div className="mt-0 mb-3 px-2 sm:hidden">
+              <p data-testid="mobile-page-subcopy" className="text-center text-[1.91rem] font-semibold tracking-tight text-zinc-900">
                 Deep dive into any culture or audience.
               </p>
             </div>
