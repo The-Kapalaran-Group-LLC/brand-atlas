@@ -2775,7 +2775,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         className={`w-full relative flex flex-col gap-4 space-y-4 ${isSearchControlsMinimized ? 'hidden' : ''}`}
       >
         <div>
-          <div className="flex items-center justify-between mb-3">
+          <div className="mt-[2px] sm:mt-0 flex items-center justify-between mb-3">
             <h3 className="m-0 text-sm font-semibold uppercase tracking-wider text-zinc-500">Brands To Analyze</h3>
             <span className="text-xs text-zinc-400">{brandCount}/6 brands </span>
           </div>

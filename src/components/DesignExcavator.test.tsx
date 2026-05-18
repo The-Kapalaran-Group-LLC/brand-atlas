@@ -275,6 +275,7 @@ describe('BrandDeepDivePage', () => {
     expect(mobileSubcopy.parentElement?.className).toContain('mb-[2px]');
     const brandsHeading = screen.getByText('Brands To Analyze');
     expect(brandsHeading.className).toContain('m-0');
+    expect(brandsHeading.parentElement?.className).toContain('mt-[2px]');
 
     const mobileNavTrigger = screen.getByTestId('mobile-nav-trigger');
     const actionContainer = screen.getByTestId('top-action-buttons');
