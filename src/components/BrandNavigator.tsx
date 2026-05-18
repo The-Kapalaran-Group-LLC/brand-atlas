@@ -67,6 +67,7 @@ import {
   type RecentResultRecord,
 } from '../services/recent-results-storage';
 import { saveDesignExcavatorPrefill } from '../services/design-excavator-prefill';
+import { MobileTwoLineSubcopy } from './MobileTwoLineSubcopy';
 
 const BRAND_NAVIGATOR_TABLE = 'Brand_Navigator';
 
@@ -1810,9 +1811,9 @@ export default function BrandNavigator() {
               )}
             </AnimatePresence>
             <div className="mt-[2px] mb-[2px] px-2 sm:hidden">
-              <p data-testid="mobile-page-subcopy" className="text-center text-[1.91rem] font-semibold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">
+              <MobileTwoLineSubcopy>
                 Audit any brand or competitive landscape.
-              </p>
+              </MobileTwoLineSubcopy>
             </div>
             <div className="absolute top-6 left-6 z-50 no-print hidden sm:block">
               <button
