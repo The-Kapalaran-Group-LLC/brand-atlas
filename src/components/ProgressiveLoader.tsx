@@ -101,7 +101,7 @@ export function ProgressiveLoader({
   return (
     <span className={`inline-flex w-full min-w-0 flex-col items-center gap-1 ${className}`.trim()}>
       <span className="flex w-full min-w-0 items-start justify-center gap-2">
-        <span className="min-w-0 whitespace-normal text-center leading-tight break-words sm:whitespace-nowrap">
+        <span className="min-w-0 h-[2.4em] overflow-hidden whitespace-normal text-center leading-tight break-words sm:h-auto sm:overflow-visible sm:whitespace-nowrap">
           {currentMessage}
         </span>
         {showProgress && <span className="shrink-0 tabular-nums font-mono relative">{Math.round(displayedProgress)}%</span>}

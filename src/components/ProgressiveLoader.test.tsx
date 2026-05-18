@@ -16,6 +16,8 @@ describe('ProgressiveLoader', () => {
     const message = screen.getByText('Collecting brand ecosystem snapshots...');
     expect(message.className).toContain('whitespace-normal');
     expect(message.className).toContain('break-words');
+    expect(message.className).toContain('h-[2.4em]');
+    expect(message.className).toContain('overflow-hidden');
     expect(message.className).toContain('sm:whitespace-nowrap');
   });
 });
