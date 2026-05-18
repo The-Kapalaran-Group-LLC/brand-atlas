@@ -294,8 +294,11 @@ describe('BrandNavigator', () => {
     expect(Boolean(mobileTitle.compareDocumentPosition(mobileIcon) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     const mobileSubcopy = screen.getByTestId('mobile-page-subcopy');
     expect(mobileSubcopy).toHaveTextContent('Audit any brand or competitive landscape.');
-    expect(mobileSubcopy.parentElement?.className).toContain('mt-4');
-    expect(mobileSubcopy.parentElement?.className).toContain('mb-3');
+    expect(mobileSubcopy.className).toContain('bg-gradient-to-r');
+    expect(mobileSubcopy.className).toContain('from-indigo-500');
+    expect(mobileSubcopy.className).toContain('to-fuchsia-500');
+    expect(mobileSubcopy.parentElement?.className).toContain('mt-[2px]');
+    expect(mobileSubcopy.parentElement?.className).toContain('mb-[2px]');
 
     const mobileNavTrigger = await screen.findByTestId('mobile-nav-trigger');
     const actionContainer = await screen.findByTestId('top-action-buttons');
