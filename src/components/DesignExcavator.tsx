@@ -2645,11 +2645,13 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             </motion.div>
           )}
         </AnimatePresence>
-        <div className="mt-[2px] mb-[2px] px-2 sm:hidden">
-          <MobileTwoLineSubcopy>
-            Compare visual identity systems across brands.
-          </MobileTwoLineSubcopy>
-        </div>
+        {!report && (
+          <div className="mt-[2px] mb-[2px] px-2 sm:hidden">
+            <MobileTwoLineSubcopy>
+              Compare visual identity systems across brands.
+            </MobileTwoLineSubcopy>
+          </div>
+        )}
         <div className="absolute top-6 left-6 z-50 no-print hidden sm:block">
           <a
             href="/?home=1"

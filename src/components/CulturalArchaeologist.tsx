@@ -2130,11 +2130,13 @@ export default function CulturalArchaeologist() {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div className="mt-[2px] mb-[2px] px-2 sm:hidden">
-              <MobileTwoLineSubcopy>
-                Deep dive into any culture or audience.
-              </MobileTwoLineSubcopy>
-            </div>
+            {!matrix && (
+              <div className="mt-[2px] mb-[2px] px-2 sm:hidden">
+                <MobileTwoLineSubcopy>
+                  Deep dive into any culture or audience.
+                </MobileTwoLineSubcopy>
+              </div>
+            )}
             <div className="absolute top-6 left-6 z-50 no-print hidden sm:block">
               <button
                 onClick={() => navigateToHomeDashboard()}
