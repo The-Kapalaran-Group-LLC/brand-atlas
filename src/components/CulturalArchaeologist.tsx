@@ -6,7 +6,7 @@ import { getUserTelemetry } from '../services/telemetry';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { Search, Loader2, Sparkles, FileText, Presentation, ExternalLink, Info, Tag, Users, Filter, ChevronDown, Check, Clock, Trash2, Target, Upload, X, RefreshCw, Calendar, Activity, Palette, ArrowLeft } from 'lucide-react';
+import { Search, Loader2, Sparkles, FileText, Presentation, ExternalLink, Info, Tag, Users, Filter, ChevronDown, Check, Clock, Trash2, Target, Upload, X, RefreshCw, Calendar, Activity, Palette, ArrowLeft, Menu } from 'lucide-react';
 import { CompassRoseIcon } from './icons/CompassRoseIcon';
 import { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport, CulturalRerunFilters } from '../services/azure-openai';
 import { generateCulturalMatrix, suggestBrands, askMatrixQuestion, generateDeepDive, generateDeepDivesBatch } from '../services/azure-openai';
@@ -108,6 +108,8 @@ const MATRIX_INSIGHT_KEYS: MatrixInsightKey[] = [
 
 const CONFIDENCE_FILTERS: ConfidenceLevelFilter[] = ['high', 'medium', 'low'];
 const EVIDENCE_FILTERS: EvidenceLabelFilter[] = ['known', 'inferred', 'speculative'];
+const CULTURAL_ARCHAEOLOGIST_TABLE = 'Cultural_Archaeologist';
+const CULTURAL_ARCHAEOLOGIST_TABLE_CANDIDATES = [CULTURAL_ARCHAEOLOGIST_TABLE, 'CulturalArchaeologist', 'searches'] as const;
 const TREND_STAGE_FILTERS: TrendStageFilter[] = ['peaking', 'emerging', 'declining'];
 
 const isMissingResultTextValue = (value?: string | null): boolean => {
@@ -496,6 +498,9 @@ export default function CulturalArchaeologist() {
   const [isSplashManualMode, setIsSplashManualMode] = useState(false);
   const [activeExperience, setActiveExperience] = useState<'research' | 'brand' | null>(initialExperience);
   const [hasOpenedBrand, setHasOpenedBrand] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isMobileTopBarVisible, setIsMobileTopBarVisible] = useState(true);
+  const lastMobileScrollYRef = useRef(0);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [brandInput, setBrandInput] = useState('');
   const [audience, setAudience] = useState('');
@@ -529,6 +534,7 @@ export default function CulturalArchaeologist() {
   const [isVocabularyOpen, setIsVocabularyOpen] = useState(false);
   
   const [savedMatrices, setSavedMatrices] = useState<SavedMatrix[]>([]);
+  const [resolvedCulturalTable, setResolvedCulturalTable] = useState<string>(CULTURAL_ARCHAEOLOGIST_TABLE);
   const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState(false);
   const brandDropdownRef = useRef<HTMLDivElement>(null);
   
@@ -627,6 +633,33 @@ export default function CulturalArchaeologist() {
   const hasVisibleInsights =
     !!displayMatrix && MATRIX_INSIGHT_KEYS.some((key) => (displayMatrix[key] || []).length > 0);
   const structuredMatrixAnswer = useMemo(() => structureAskAnswer(matrixAnswer), [matrixAnswer]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleMobileHeaderScroll = () => {
+      const currentScrollY = window.scrollY || 0;
+      const previousScrollY = lastMobileScrollYRef.current;
+
+      if (currentScrollY <= 0) {
+        setIsMobileTopBarVisible(true);
+        lastMobileScrollYRef.current = 0;
+        return;
+      }
+
+      if (currentScrollY > previousScrollY + 4) {
+        setIsMobileTopBarVisible(false);
+        setIsMobileNavOpen(false);
+      } else if (currentScrollY < previousScrollY - 4) {
+        setIsMobileTopBarVisible(true);
+      }
+
+      lastMobileScrollYRef.current = currentScrollY;
+    };
+
+    lastMobileScrollYRef.current = window.scrollY || 0;
+    window.addEventListener('scroll', handleMobileHeaderScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleMobileHeaderScroll);
+  }, []);
 
   const loadSavedMatrix = (sm: SavedMatrix, shouldScroll = false) => {
     const parsedBrands = parseBrandsInput(sm.brand || '');
@@ -882,12 +915,43 @@ export default function CulturalArchaeologist() {
   // Load saved matrices from Supabase
   useEffect(() => {
     const fetchSavedMatrices = async () => {
-      const { data, error } = await supabase
-        .from('searches')
-        .select('*')
-        .order('createdAt', { ascending: false })
-        .limit(20);
-      if (!error) setSavedMatrices(data || []);
+      const orderColumns = ['createdAt', 'created_at'];
+      console.log('[CulturalArchaeologist] Loading saved matrices from Supabase.', {
+        tableCandidates: CULTURAL_ARCHAEOLOGIST_TABLE_CANDIDATES,
+        orderColumns,
+      });
+
+      for (const tableName of CULTURAL_ARCHAEOLOGIST_TABLE_CANDIDATES) {
+        for (const orderColumn of orderColumns) {
+          const { data, error } = await supabase
+            .from(tableName)
+            .select('*')
+            .order(orderColumn, { ascending: false })
+            .limit(20);
+
+          if (!error) {
+            console.log('[CulturalArchaeologist] Loaded saved matrices from Supabase.', {
+              tableName,
+              orderColumn,
+              count: Array.isArray(data) ? data.length : 0,
+            });
+            setResolvedCulturalTable(tableName);
+            setSavedMatrices((data as SavedMatrix[]) || []);
+            return;
+          }
+
+          console.log('[CulturalArchaeologist] Supabase saved-matrix load attempt failed.', {
+            tableName,
+            orderColumn,
+            errorCode: error?.code,
+            errorMessage: error?.message,
+            errorHint: error?.hint,
+          });
+        }
+      }
+
+      setSavedMatrices([]);
+      setSaveWarning('Could not load saved reports. Confirm table name, RLS policies, and refresh.');
     };
     fetchSavedMatrices();
   }, []);
@@ -1158,7 +1222,7 @@ export default function CulturalArchaeologist() {
 
       try {
         const { device, location, ip_address } = await getUserTelemetry();
-        const { error: saveError } = await supabase.from('searches').insert([
+        const { error: saveError } = await supabase.from(resolvedCulturalTable).insert([
           {
             brand: brandContextValue || null,
             audience: audienceValue,
@@ -1433,7 +1497,7 @@ export default function CulturalArchaeologist() {
   };
 
   const deleteSavedMatrix = async (id: string) => {
-    await supabase.from('searches').delete().eq('id', id);
+    await supabase.from(resolvedCulturalTable).delete().eq('id', id);
     // Optionally, refresh saved matrices here
   };
 
@@ -1969,22 +2033,6 @@ export default function CulturalArchaeologist() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {!showSplash && activeExperience === null && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.6, ease: 'easeOut' }}
-            className="fixed inset-0 z-[1] pointer-events-none overflow-hidden"
-          >
-            <div className="absolute inset-x-0 top-[64px] -bottom-[64px]">
-              <SplashGrid sizeMultiplier={1.25} qualityMode="fast" startLongitude={-74.006} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Soft Dialpad-style background gradient */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] rounded-full bg-indigo-200/30 blur-[120px]" />
@@ -2010,7 +2058,83 @@ export default function CulturalArchaeologist() {
 
         {activeExperience === 'research' && (
           <>
-            <div className="absolute top-4 left-4 right-4 z-50 no-print sm:top-6 sm:left-6 sm:right-auto">
+            <div
+              data-testid="mobile-top-bar"
+              className={`fixed top-0 left-0 right-0 z-[60] no-print border-b border-zinc-200/80 bg-white/92 backdrop-blur-sm transition-transform duration-200 sm:hidden ${isMobileTopBarVisible ? 'translate-y-0' : '-translate-y-full'}`}
+            >
+              <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
+                <button
+                  type="button"
+                  data-testid="mobile-nav-trigger"
+                  aria-expanded={isMobileNavOpen}
+                  aria-label="Open navigation menu"
+                  onClick={() => setIsMobileNavOpen((prev) => !prev)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white/90 text-zinc-700 shadow-sm backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-zinc-500/50"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+                <div data-testid="mobile-page-heading" className="ml-auto inline-flex min-w-0 items-center justify-end gap-2">
+                  <p data-testid="mobile-page-title" className="truncate text-right text-sm font-semibold text-zinc-900">Cultural Archaeologist</p>
+                  <div data-testid="mobile-page-icon" className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-indigo-600">
+                    <Search className="h-4 w-4" />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <AnimatePresence>
+              {isMobileNavOpen && (
+                <motion.div
+                  data-testid="mobile-nav-menu"
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="fixed top-16 left-4 right-4 z-[55] rounded-2xl border border-zinc-200 bg-white/95 p-2 shadow-lg backdrop-blur-sm no-print sm:hidden"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileNavOpen(false);
+                      navigateToHomeDashboard();
+                    }}
+                    className="inline-flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back to Home
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileNavOpen(false);
+                      navigateToHashRoute('brand-navigator');
+                    }}
+                    className="inline-flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    <CompassRoseIcon className="w-4 h-4" />
+                    Brand Navigator
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileNavOpen(false);
+                      navigateToHashRoute('design-excavator');
+                    }}
+                    className="inline-flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    <Palette className="w-4 h-4" />
+                    Design Excavator
+                    <span className="ml-1 inline-block rounded-full border border-indigo-200 bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
+                      Beta
+                    </span>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <div className="mt-16 mb-6 px-2 sm:hidden">
+              <p data-testid="mobile-page-subcopy" className="text-left text-lg text-zinc-500">
+                Deep dive into any culture or audience.
+              </p>
+            </div>
+            <div className="absolute top-6 left-6 z-50 no-print hidden sm:block">
               <button
                 onClick={() => navigateToHomeDashboard()}
                 className="inline-flex h-10 items-center gap-2 text-sm font-medium leading-none text-zinc-500 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400/40 focus:ring-offset-2 rounded-md"
@@ -2022,7 +2146,7 @@ export default function CulturalArchaeologist() {
             {/* Top Navigation / Actions */}
             <div
               data-testid="top-action-buttons"
-              className="absolute top-20 left-4 right-4 z-50 no-print flex flex-col items-stretch gap-2 sm:top-6 sm:left-auto sm:right-6 sm:w-auto sm:flex-row sm:items-center sm:justify-end sm:gap-2"
+              className="absolute top-6 left-auto right-6 z-50 no-print hidden sm:flex sm:w-auto sm:flex-row sm:items-center sm:justify-end sm:gap-2"
             >
               <button
                 onClick={() => navigateToHashRoute('brand-navigator')}
@@ -2427,11 +2551,12 @@ export default function CulturalArchaeologist() {
           )}
         </AnimatePresence>
 
-        <div className="flex flex-col items-center text-center mb-16 no-print pt-28 sm:pt-14">
+        <div className="mb-16 flex flex-col items-center text-center no-print pt-20 sm:pt-14">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
+            className="hidden sm:block"
           >
             <div className="inline-flex items-center justify-center p-2 bg-white rounded-2xl shadow-sm border border-zinc-200/50 mb-8">
               <Search className="w-5 h-5 text-indigo-500" />
@@ -2882,31 +3007,43 @@ export default function CulturalArchaeologist() {
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-[288px] mx-auto px-4 py-4 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-zinc-900/50 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all flex items-center justify-center gap-2 text-sm mt-2 select-none relative overflow-hidden"
-            >
-              {isLoading ? (
-                <ProgressiveLoader
-                  messages={[
-                    'Scanning latest audience signals...',
-                    'Synthesizing cultural tensions...',
-                    'Ranking highest-potency insights...',
-                    'Shaping strategist-ready output...',
-                  ]}
-                  className="text-xs whitespace-nowrap leading-none"
-                  showProgress
-                  progress={fakeProgress}
-                  averageDurationMs={4000}
-                />
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5" /> Generate Insights
-                </>
-              )}
-              {/* Progress bar is now rendered inside ProgressiveLoader for alignment with % */}
-            </button>
+            <div className="mt-2 mx-auto flex w-full max-w-[312px] items-stretch justify-center gap-2 sm:max-w-none sm:flex sm:justify-center">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-[252px] sm:w-[288px] px-4 py-4 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-zinc-900/50 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all flex items-center justify-center gap-2 text-sm select-none relative overflow-hidden"
+              >
+                {isLoading ? (
+                  <ProgressiveLoader
+                    messages={[
+                      'Scanning latest audience signals...',
+                      'Synthesizing cultural tensions...',
+                      'Ranking highest-potency insights...',
+                      'Shaping strategist-ready output...',
+                    ]}
+                    className="text-xs whitespace-nowrap leading-none"
+                    showProgress
+                    progress={fakeProgress}
+                    averageDurationMs={4000}
+                  />
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5" /> Generate Insights
+                  </>
+                )}
+                {/* Progress bar is now rendered inside ProgressiveLoader for alignment with % */}
+              </button>
+              <button
+                type="button"
+                data-testid="new-search-below-generate"
+                aria-label="New Search"
+                title="New Search"
+                onClick={handleReset}
+                className="inline-flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-2xl border border-zinc-200 bg-white text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-2 sm:hidden"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
 
             <p className="subheader-copy text-xs text-zinc-400 text-center mt-8">
               AI models can make mistakes. Always double check your work. Remember to think critically.

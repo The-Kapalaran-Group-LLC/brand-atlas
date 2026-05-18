@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { BrandDeepDivePage } from './DesignExcavator';
 
@@ -8,10 +8,47 @@ const { generateBrandDeepDive, submitBrandDeepDivePrompt, suggestBrandWebsite } 
   suggestBrandWebsite: vi.fn(),
 }));
 
+const { getUserTelemetryMock, supabaseFromMock, supabaseInsertMock, supabaseOrderMock } = vi.hoisted(() => ({
+  getUserTelemetryMock: vi.fn().mockResolvedValue({
+    device: 'test-device',
+    location: 'test-location',
+    ip_address: '127.0.0.1',
+  }),
+  supabaseFromMock: vi.fn(),
+  supabaseInsertMock: vi.fn((payload: unknown) => Promise.resolve({ data: [{ id: 'saved-id' }], error: null, payload })),
+  supabaseOrderMock: vi.fn(async () => ({ data: [], error: null })),
+}));
+
 vi.mock('../services/azure-openai', () => ({
   generateBrandDeepDive,
   submitBrandDeepDivePrompt,
   suggestBrandWebsite,
+}));
+
+vi.mock('../services/telemetry', () => ({
+  getUserTelemetry: getUserTelemetryMock,
+}));
+
+vi.mock('../services/supabase-client', () => ({
+  supabase: {
+    from: supabaseFromMock.mockImplementation(() => {
+      const builder: any = {};
+      builder.select = vi.fn(() => builder);
+      builder.order = supabaseOrderMock;
+      builder.insert = vi.fn((payload: unknown) => {
+        const insertResult = supabaseInsertMock(payload);
+        return {
+          data: [{ id: 'saved-id' }],
+          error: null,
+          select: vi.fn(async () => insertResult),
+        };
+      });
+      builder.update = vi.fn(() => builder);
+      builder.delete = vi.fn(() => builder);
+      builder.eq = vi.fn(async () => ({ data: null, error: null }));
+      return builder;
+    }),
+  },
 }));
 
 const sampleReport = {
@@ -108,6 +145,35 @@ describe('BrandDeepDivePage', () => {
       report: sampleReport,
     });
     suggestBrandWebsite.mockResolvedValue(null);
+    getUserTelemetryMock.mockResolvedValue({
+      device: 'test-device',
+      location: 'test-location',
+      ip_address: '127.0.0.1',
+    });
+  });
+
+  it('includes telemetry fields when saving generated reports to brandexcavator', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    await waitFor(() => {
+      expect(supabaseInsertMock).toHaveBeenCalled();
+    });
+
+    const firstInsertCall = supabaseInsertMock.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    expect(firstInsertCall?.[0]).toEqual(
+      expect.objectContaining({
+        device: 'test-device',
+        location: 'test-location',
+        ip_address: '127.0.0.1',
+      })
+    );
+    expect(supabaseFromMock).toHaveBeenCalledWith('brandexcavator');
+    expect(getUserTelemetryMock).toHaveBeenCalledTimes(1);
   });
 
   it('prefills brand names from Design Excavator prefill storage payload', async () => {
@@ -189,33 +255,63 @@ describe('BrandDeepDivePage', () => {
     }, { timeout: 5000 });
   });
 
-  it('renders top navigation actions as links so they can be opened in new tabs', () => {
+  it('uses a mobile hamburger for navigation links and keeps desktop top links at sm+', () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 
-    expect(screen.getByRole('link', { name: /back to home/i })).toHaveAttribute('href', '/?home=1');
-    const culturalLink = screen.getByRole('link', { name: /cultural archaeologist/i });
-    const brandLink = screen.getByRole('link', { name: /brand navigator/i });
-    const newSearchLink = screen.getByRole('link', { name: /new search/i });
-    const actionContainer = screen.getByTestId('top-action-buttons');
+    const mobileTopBar = screen.getByTestId('mobile-top-bar');
+    expect(mobileTopBar.className).toContain('fixed');
+    expect(mobileTopBar.className).toContain('top-0');
+    expect(mobileTopBar.className).toContain('translate-y-0');
+    expect(within(mobileTopBar).getByText('Design Excavator')).toBeInTheDocument();
+    const mobileTitle = within(mobileTopBar).getByTestId('mobile-page-title');
+    const mobileIcon = within(mobileTopBar).getByTestId('mobile-page-icon');
+    const mobileHeading = within(mobileTopBar).getByTestId('mobile-page-heading');
+    expect(mobileHeading.className).toContain('ml-auto');
+    expect(mobileHeading.className).toContain('justify-end');
+    expect(mobileTitle.className).toContain('text-right');
+    expect(Boolean(mobileTitle.compareDocumentPosition(mobileIcon) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(screen.getByTestId('mobile-page-subcopy')).toHaveTextContent('Compare visual identity systems across 1-6 brands.');
 
-    expect(culturalLink).toHaveAttribute('href', '/#cultural-archaeologist');
-    expect(brandLink).toHaveAttribute('href', '/#brand-navigator');
-    expect(newSearchLink).toHaveAttribute('href', '/#design-excavator');
-    expect(actionContainer.className).toContain('left-4');
+    const mobileNavTrigger = screen.getByTestId('mobile-nav-trigger');
+    const actionContainer = screen.getByTestId('top-action-buttons');
+    expect(actionContainer.className).toContain('hidden');
     expect(actionContainer.className).toContain('sm:flex-row');
-    expect(culturalLink.className).toContain('w-full');
-    expect(culturalLink.className).toContain('sm:w-auto');
-    expect(brandLink.className).toContain('w-full');
-    expect(brandLink.className).toContain('sm:w-auto');
-    expect(newSearchLink.className).toContain('w-full');
-    expect(newSearchLink.className).toContain('sm:w-auto');
+
+    Object.defineProperty(window, 'scrollY', { configurable: true, writable: true, value: 220 });
+    fireEvent.scroll(window);
+    expect(mobileTopBar.className).toContain('-translate-y-full');
+
+    Object.defineProperty(window, 'scrollY', { configurable: true, writable: true, value: 80 });
+    fireEvent.scroll(window);
+    expect(mobileTopBar.className).toContain('translate-y-0');
+
+    fireEvent.click(mobileNavTrigger);
+    const mobileMenu = screen.getByTestId('mobile-nav-menu');
+    expect(mobileMenu.className).toContain('fixed');
+    expect(mobileMenu.className).toContain('top-16');
+    expect(mobileMenu.className).toContain('left-4');
+    expect(mobileMenu.className).toContain('right-4');
+    expect(within(mobileMenu).getByRole('link', { name: /back to home/i })).toHaveAttribute('href', '/?home=1');
+    expect(within(mobileMenu).getByRole('link', { name: /cultural archaeologist/i })).toHaveAttribute('href', '/#cultural-archaeologist');
+    expect(within(mobileMenu).getByRole('link', { name: /brand navigator/i })).toHaveAttribute('href', '/#brand-navigator');
+    expect(within(mobileMenu).getByRole('link', { name: /design excavator/i })).toHaveAttribute('href', '/#design-excavator');
+  });
+
+  it('renders mobile New Search as an icon button to the right of generate visual analysis', () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+    const generateButton = screen.getByRole('button', { name: /generate visual analysis/i });
+    const newSearchButton = screen.getByTestId('new-search-below-generate');
+    expect(newSearchButton).toHaveAccessibleName(/new search/i);
+    expect(newSearchButton.className).toContain('sm:hidden');
+    expect(Boolean(generateButton.compareDocumentPosition(newSearchButton) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   });
 
   it('uses the same primary generate button size and font treatment as other research pages', () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 
     const generateButton = screen.getByRole('button', { name: /generate visual analysis/i });
-    expect(generateButton.className).toContain('w-[360px]');
+    expect(generateButton.className).toContain('w-[304px]');
+    expect(generateButton.className).toContain('sm:w-[360px]');
     expect(generateButton.className).toContain('px-4');
     expect(generateButton.className).toContain('py-4');
     expect(generateButton.className).toContain('text-sm');

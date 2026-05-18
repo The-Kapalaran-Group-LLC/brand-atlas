@@ -54,8 +54,12 @@
 - After every code update, ensure the local host network is running so changes can be viewed in-browser:
   - Start or confirm dev server with `npm run dev`.
   - Capture and report the actual active Vite local URL printed in terminal (for example: `http://127.0.0.1:3004/`).
+  - Also always report a working network URL using the same active Vite port in this format: `http://192.168.1.140:<PORT>/`.
+  - Treat both links as required output whenever `npm run dev` is used:
+    - Local link: `http://127.0.0.1:<PORT>/`
+    - Network link: `http://192.168.1.140:<PORT>/`
   - Verify a listener exists on the chosen localhost port (example: `lsof -nP -iTCP -sTCP:LISTEN | rg 3004`).
-  - Always share the active localhost network URL in the completion message.
+  - Always share both the active localhost URL and network URL in the completion message.
 - If you encounter the runtime/tooling error `stream disconnected before completion: response.failed event received`, continue the task and retry or proceed with the next safe step instead of stopping.
 
 ## Streaming Failure Retry Policy (Hardcoded)

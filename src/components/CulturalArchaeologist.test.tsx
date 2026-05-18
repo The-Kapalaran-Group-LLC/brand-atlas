@@ -132,6 +132,7 @@ describe('CulturalArchaeologist', () => {
     fireEvent.click(screen.getByRole('button', { name: /high/i }));
 
     expect(await screen.findByTestId('rerun-analysis-button')).toBeInTheDocument();
+    expect(supabaseFrom).toHaveBeenCalledWith('Cultural_Archaeologist');
   });
 
   it('shows per-section refresh for incomplete results and reruns a fresh search when clicked', async () => {
@@ -156,25 +157,56 @@ describe('CulturalArchaeologist', () => {
     });
   });
 
-  it('stacks top action controls on mobile and keeps auto sizing at sm+', async () => {
+  it('uses a mobile hamburger for navigation links and keeps desktop top links at sm+', async () => {
     render(<CulturalArchaeologist />);
 
+    const mobileTopBar = await screen.findByTestId('mobile-top-bar');
+    expect(mobileTopBar.className).toContain('fixed');
+    expect(mobileTopBar.className).toContain('top-0');
+    expect(mobileTopBar.className).toContain('translate-y-0');
+    expect(within(mobileTopBar).getByText('Cultural Archaeologist')).toBeInTheDocument();
+    const mobileTitle = within(mobileTopBar).getByTestId('mobile-page-title');
+    const mobileIcon = within(mobileTopBar).getByTestId('mobile-page-icon');
+    const mobileHeading = within(mobileTopBar).getByTestId('mobile-page-heading');
+    expect(mobileHeading.className).toContain('ml-auto');
+    expect(mobileHeading.className).toContain('justify-end');
+    expect(mobileTitle.className).toContain('text-right');
+    expect(Boolean(mobileTitle.compareDocumentPosition(mobileIcon) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(screen.getByTestId('mobile-page-subcopy')).toHaveTextContent('Deep dive into any culture or audience.');
+
+    const mobileNavTrigger = await screen.findByTestId('mobile-nav-trigger');
     const actionContainer = await screen.findByTestId('top-action-buttons');
-    const brandButton = screen.getByRole('button', { name: /brand navigator/i });
-    const designButton = screen.getByRole('button', { name: /design excavator/i });
-    const newSearchButton = screen.getByRole('button', { name: /new search/i });
-
-    expect(actionContainer.className).toContain('left-4');
-    expect(actionContainer.className).toContain('right-4');
-    expect(actionContainer.className).toContain('sm:left-auto');
+    expect(actionContainer.className).toContain('hidden');
     expect(actionContainer.className).toContain('sm:flex-row');
+    expect(actionContainer.className).toContain('left-auto');
 
-    expect(brandButton.className).toContain('w-full');
-    expect(brandButton.className).toContain('sm:w-auto');
-    expect(designButton.className).toContain('w-full');
-    expect(designButton.className).toContain('sm:w-auto');
-    expect(newSearchButton.className).toContain('w-full');
-    expect(newSearchButton.className).toContain('sm:w-auto');
+    Object.defineProperty(window, 'scrollY', { configurable: true, writable: true, value: 180 });
+    fireEvent.scroll(window);
+    expect(mobileTopBar.className).toContain('-translate-y-full');
+
+    Object.defineProperty(window, 'scrollY', { configurable: true, writable: true, value: 40 });
+    fireEvent.scroll(window);
+    expect(mobileTopBar.className).toContain('translate-y-0');
+
+    fireEvent.click(mobileNavTrigger);
+
+    const mobileMenu = await screen.findByTestId('mobile-nav-menu');
+    expect(mobileMenu.className).toContain('fixed');
+    expect(mobileMenu.className).toContain('top-16');
+    expect(mobileMenu.className).toContain('left-4');
+    expect(mobileMenu.className).toContain('right-4');
+    expect(within(mobileMenu).getByRole('button', { name: /back to home/i })).toBeInTheDocument();
+    expect(within(mobileMenu).getByRole('button', { name: /brand navigator/i })).toBeInTheDocument();
+    expect(within(mobileMenu).getByRole('button', { name: /design excavator/i })).toBeInTheDocument();
+  });
+
+  it('renders mobile New Search as an icon button to the right of generate insights', async () => {
+    render(<CulturalArchaeologist />);
+    const generateButton = await screen.findByRole('button', { name: /generate insights/i });
+    const newSearchButton = screen.getByTestId('new-search-below-generate');
+    expect(newSearchButton).toHaveAccessibleName(/new search/i);
+    expect(newSearchButton.className).toContain('sm:hidden');
+    expect(Boolean(generateButton.compareDocumentPosition(newSearchButton) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   });
 
   it('reruns analysis with active filter constraints while keeping current filter behavior', async () => {

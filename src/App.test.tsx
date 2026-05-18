@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 
@@ -121,16 +121,20 @@ describe('App Component', () => {
     await waitFor(() => expect(screen.getByText(/Failed to get brand suggestions/i)).toBeInTheDocument());
   });
 
-  it('stacks the top action buttons on mobile to add spacing', async () => {
+  it('shows a mobile hamburger menu for top navigation links', async () => {
     render(<App />);
     await waitForSplashToDisappear();
     await openResearchExperience();
 
-    const actionBar = screen.getByRole('button', { name: /design excavator/i }).parentElement;
-
-    expect(actionBar).toHaveClass('flex-col');
-    expect(actionBar).toHaveClass('items-stretch');
-    expect(actionBar).toHaveClass('gap-2');
+    const actionBar = screen.getByTestId('top-action-buttons');
+    expect(actionBar).toHaveClass('hidden');
     expect(actionBar).toHaveClass('sm:flex-row');
+
+    fireEvent.click(screen.getByTestId('mobile-nav-trigger'));
+    const mobileMenu = await screen.findByTestId('mobile-nav-menu');
+    expect(mobileMenu).toBeInTheDocument();
+    expect(within(mobileMenu).getByRole('button', { name: /back to home/i })).toBeInTheDocument();
+    expect(within(mobileMenu).getByRole('button', { name: /brand navigator/i })).toBeInTheDocument();
+    expect(within(mobileMenu).getByRole('button', { name: /design excavator/i })).toBeInTheDocument();
   });
 });

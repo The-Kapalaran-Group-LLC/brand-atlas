@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
+import { SplashGrid } from './SplashGrid';
 
 const DEFAULT_BADGE_CLASS_NAME =
   'align-super ml-3 inline-block px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold tracking-wide border border-indigo-200';
@@ -37,16 +38,19 @@ export default function MenuPage({
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45 }}
-      className={`${sectionClassName} mx-auto text-center min-h-[78vh] flex flex-col`}
+      className={`${sectionClassName} relative mx-auto text-center min-h-[78vh] flex flex-col overflow-hidden`}
       data-testid="menu-page"
     >
-      <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-3 mx-auto">
+      <div className="absolute inset-x-0 top-[64px] -bottom-[64px] z-0 pointer-events-none">
+        <SplashGrid sizeMultiplier={1.25} qualityMode="fast" startLongitude={-74.006} />
+      </div>
+      <div className="relative z-10 w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-3 mx-auto">
         <Sparkles className="w-5 h-5" />
       </div>
-      <h1 className="text-lg md:text-xl font-semibold tracking-tight text-zinc-950 mb-4 select-none">
+      <h1 className="relative z-10 text-lg md:text-xl font-semibold tracking-tight text-zinc-950 mb-4 select-none">
         Brand <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">Atlas</span>
       </h1>
-      <div className="flex-1 flex flex-col justify-center">
+      <div className="relative z-10 flex-1 flex flex-col justify-center">
         <h2 className="text-[1.91rem] md:text-[2.55rem] font-semibold tracking-tight text-zinc-900 mb-3">
           Choose Your Research Experience
         </h2>

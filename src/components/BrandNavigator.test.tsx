@@ -276,26 +276,57 @@ describe('BrandNavigator', () => {
     expect(await screen.findByRole('button', { name: /generate analysis/i })).toBeInTheDocument();
   });
 
-  it('stacks top action controls on mobile and keeps auto sizing at sm+', async () => {
+  it('uses a mobile hamburger for navigation links and keeps desktop top links at sm+', async () => {
     render(<BrandNavigator />);
     fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
 
+    const mobileTopBar = await screen.findByTestId('mobile-top-bar');
+    expect(mobileTopBar.className).toContain('fixed');
+    expect(mobileTopBar.className).toContain('top-0');
+    expect(mobileTopBar.className).toContain('translate-y-0');
+    expect(within(mobileTopBar).getByText('Brand Navigator')).toBeInTheDocument();
+    const mobileTitle = within(mobileTopBar).getByTestId('mobile-page-title');
+    const mobileIcon = within(mobileTopBar).getByTestId('mobile-page-icon');
+    const mobileHeading = within(mobileTopBar).getByTestId('mobile-page-heading');
+    expect(mobileHeading.className).toContain('ml-auto');
+    expect(mobileHeading.className).toContain('justify-end');
+    expect(mobileTitle.className).toContain('text-right');
+    expect(Boolean(mobileTitle.compareDocumentPosition(mobileIcon) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(screen.getByTestId('mobile-page-subcopy')).toHaveTextContent('Audit any brand or competitive landscape.');
+
+    const mobileNavTrigger = await screen.findByTestId('mobile-nav-trigger');
     const actionContainer = await screen.findByTestId('top-action-buttons');
-    const culturalButton = screen.getByRole('button', { name: /cultural archaeologist/i });
-    const designButton = screen.getByRole('button', { name: /design excavator/i });
-    const newSearchButton = screen.getByRole('button', { name: /new search/i });
-
-    expect(actionContainer.className).toContain('left-4');
-    expect(actionContainer.className).toContain('right-4');
-    expect(actionContainer.className).toContain('sm:left-auto');
+    expect(actionContainer.className).toContain('hidden');
     expect(actionContainer.className).toContain('sm:flex-row');
+    expect(actionContainer.className).toContain('left-auto');
 
-    expect(culturalButton.className).toContain('w-full');
-    expect(culturalButton.className).toContain('sm:w-auto');
-    expect(designButton.className).toContain('w-full');
-    expect(designButton.className).toContain('sm:w-auto');
-    expect(newSearchButton.className).toContain('w-full');
-    expect(newSearchButton.className).toContain('sm:w-auto');
+    Object.defineProperty(window, 'scrollY', { configurable: true, writable: true, value: 160 });
+    fireEvent.scroll(window);
+    expect(mobileTopBar.className).toContain('-translate-y-full');
+
+    Object.defineProperty(window, 'scrollY', { configurable: true, writable: true, value: 20 });
+    fireEvent.scroll(window);
+    expect(mobileTopBar.className).toContain('translate-y-0');
+
+    fireEvent.click(mobileNavTrigger);
+    const mobileMenu = await screen.findByTestId('mobile-nav-menu');
+    expect(mobileMenu.className).toContain('fixed');
+    expect(mobileMenu.className).toContain('top-16');
+    expect(mobileMenu.className).toContain('left-4');
+    expect(mobileMenu.className).toContain('right-4');
+    expect(within(mobileMenu).getByRole('button', { name: /back to home/i })).toBeInTheDocument();
+    expect(within(mobileMenu).getByRole('button', { name: /cultural archaeologist/i })).toBeInTheDocument();
+    expect(within(mobileMenu).getByRole('button', { name: /design excavator/i })).toBeInTheDocument();
+  });
+
+  it('renders mobile New Search as an icon button to the right of generate analysis', async () => {
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    const generateButton = await screen.findByRole('button', { name: /generate analysis/i });
+    const newSearchButton = screen.getByTestId('new-search-below-generate');
+    expect(newSearchButton).toHaveAccessibleName(/new search/i);
+    expect(newSearchButton.className).toContain('sm:hidden');
+    expect(Boolean(generateButton.compareDocumentPosition(newSearchButton) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   });
 
   it('left aligns text in the brand, audience, and topic inputs', async () => {
@@ -1277,7 +1308,7 @@ describe('BrandNavigator', () => {
     expect(askBrandNavigatorQuestion).toHaveBeenCalled();
   });
 
-  it('saves Brand Navigator results to the BrandNavigator table with a custom_name', async () => {
+  it('saves Brand Navigator results to the Brand_Navigator table with a custom_name', async () => {
     render(<BrandNavigator />);
     fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
 
@@ -1289,7 +1320,7 @@ describe('BrandNavigator', () => {
 
     await waitFor(() => {
       expect(generateBrandResearchMatrix).toHaveBeenCalled();
-      expect(supabaseFrom).toHaveBeenCalledWith('BrandNavigator');
+      expect(supabaseFrom).toHaveBeenCalledWith('Brand_Navigator');
       expect(supabaseInsert).toHaveBeenCalled();
     });
 

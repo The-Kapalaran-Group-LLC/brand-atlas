@@ -900,13 +900,13 @@ export function SplashGrid({
       rotatedY = 0,
       rotatedZ = 0,
     ) => {
-      if (mode === 'ocean') return 'rgb(156 182 238)';
+      if (mode === 'ocean') return 'rgb(199 210 254)';
       const continentIndex = getContinentIndex(point.lat, point.lon);
       if (continentIndex === 6) {
-        if (mode === 'countryOutline') return 'rgb(102 142 230)';
-        if (mode === 'continentOutline') return 'rgb(134 176 246)';
-        if (mode === 'countryFill') return 'rgb(184 221 255)';
-        return 'rgb(203 233 255)';
+        if (mode === 'countryOutline') return 'rgb(129 140 248)';
+        if (mode === 'continentOutline') return 'rgb(165 180 252)';
+        if (mode === 'countryFill') return 'rgb(199 210 254)';
+        return 'rgb(224 231 255)';
       }
       const xNorm = (rotatedX / GLOBE_RADIUS + 1) * 0.5;
       const yNorm = 1 - (rotatedY / GLOBE_RADIUS + 1) * 0.5;
@@ -936,7 +936,7 @@ export function SplashGrid({
       const depthBiasedT = lerp(farSideBlendT, purpleForwardT, frontWeight);
       const gradientT = Math.pow(depthBiasedT, 0.78);
       if (mode === 'countryFill') return gradientColorAt(gradientT, 1.14);
-      if (mode === 'countryOutline') return 'rgb(92 92 255)';
+      if (mode === 'countryOutline') return 'rgb(129 140 248)';
       if (mode === 'continentOutline') return gradientColorAt(gradientT, 1.28);
       return gradientColorAt(gradientT, 1.38);
     };

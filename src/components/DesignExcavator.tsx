@@ -64,7 +64,7 @@ const useAllVisualsLoaded = (
   return { allVisualsLoaded, handleImageLoad, handleImageError, expectedCount };
 };
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Info, Users, Trash2, Plus, Crosshair, Loader2, Presentation, FileText, ImageIcon, Type, Palette, Clock, ExternalLink, Share2, Globe, Tag, Sparkles, ArrowLeft, RefreshCw, X, Pipette } from 'lucide-react';
+import { Search, Info, Users, Trash2, Plus, Crosshair, Loader2, Presentation, FileText, ImageIcon, Type, Palette, Clock, ExternalLink, Share2, Globe, Tag, Sparkles, ArrowLeft, RefreshCw, X, Pipette, Menu } from 'lucide-react';
 import { CompassRoseIcon } from './icons/CompassRoseIcon';
 import { navigateToHashRoute } from '../services/navigation';
 import { toSafeExternalHref } from '../services/external-links';
@@ -80,6 +80,7 @@ import { Accordion } from './Accordion';
 import { runUserAction } from '../services/user-actions';
 import { normalizeAppError } from '../services/api-errors';
 import { logger } from '../services/logger';
+import { getUserTelemetry } from '../services/telemetry';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
 import { RecentResultsLibrary } from './RecentResultsLibrary';
 import {
@@ -136,7 +137,18 @@ interface SavedDeepDiveSearch {
   targetAudience: string;
   report: VisualDesignReport;
   customName?: string;
+  device?: string;
+  location?: string;
+  ip_address?: string;
 }
+
+const BRAND_EXCAVATOR_TABLE = 'brandexcavator';
+const BRAND_EXCAVATOR_TABLE_CANDIDATES = [
+  BRAND_EXCAVATOR_TABLE,
+  'BrandExcavator',
+  'Design_Excavator',
+  'brand_deep_dives',
+] as const;
 
 type DesignExcavatorRecentResult = RecentResultRecord & {
   savedSearch?: SavedDeepDiveSearch;
@@ -773,11 +785,15 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   const [reportAnswer, setReportAnswer] = useState('');
   const [isSubmittingPrompt, setIsSubmittingPrompt] = useState(false);
   const [isSearchControlsMinimized, setIsSearchControlsMinimized] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isMobileTopBarVisible, setIsMobileTopBarVisible] = useState(true);
+  const lastMobileScrollYRef = useRef(0);
   const [bestVisualsByBrand, setBestVisualsByBrand] = useState<Record<string, BrandVisualSelection>>({});
   const [visualFailuresByCard, setVisualFailuresByCard] = useState<Record<string, { attempts: number; lastSource: string; isPlaceholder: boolean; hidden?: boolean; retried?: boolean }>>({});
   const [isExporting, setIsExporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedDeepDiveSearch[]>([]);
+  const [resolvedBrandExcavatorTable, setResolvedBrandExcavatorTable] = useState<string>(BRAND_EXCAVATOR_TABLE);
   const websiteLookupTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const undoDeleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [recentlyDeletedSearch, setRecentlyDeletedSearch] = useState<SavedDeepDiveSearch | null>(null);
@@ -798,6 +814,33 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
   // Loader for all visuals (now after report and bestVisualsByBrand)
   const { allVisualsLoaded, handleImageLoad, handleImageError, expectedCount } = useAllVisualsLoaded(report, bestVisualsByBrand);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleMobileHeaderScroll = () => {
+      const currentScrollY = window.scrollY || 0;
+      const previousScrollY = lastMobileScrollYRef.current;
+
+      if (currentScrollY <= 0) {
+        setIsMobileTopBarVisible(true);
+        lastMobileScrollYRef.current = 0;
+        return;
+      }
+
+      if (currentScrollY > previousScrollY + 4) {
+        setIsMobileTopBarVisible(false);
+        setIsMobileNavOpen(false);
+      } else if (currentScrollY < previousScrollY - 4) {
+        setIsMobileTopBarVisible(true);
+      }
+
+      lastMobileScrollYRef.current = currentScrollY;
+    };
+
+    lastMobileScrollYRef.current = window.scrollY || 0;
+    window.addEventListener('scroll', handleMobileHeaderScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleMobileHeaderScroll);
+  }, []);
 
   const clearExcavatorSearch = (options?: { singleRow?: boolean }) => {
     if (options?.singleRow) {
@@ -925,7 +968,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     const trimmed = (newName || '').trim();
     if (!trimmed) return;
     const { data, error } = await supabase
-      .from('brand_deep_dives')
+      .from(resolvedBrandExcavatorTable)
       .update({ custom_name: trimmed })
       .eq('id', id)
       .select();
@@ -945,7 +988,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     if (!deleted) return;
 
     const { error } = await supabase
-      .from('brand_deep_dives')
+      .from(resolvedBrandExcavatorTable)
       .delete()
       .eq('id', id);
 
@@ -976,7 +1019,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     }
 
     // Re-insert into Supabase
-    const { error } = await supabase.from('brand_deep_dives').insert([
+    const { error } = await supabase.from(resolvedBrandExcavatorTable).insert([
       {
         id: recentlyDeletedSearch.id,
         brands: recentlyDeletedSearch.brands,
@@ -985,6 +1028,9 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         report: recentlyDeletedSearch.report,
         custom_name: recentlyDeletedSearch.customName,
         created_at: recentlyDeletedSearch.date,
+        device: recentlyDeletedSearch.device || 'Unknown',
+        location: recentlyDeletedSearch.location || 'Unknown',
+        ip_address: recentlyDeletedSearch.ip_address || '',
       },
     ]);
     if (!error) {
@@ -999,25 +1045,56 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   useEffect(() => {
     // Load saved deep dives from Supabase
     (async () => {
-      const { data, error } = await supabase
-        .from('brand_deep_dives')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (!error && Array.isArray(data)) {
-        setSavedSearches(
-          data.map((row) => ({
-            id: row.id,
-            date: row.created_at,
-            brands: row.brands,
-            analysisObjective: row.analysis_objective,
-            targetAudience: row.target_audience,
-            report: row.report,
-            customName: row.custom_name,
-          }))
-        );
-      } else {
-        setSavedSearches([]);
+      const orderColumns = ['created_at', 'createdAt'];
+      console.log('[DesignExcavator] Loading saved searches from Supabase.', {
+        tableCandidates: BRAND_EXCAVATOR_TABLE_CANDIDATES,
+        orderColumns,
+      });
+
+      for (const tableName of BRAND_EXCAVATOR_TABLE_CANDIDATES) {
+        for (const orderColumn of orderColumns) {
+          const { data, error } = await supabase
+            .from(tableName)
+            .select('*')
+            .order(orderColumn, { ascending: false });
+
+          if (!error && Array.isArray(data)) {
+            console.log('[DesignExcavator] Loaded saved searches from Supabase.', {
+              tableName,
+              orderColumn,
+              count: data.length,
+            });
+            setResolvedBrandExcavatorTable(tableName);
+            setSavedSearches(
+              data.map((row) => ({
+                id: row.id,
+                date: row.created_at || row.createdAt,
+                brands: row.brands,
+                analysisObjective: row.analysis_objective,
+                targetAudience: row.target_audience,
+                report: row.report,
+                customName: row.custom_name,
+                device: row.device,
+                location: row.location,
+                ip_address: row.ip_address,
+              }))
+            );
+            return;
+          }
+
+          console.log('[DesignExcavator] Supabase saved-search load attempt failed.', {
+            tableName,
+            orderColumn,
+            errorCode: error?.code,
+            errorMessage: error?.message,
+            errorHint: error?.hint,
+          });
+        }
       }
+
+      console.log('[DesignExcavator] Unable to load saved searches from all table candidates.');
+      setSavedSearches([]);
+      setSaveWarning('Could not load saved projects. Confirm table name, RLS policies, and refresh.');
     })();
   }, []);
 
@@ -1213,7 +1290,13 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       };
       // Persist to Supabase
       try {
-        const { data, error } = await supabase.from('brand_deep_dives').insert([
+        const { device, location, ip_address } = await getUserTelemetry();
+        console.log('[DesignExcavator] Collected telemetry for generated report save.', {
+          device,
+          location,
+          ip_address,
+        });
+        const { data, error } = await supabase.from(resolvedBrandExcavatorTable).insert([
           {
             id: nextSaved.id,
             brands: normalizedBrands,
@@ -1221,9 +1304,15 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             target_audience: targetAudienceValue,
             report: result,
             created_at: nextSaved.date,
+            device,
+            location,
+            ip_address,
           },
         ]).select();
         if (!error && data) {
+          nextSaved.device = device;
+          nextSaved.location = location;
+          nextSaved.ip_address = ip_address;
           setSavedSearches((prev) => [nextSaved, ...prev.filter((item) => item.id !== nextSaved.id)].slice(0, 20));
         } else if (error) {
           throw error;
@@ -1358,7 +1447,13 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         };
         // Persist to Supabase
         try {
-          const { data, error } = await supabase.from('brand_deep_dives').insert([
+          const { device, location, ip_address } = await getUserTelemetry();
+          console.log('[DesignExcavator] Collected telemetry for prompt rescan save.', {
+            device,
+            location,
+            ip_address,
+          });
+          const { data, error } = await supabase.from(resolvedBrandExcavatorTable).insert([
             {
               id: nextSaved.id,
               brands: normalizedBrands,
@@ -1366,9 +1461,15 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
               target_audience: targetAudience,
               report: result.report,
               created_at: nextSaved.date,
+              device,
+              location,
+              ip_address,
             },
           ]).select();
           if (!error && data) {
+            nextSaved.device = device;
+            nextSaved.location = location;
+            nextSaved.ip_address = ip_address;
             setSavedSearches((prev) => [nextSaved, ...prev.filter((item) => item.id !== nextSaved.id)].slice(0, 20));
           } else if (error) {
             throw error;
@@ -2461,7 +2562,94 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   return (
     <>
       <div className="w-full px-2 sm:px-0">
-        <div className="absolute top-4 left-4 right-4 z-50 no-print sm:top-6 sm:left-6 sm:right-auto">
+        <div
+          data-testid="mobile-top-bar"
+          className={`fixed top-0 left-0 right-0 z-[60] no-print border-b border-zinc-200/80 bg-white/92 backdrop-blur-sm transition-transform duration-200 sm:hidden ${isMobileTopBarVisible ? 'translate-y-0' : '-translate-y-full'}`}
+        >
+          <div className="mx-auto flex h-14 max-w-4xl items-center gap-3 px-4">
+            <button
+              type="button"
+              data-testid="mobile-nav-trigger"
+              aria-expanded={isMobileNavOpen}
+              aria-label="Open navigation menu"
+              onClick={() => setIsMobileNavOpen((prev) => !prev)}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white/90 text-zinc-700 shadow-sm backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-zinc-500/50"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div data-testid="mobile-page-heading" className="ml-auto inline-flex min-w-0 items-center justify-end gap-2">
+              <p data-testid="mobile-page-title" className="truncate text-right text-sm font-semibold text-zinc-900">Design Excavator</p>
+              <div data-testid="mobile-page-icon" className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-indigo-600">
+                <Palette className="h-4 w-4" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <AnimatePresence>
+          {isMobileNavOpen && (
+            <motion.div
+              data-testid="mobile-nav-menu"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="fixed top-16 left-4 right-4 z-[55] rounded-2xl border border-zinc-200 bg-white/95 p-2 shadow-lg backdrop-blur-sm no-print sm:hidden"
+            >
+              <a
+                href="/?home=1"
+                onClick={(event) => handlePrimaryLinkNavigation(event, () => {
+                  setIsMobileNavOpen(false);
+                  onBack();
+                })}
+                className="inline-flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Home
+              </a>
+              <a
+                href="/#cultural-archaeologist"
+                onClick={(event) => handlePrimaryLinkNavigation(event, () => {
+                  setIsMobileNavOpen(false);
+                  navigateToHashRoute('cultural-archaeologist');
+                })}
+                className="inline-flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              >
+                <Search className="w-4 h-4" />
+                Cultural Archaeologist
+              </a>
+              <a
+                href="/#brand-navigator"
+                onClick={(event) => handlePrimaryLinkNavigation(event, () => {
+                  setIsMobileNavOpen(false);
+                  navigateToHashRoute('brand-navigator');
+                })}
+                className="inline-flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              >
+                <CompassRoseIcon className="w-4 h-4" />
+                Brand Navigator
+              </a>
+              <a
+                href="/#design-excavator"
+                onClick={(event) => handlePrimaryLinkNavigation(event, () => {
+                  setIsMobileNavOpen(false);
+                  clearExcavatorSearch();
+                })}
+                className="inline-flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              >
+                <Palette className="w-4 h-4" />
+                Design Excavator
+                <span className="ml-1 inline-block rounded-full border border-indigo-200 bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
+                  Beta
+                </span>
+              </a>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <div className="mt-16 mb-6 px-2 sm:hidden">
+          <p data-testid="mobile-page-subcopy" className="text-left text-lg text-zinc-500">
+            Compare visual identity systems across 1-6 brands.
+          </p>
+        </div>
+        <div className="absolute top-6 left-6 z-50 no-print hidden sm:block">
           <a
             href="/?home=1"
             onClick={(event) => handlePrimaryLinkNavigation(event, onBack)}
@@ -2474,7 +2662,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         {/* Top Navigation / Actions */}
         <div
           data-testid="top-action-buttons"
-          className="absolute top-20 left-4 right-4 z-50 no-print flex flex-col items-stretch gap-2 sm:top-6 sm:left-auto sm:right-6 sm:w-auto sm:flex-row sm:items-center sm:justify-end sm:gap-2"
+          className="absolute top-6 left-auto right-6 z-50 no-print hidden sm:flex sm:w-auto sm:flex-row sm:items-center sm:justify-end sm:gap-2"
         >
           <a
             href="/#cultural-archaeologist"
@@ -2538,7 +2726,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="mb-12 text-center flex flex-col items-center pt-28 sm:pt-14"
+        className="mb-12 hidden text-center flex-col items-center pt-14 sm:flex"
       >
         <div className="inline-flex items-center justify-center p-2 bg-white rounded-2xl shadow-sm border border-indigo-200/80 mb-8">
           <Palette className="w-5 h-5 text-indigo-600" />
@@ -2689,14 +2877,14 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-center pt-2">
-          <div className="md:col-span-3 flex justify-center">
+          <div className="md:col-span-3 mx-auto flex w-full max-w-[372px] items-stretch justify-center gap-2 sm:max-w-none sm:flex sm:justify-center">
             <button
               type="button"
               onClick={() => {
                 void handleSubmit();
               }}
               disabled={isLoading}
-              className="w-[360px] mx-auto px-4 py-4 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-zinc-900/50 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all inline-flex items-center justify-center gap-2 text-sm mt-2 select-none relative overflow-hidden"
+              className="w-[304px] sm:w-[360px] px-4 py-4 bg-zinc-900 text-white rounded-2xl font-medium hover:bg-zinc-800 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-zinc-900/50 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all inline-flex items-center justify-center gap-2 text-sm mt-2 select-none relative overflow-hidden"
             >
               {isLoading ? (
                 <ProgressiveLoader
@@ -2717,6 +2905,16 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                 </>
               )}
               {/* Progress bar is now rendered inside ProgressiveLoader for alignment with % */}
+            </button>
+            <button
+              type="button"
+              data-testid="new-search-below-generate"
+              aria-label="New Search"
+              title="New Search"
+              onClick={() => clearExcavatorSearch()}
+              className="mt-2 inline-flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-2xl border border-zinc-200 bg-white text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-2 sm:hidden"
+            >
+              <RefreshCw className="w-4 h-4" />
             </button>
           </div>
         </div>
