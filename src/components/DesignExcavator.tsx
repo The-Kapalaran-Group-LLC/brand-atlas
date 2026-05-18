@@ -2776,7 +2776,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       >
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-500">Brands To Analyze</h3>
+            <h3 className="m-0 text-sm font-semibold uppercase tracking-wider text-zinc-500">Brands To Analyze</h3>
             <span className="text-xs text-zinc-400">{brandCount}/6 brands </span>
           </div>
 

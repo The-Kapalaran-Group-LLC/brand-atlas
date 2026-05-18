@@ -270,7 +270,11 @@ describe('BrandDeepDivePage', () => {
     expect(mobileHeading.className).toContain('justify-end');
     expect(mobileTitle.className).toContain('text-right');
     expect(Boolean(mobileTitle.compareDocumentPosition(mobileIcon) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
-    expect(screen.getByTestId('mobile-page-subcopy')).toHaveTextContent('Compare visual identity systems across brands.');
+    const mobileSubcopy = screen.getByTestId('mobile-page-subcopy');
+    expect(mobileSubcopy).toHaveTextContent('Compare visual identity systems across brands.');
+    expect(mobileSubcopy.parentElement?.className).toContain('mb-[2px]');
+    const brandsHeading = screen.getByText('Brands To Analyze');
+    expect(brandsHeading.className).toContain('m-0');
 
     const mobileNavTrigger = screen.getByTestId('mobile-nav-trigger');
     const actionContainer = screen.getByTestId('top-action-buttons');
