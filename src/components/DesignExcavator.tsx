@@ -2647,7 +2647,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         </AnimatePresence>
         <div className="mt-[2px] mb-[2px] px-2 sm:hidden">
           <MobileTwoLineSubcopy>
-            Compare visual identity systems across 1-6 brands.
+            Compare visual identity systems across brands.
           </MobileTwoLineSubcopy>
         </div>
         <div className="absolute top-6 left-6 z-50 no-print hidden sm:block">
@@ -2737,7 +2737,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
           <span className="align-super ml-3 inline-block px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold tracking-wide border border-indigo-200">Beta</span>
         </h1>
         <p className="text-lg text-zinc-500 max-w-2xl mx-auto leading-relaxed select-none">
-          Compare visual identity systems across 1-6 brands.
+          Compare visual identity systems across brands.
         </p>
       </motion.div>
 
