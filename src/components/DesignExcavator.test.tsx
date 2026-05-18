@@ -255,6 +255,23 @@ describe('BrandDeepDivePage', () => {
     }, { timeout: 5000 });
   });
 
+  it('renders mobile results navigation for all design result components', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    const mobileResultsNav = await screen.findByTestId('mobile-results-nav-design');
+    expect(mobileResultsNav).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Analysis Q&A' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Aesop' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Opportunity Spaces' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Strategic Recommendations' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Sources' })).toBeInTheDocument();
+  });
+
   it('uses a mobile hamburger for navigation links and keeps desktop top links at sm+', () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 

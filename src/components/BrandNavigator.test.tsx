@@ -113,6 +113,34 @@ const incompleteMatrix = {
   sources: [],
 };
 
+const matrixWithResults = {
+  analysisObjective: 'test objective',
+  ecosystemMethod: 'test method',
+  results: [
+    {
+      brandName: 'Patagonia',
+      highLevelSummary: 'Purpose-first outdoor brand.',
+      brandMission: 'Build the best product.',
+      brandPositioning: {
+        taglines: ['We’re in business to save our home planet'],
+        keyMessagesAndClaims: ['Durability over disposable fashion'],
+        valueProposition: 'Premium outdoor apparel with activism core',
+        voiceAndTone: 'Principled and direct',
+      },
+      keyOfferingsProductsServices: ['Outerwear'],
+      strategicMoatsStrengths: ['Brand trust'],
+      potentialThreatsWeaknesses: ['Premium pricing'],
+      targetAudiences: [],
+      recentCampaigns: ['Worn Wear'],
+      keyMarketingChannels: ['Owned channels'],
+      socialMediaChannels: [],
+      recentNews: [],
+      sources: [],
+    },
+  ],
+  sources: [{ title: 'Patagonia newsroom', url: 'https://www.patagonia.com/stories/' }],
+};
+
 describe('BrandNavigator', () => {
   beforeEach(() => {
     window.history.pushState({}, '', '/');
@@ -267,6 +295,24 @@ describe('BrandNavigator', () => {
     await waitFor(() => {
       expect(generateBrandResearchMatrix).toHaveBeenCalledTimes(2);
     }, { timeout: 5000 });
+  });
+
+  it('renders mobile results navigation for all brand result components', async () => {
+    generateBrandResearchMatrix.mockResolvedValueOnce(matrixWithResults);
+
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: /generate analysis/i }));
+
+    const mobileResultsNav = await screen.findByTestId('mobile-results-nav-brand');
+    expect(mobileResultsNav).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Brand Q&A' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Patagonia' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Sources' })).toBeInTheDocument();
   });
 
   it('opens research experience immediately when hash route targets brand navigator', async () => {

@@ -68,6 +68,7 @@ import {
 } from '../services/recent-results-storage';
 import { saveDesignExcavatorPrefill } from '../services/design-excavator-prefill';
 import { MobileTwoLineSubcopy } from './MobileTwoLineSubcopy';
+import { MobileResultsNav } from './MobileResultsNav';
 
 const BRAND_NAVIGATOR_TABLE = 'Brand_Navigator';
 
@@ -1374,6 +1375,25 @@ export default function BrandNavigator() {
     socialMediaChannels: 'Social Media Channels',
     recentNews: 'Recent News',
   };
+  const brandResultNavItems = useMemo(() => {
+    if (!isBrandResultsMode) {
+      return [];
+    }
+
+    const items: Array<{ id: string; label: string }> = [
+      { id: 'brand-results-ask', label: 'Brand Q&A' },
+      ...brandResults.map((result, index) => ({
+        id: `brand-results-brand-${index}`,
+        label: (result.brandName || `Brand ${index + 1}`).trim(),
+      })),
+    ];
+
+    if ((matrix?.sources || []).length > 0) {
+      items.push({ id: 'brand-results-sources', label: 'Sources' });
+    }
+
+    return items;
+  }, [brandResults, isBrandResultsMode, matrix?.sources]);
 
   const sectionLinesForBrand = (brand: BrandResultEntry, key: BrandResultSectionKey): string[] => {
     switch (key) {
@@ -2579,7 +2599,14 @@ export default function BrandNavigator() {
               </div>
 
               {isBrandResultsMode && (
-                <div className="mb-10 bg-indigo-50 rounded-3xl p-6 md:p-8 border border-indigo-100 shadow-sm no-print">
+                <MobileResultsNav
+                  testId="mobile-results-nav-brand"
+                  items={brandResultNavItems}
+                />
+              )}
+
+              {isBrandResultsMode && (
+                <div id="brand-results-ask" className="mb-10 bg-indigo-50 rounded-3xl p-6 md:p-8 border border-indigo-100 shadow-sm no-print">
                   <h3 className="text-xl font-bold text-indigo-900 mb-4 flex items-center gap-2">
                     <Search className="w-6 h-6" /> Ask Brand Navigator
                   </h3>
@@ -2687,6 +2714,7 @@ export default function BrandNavigator() {
               {/* Sources Section */}
               {matrix.sources && matrix.sources.length > 0 && (
                 <motion.div
+                  id="brand-results-sources"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.8 }}
@@ -3442,6 +3470,7 @@ function BrandResultsGrid({
       {results.map((brandResult, brandIndex) => (
         <BrandResultCard
           key={`${brandResult.brandName || 'brand'}-${brandIndex}`}
+          sectionId={`brand-results-brand-${brandIndex}`}
           brandResult={brandResult}
           brandIndex={brandIndex}
           brandWebsite={resolvedBrandWebsites[normalizeBrandLookupKey(brandResult.brandName || '')] || ''}
@@ -3480,6 +3509,7 @@ function BrandResultsGrid({
 }
 
 function BrandResultCard({
+  sectionId,
   brandResult,
   brandIndex,
   brandWebsite,
@@ -3492,6 +3522,7 @@ function BrandResultCard({
   isRefreshing,
   onAudienceDeepDive,
 }: {
+  sectionId: string;
   brandResult: BrandResultEntry;
   brandIndex: number;
   brandWebsite: string;
@@ -3655,7 +3686,10 @@ function BrandResultCard({
   };
 
   return (
-    <section className="bg-zinc-50/60 p-6 rounded-3xl border border-zinc-200 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-shadow duration-300 w-full">
+    <section
+      id={sectionId}
+      className="bg-zinc-50/60 p-6 rounded-3xl border border-zinc-200 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-shadow duration-300 w-full"
+    >
       <div className="mb-3 flex items-center justify-between gap-3">
         <div data-testid={`brand-result-identity-${brandIndex}`} className="flex items-center gap-3 min-w-0">
           <span className="w-11 h-11 rounded-xl flex items-center justify-center overflow-hidden shrink-0 relative border border-zinc-200 bg-white">

@@ -1,6 +1,6 @@
 import PptxGenJS from 'pptxgenjs';
 import { ProgressiveLoader } from './ProgressiveLoader';
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 // Loader state for all visuals
 type UseAllVisualsLoadedResult = {
   allVisualsLoaded: boolean;
@@ -94,6 +94,7 @@ import {
   readDesignExcavatorPrefill,
 } from '../services/design-excavator-prefill';
 import { MobileTwoLineSubcopy } from './MobileTwoLineSubcopy';
+import { MobileResultsNav } from './MobileResultsNav';
 
 interface VisualDesignPageProps {
   onBack: () => void;
@@ -1499,6 +1500,39 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   const brandCount = brands.filter((brand) => (brand.name || '').trim()).length;
   const reportBrandCount = report?.brandProfiles?.filter((profile) => (profile.brandName || '').trim().length > 0).length || 0;
   const showCompareTab = reportBrandCount > 1;
+  const designResultNavItems = useMemo(() => {
+    if (!report) {
+      return [];
+    }
+
+    const items: Array<{ id: string; label: string }> = [];
+
+    if (resultTab === 'profiles') {
+      items.push({ id: 'design-results-ask', label: 'Analysis Q&A' });
+      report.brandProfiles.forEach((profile, index) => {
+        const label = (profile.brandName || `Brand ${index + 1}`).trim();
+        items.push({ id: `brand-${index}`, label });
+      });
+    }
+
+    if (resultTab === 'compare' && showCompareTab) {
+      items.push({ id: 'design-results-compare', label: 'Compare Across Brands' });
+    }
+
+    if ((report.crossBrandReadout?.length || 0) > 0) {
+      items.push({ id: 'design-results-opportunity', label: 'Opportunity Spaces' });
+    }
+
+    if (report.strategicRecommendations?.some((item) => !isDevilsAdvocateLine(item || ''))) {
+      items.push({ id: 'design-results-strategic', label: 'Strategic Recommendations' });
+    }
+
+    if ((report.sources || []).length > 0) {
+      items.push({ id: 'design-results-sources', label: 'Sources' });
+    }
+
+    return items;
+  }, [report, resultTab, showCompareTab]);
 
   useEffect(() => {
     if (!showCompareTab && resultTab === 'compare') {
@@ -3063,12 +3097,16 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                 )}
               </div>
             )}
+            <MobileResultsNav
+              testId="mobile-results-nav-design"
+              items={designResultNavItems}
+            />
 
             {/* ── Profiles Tab ── */}
             {resultTab === 'profiles' && (
               <>
                 {/* Ask About This Analysis section (moved above tabs) */}
-                <section className="bg-zinc-50 rounded-3xl border border-zinc-200 p-6 mb-6">
+                <section id="design-results-ask" className="bg-zinc-50 rounded-3xl border border-zinc-200 p-6 mb-6">
                   <h4 className="text-lg font-bold text-zinc-900 mb-4 flex items-center gap-2">
                     <Search className="w-5 h-5 text-indigo-500" /> Ask About This Analysis
                   </h4>
@@ -3676,7 +3714,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
             {/* ── Compare Tab ── */}
             {resultTab === 'compare' && (
-              <div className="space-y-4">
+              <div id="design-results-compare" className="space-y-4">
                 <div className="flex flex-wrap gap-2 mb-2">
                   {[
                     { key: 'primaryColors', label: 'Primary Colors', icon: <Palette className="w-3.5 h-3.5" /> },
@@ -3707,7 +3745,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             {(report.crossBrandReadout?.length > 0 || report.strategicRecommendations?.length > 0) && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {report.crossBrandReadout?.length > 0 && (
-                  <section className="bg-indigo-50 rounded-3xl border border-indigo-100 p-6">
+                  <section id="design-results-opportunity" className="bg-indigo-50 rounded-3xl border border-indigo-100 p-6">
                     <h4 className="text-sm font-bold text-indigo-900 uppercase tracking-wider mb-4 flex items-center gap-2">
                       <Palette className="w-4 h-4" /> Opportunity Spaces
                     </h4>
@@ -3734,7 +3772,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                   </section>
                 )}
                 {report.strategicRecommendations?.filter((item) => !isDevilsAdvocateLine(item || '')).length > 0 && (
-                  <section className="bg-white rounded-3xl border border-zinc-200 p-6">
+                  <section id="design-results-strategic" className="bg-white rounded-3xl border border-zinc-200 p-6">
                     <h4 className="text-sm font-bold text-zinc-900 uppercase tracking-wider mb-4">Strategic Recommendations</h4>
                     <ul className="space-y-3">
                       {report.strategicRecommendations
@@ -3766,6 +3804,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             {/* Sources Section */}
             {report.sources && report.sources.length > 0 && (
               <motion.div
+                id="design-results-sources"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.8 }}

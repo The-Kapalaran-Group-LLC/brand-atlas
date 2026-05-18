@@ -157,6 +157,29 @@ describe('CulturalArchaeologist', () => {
     });
   });
 
+  it('renders mobile results navigation for all cultural result sections', async () => {
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    const mobileResultsNav = await screen.findByTestId('mobile-results-nav-culture');
+    expect(mobileResultsNav).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Audience Q&A' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Demographics' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Moments' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Beliefs' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Tone' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Language' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Behaviors' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Contradictions' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Community' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Influencers' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Sources' })).toBeInTheDocument();
+  });
+
   it('uses a mobile hamburger for navigation links and keeps desktop top links at sm+', async () => {
     render(<CulturalArchaeologist />);
 
