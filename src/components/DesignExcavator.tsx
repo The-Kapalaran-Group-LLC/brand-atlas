@@ -1511,7 +1511,16 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       items.push({ id: 'design-results-ask', label: 'Analysis Q&A' });
       report.brandProfiles.forEach((profile, index) => {
         const label = (profile.brandName || `Brand ${index + 1}`).trim();
+        const brandPrefix = label;
         items.push({ id: `brand-${index}`, label });
+        items.push({ id: `design-results-brand-${index}-logos-visuals`, label: `${brandPrefix}: Logos & Visuals` });
+        items.push({ id: `design-results-brand-${index}-logo-system`, label: `${brandPrefix}: Logo System` });
+        items.push({ id: `design-results-brand-${index}-color-palette`, label: `${brandPrefix}: Color Palette` });
+        items.push({ id: `design-results-brand-${index}-typography`, label: `${brandPrefix}: Typography` });
+        items.push({
+          id: `design-results-brand-${index}-supporting-visual-elements`,
+          label: `${brandPrefix}: Supporting Visual Elements`,
+        });
       });
     }
 
@@ -3268,7 +3277,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                         </div>
 
                         {/* Logos & Visuals Box */}
-                        <div className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4">
+                        <div id={`design-results-brand-${idx}-logos-visuals`} className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4">
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
                               <ImageIcon className="w-3.5 h-3.5" /> Logos & Visuals
@@ -3339,6 +3348,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
                         {/* Logo System Box */}
                         <div
+                          id={`design-results-brand-${idx}-logo-system`}
                           className={`bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4 ${showCompareTab ? 'cursor-pointer' : 'cursor-default'}`}
                           onClick={showCompareTab ? (e) => openComparePopup(e, 'primaryColors') : undefined}
                         >
@@ -3410,7 +3420,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                         </div>
 
                         {/* Color Palette Box */}
-                        <div className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4">
+                        <div id={`design-results-brand-${idx}-color-palette`} className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4">
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
                               <Palette className="w-3.5 h-3.5" /> Color Palette
@@ -3488,6 +3498,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
                         {/* Typography Box */}
                         <div
+                          id={`design-results-brand-${idx}-typography`}
                           className={`bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4 ${showCompareTab ? 'cursor-pointer hover:bg-zinc-50' : 'cursor-default'}`}
                           onClick={showCompareTab ? (e) => openComparePopup(e, 'typography') : undefined}
                         >
@@ -3619,7 +3630,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                         </div>
 
                         {/* Supporting Visual Elements Box */}
-                        <div className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4">
+                        <div id={`design-results-brand-${idx}-supporting-visual-elements`} className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 mb-4">
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Supporting Visual Elements</p>
                             {isSupportingVisualElementsMissing && (

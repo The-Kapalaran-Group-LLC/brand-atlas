@@ -1380,20 +1380,24 @@ export default function BrandNavigator() {
       return [];
     }
 
-    const items: Array<{ id: string; label: string }> = [
-      { id: 'brand-results-ask', label: 'Brand Q&A' },
-      ...brandResults.map((result, index) => ({
-        id: `brand-results-brand-${index}`,
-        label: (result.brandName || `Brand ${index + 1}`).trim(),
-      })),
-    ];
+    const items: Array<{ id: string; label: string }> = [{ id: 'brand-results-ask', label: 'Brand Q&A' }];
+    brandResults.forEach((result, index) => {
+      const brandLabel = (result.brandName || `Brand ${index + 1}`).trim();
+      items.push({ id: `brand-results-brand-${index}`, label: brandLabel });
+      BRAND_RESULT_SECTION_KEYS.forEach((sectionKey) => {
+        items.push({
+          id: `brand-results-brand-${index}-section-${sectionKey}`,
+          label: `${brandLabel}: ${sectionTitleMap[sectionKey]}`,
+        });
+      });
+    });
 
     if ((matrix?.sources || []).length > 0) {
       items.push({ id: 'brand-results-sources', label: 'Sources' });
     }
 
     return items;
-  }, [brandResults, isBrandResultsMode, matrix?.sources]);
+  }, [brandResults, isBrandResultsMode, matrix?.sources, sectionTitleMap]);
 
   const sectionLinesForBrand = (brand: BrandResultEntry, key: BrandResultSectionKey): string[] => {
     switch (key) {
@@ -3661,6 +3665,8 @@ function BrandResultCard({
       });
     }
   };
+  const resolveBrandSectionId = (sectionKey: BrandResultSectionKey): string =>
+    `brand-results-brand-${brandIndex}-section-${sectionKey}`;
 
   const handleBrandLogoError = (event: React.SyntheticEvent<HTMLImageElement>) => {
     const img = event.currentTarget;
@@ -3733,15 +3739,15 @@ function BrandResultCard({
         data-testid="brand-result-sections-layout"
         className="columns-1 lg:columns-2 gap-6 text-sm text-zinc-700"
       >
-        <BrandCriteriaSection title="High-level summary" sectionKey="highLevelSummary" highlighted={highlightedSections.includes('highLevelSummary')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth showRefresh={isSectionMissing('highLevelSummary')} onRefresh={() => onRefreshSection('highLevelSummary')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-highLevelSummary`}>
+        <BrandCriteriaSection sectionId={resolveBrandSectionId('highLevelSummary')} title="High-level summary" sectionKey="highLevelSummary" highlighted={highlightedSections.includes('highLevelSummary')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth showRefresh={isSectionMissing('highLevelSummary')} onRefresh={() => onRefreshSection('highLevelSummary')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-highLevelSummary`}>
           <BrandResultRichText value={brandResult.highLevelSummary} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Brand mission" sectionKey="brandMission" highlighted={highlightedSections.includes('brandMission')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('brandMission')} onRefresh={() => onRefreshSection('brandMission')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-brandMission`}>
+        <BrandCriteriaSection sectionId={resolveBrandSectionId('brandMission')} title="Brand mission" sectionKey="brandMission" highlighted={highlightedSections.includes('brandMission')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('brandMission')} onRefresh={() => onRefreshSection('brandMission')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-brandMission`}>
           <BrandResultRichText value={brandResult.brandMission} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Brand positioning" sectionKey="brandPositioning" highlighted={highlightedSections.includes('brandPositioning')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth showRefresh={isSectionMissing('brandPositioning')} onRefresh={() => onRefreshSection('brandPositioning')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-brandPositioning`}>
+        <BrandCriteriaSection sectionId={resolveBrandSectionId('brandPositioning')} title="Brand positioning" sectionKey="brandPositioning" highlighted={highlightedSections.includes('brandPositioning')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth showRefresh={isSectionMissing('brandPositioning')} onRefresh={() => onRefreshSection('brandPositioning')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-brandPositioning`}>
           <div className="space-y-2">
             <BrandResultLabeledBulletList label="Taglines" items={positioning.taglines || []} inferredEvidenceUrl={inferredEvidenceUrl} />
             <BrandResultLabeledBulletList label="Key messages and claims" items={positioning.keyMessagesAndClaims || []} inferredEvidenceUrl={inferredEvidenceUrl} />
@@ -3750,19 +3756,19 @@ function BrandResultCard({
           </div>
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Key offerings/products/services" sectionKey="keyOfferingsProductsServices" highlighted={highlightedSections.includes('keyOfferingsProductsServices')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('keyOfferingsProductsServices')} onRefresh={() => onRefreshSection('keyOfferingsProductsServices')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-keyOfferingsProductsServices`}>
+        <BrandCriteriaSection sectionId={resolveBrandSectionId('keyOfferingsProductsServices')} title="Key offerings/products/services" sectionKey="keyOfferingsProductsServices" highlighted={highlightedSections.includes('keyOfferingsProductsServices')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('keyOfferingsProductsServices')} onRefresh={() => onRefreshSection('keyOfferingsProductsServices')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-keyOfferingsProductsServices`}>
           <BrandResultBulletList items={brandResult.keyOfferingsProductsServices || []} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Strategic moats (strengths)" sectionKey="strategicMoatsStrengths" highlighted={highlightedSections.includes('strategicMoatsStrengths')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('strategicMoatsStrengths')} onRefresh={() => onRefreshSection('strategicMoatsStrengths')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-strategicMoatsStrengths`}>
+        <BrandCriteriaSection sectionId={resolveBrandSectionId('strategicMoatsStrengths')} title="Strategic moats (strengths)" sectionKey="strategicMoatsStrengths" highlighted={highlightedSections.includes('strategicMoatsStrengths')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('strategicMoatsStrengths')} onRefresh={() => onRefreshSection('strategicMoatsStrengths')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-strategicMoatsStrengths`}>
           <BrandResultBulletList items={brandResult.strategicMoatsStrengths || []} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Potential threats (weaknesses)" sectionKey="potentialThreatsWeaknesses" highlighted={highlightedSections.includes('potentialThreatsWeaknesses')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('potentialThreatsWeaknesses')} onRefresh={() => onRefreshSection('potentialThreatsWeaknesses')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-potentialThreatsWeaknesses`}>
+        <BrandCriteriaSection sectionId={resolveBrandSectionId('potentialThreatsWeaknesses')} title="Potential threats (weaknesses)" sectionKey="potentialThreatsWeaknesses" highlighted={highlightedSections.includes('potentialThreatsWeaknesses')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('potentialThreatsWeaknesses')} onRefresh={() => onRefreshSection('potentialThreatsWeaknesses')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-potentialThreatsWeaknesses`}>
           <BrandResultBulletList items={brandResult.potentialThreatsWeaknesses || []} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Target audiences" sectionKey="targetAudiences" highlighted={highlightedSections.includes('targetAudiences')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth showRefresh={isSectionMissing('targetAudiences')} onRefresh={() => onRefreshSection('targetAudiences')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-targetAudiences`}>
+        <BrandCriteriaSection sectionId={resolveBrandSectionId('targetAudiences')} title="Target audiences" sectionKey="targetAudiences" highlighted={highlightedSections.includes('targetAudiences')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth showRefresh={isSectionMissing('targetAudiences')} onRefresh={() => onRefreshSection('targetAudiences')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-targetAudiences`}>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
             {(brandResult.targetAudiences || []).map((aud, audIndex) => (
               <TargetAudienceCard
@@ -3778,15 +3784,15 @@ function BrandResultCard({
           </div>
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Recent campaigns" sectionKey="recentCampaigns" highlighted={highlightedSections.includes('recentCampaigns')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('recentCampaigns')} onRefresh={() => onRefreshSection('recentCampaigns')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-recentCampaigns`}>
+        <BrandCriteriaSection sectionId={resolveBrandSectionId('recentCampaigns')} title="Recent campaigns" sectionKey="recentCampaigns" highlighted={highlightedSections.includes('recentCampaigns')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('recentCampaigns')} onRefresh={() => onRefreshSection('recentCampaigns')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-recentCampaigns`}>
           <BrandResultBulletList items={brandResult.recentCampaigns || []} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Key marketing channels" sectionKey="keyMarketingChannels" highlighted={highlightedSections.includes('keyMarketingChannels')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('keyMarketingChannels')} onRefresh={() => onRefreshSection('keyMarketingChannels')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-keyMarketingChannels`}>
+        <BrandCriteriaSection sectionId={resolveBrandSectionId('keyMarketingChannels')} title="Key marketing channels" sectionKey="keyMarketingChannels" highlighted={highlightedSections.includes('keyMarketingChannels')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('keyMarketingChannels')} onRefresh={() => onRefreshSection('keyMarketingChannels')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-keyMarketingChannels`}>
           <BrandResultBulletList items={brandResult.keyMarketingChannels || []} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Social media channels" sectionKey="socialMediaChannels" highlighted={highlightedSections.includes('socialMediaChannels')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('socialMediaChannels')} onRefresh={() => onRefreshSection('socialMediaChannels')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-socialMediaChannels`}>
+        <BrandCriteriaSection sectionId={resolveBrandSectionId('socialMediaChannels')} title="Social media channels" sectionKey="socialMediaChannels" highlighted={highlightedSections.includes('socialMediaChannels')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('socialMediaChannels')} onRefresh={() => onRefreshSection('socialMediaChannels')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-socialMediaChannels`}>
           <div className="flex flex-wrap gap-2">
             {sanitizedSocialChannels.map((channel, channelIndex) => (
               <a
@@ -3804,7 +3810,7 @@ function BrandResultCard({
           </div>
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection title="Recent news" sectionKey="recentNews" highlighted={highlightedSections.includes('recentNews')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth showRefresh={isSectionMissing('recentNews')} onRefresh={() => onRefreshSection('recentNews')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-recentNews`}>
+        <BrandCriteriaSection sectionId={resolveBrandSectionId('recentNews')} title="Recent news" sectionKey="recentNews" highlighted={highlightedSections.includes('recentNews')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth showRefresh={isSectionMissing('recentNews')} onRefresh={() => onRefreshSection('recentNews')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-recentNews`}>
           <ul className="space-y-1">
             {displayNewsItems.length > 0 ? (
               displayNewsItems.map((item, idx) => (
@@ -3883,6 +3889,7 @@ function TargetAudienceCard({
 }
 
 function BrandCriteriaSection({
+  sectionId,
   title,
   sectionKey,
   highlighted = false,
@@ -3896,6 +3903,7 @@ function BrandCriteriaSection({
   refreshTestId,
   children,
 }: {
+  sectionId?: string;
   title: string;
   sectionKey?: BrandResultSectionKey;
   highlighted?: boolean;
@@ -3913,6 +3921,7 @@ function BrandCriteriaSection({
   const compareEnabled = canCompareAcrossBrands && Boolean(sectionKey) && Boolean(onRequestCompareAcrossBrands);
   return (
     <div
+      id={sectionId}
       data-testid={sectionTestId}
       style={fullWidth ? { columnSpan: 'all' } : undefined}
       onClick={(event) => {

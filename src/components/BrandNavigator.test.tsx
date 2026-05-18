@@ -312,6 +312,7 @@ describe('BrandNavigator', () => {
     expect(mobileResultsNav).toBeInTheDocument();
     expect(within(mobileResultsNav).getByRole('button', { name: 'Brand Q&A' })).toBeInTheDocument();
     expect(within(mobileResultsNav).getByRole('button', { name: 'Patagonia' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Patagonia: Brand Mission' })).toBeInTheDocument();
     expect(within(mobileResultsNav).getByRole('button', { name: 'Sources' })).toBeInTheDocument();
   });
 
@@ -451,7 +452,7 @@ describe('BrandNavigator', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
 
-    expect(await screen.findByText(/high-level summary/i)).toBeInTheDocument();
+    expect(await screen.findByTestId('brand-result-section-high-level-summary')).toBeInTheDocument();
     expect(
       await screen.findByText(/Purpose-led outdoor brand with premium durability positioning/i, {}, { timeout: 5000 })
     ).toBeInTheDocument();
@@ -1091,12 +1092,7 @@ describe('BrandNavigator', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
 
-    const recentNewsHeader = await screen.findByText(/recent news/i);
-    const recentNewsSection = recentNewsHeader.closest('div');
-    expect(recentNewsSection).toBeTruthy();
-    if (!recentNewsSection) {
-      throw new Error('Expected recent news section container.');
-    }
+    const recentNewsSection = await screen.findByTestId('brand-result-section-recent-news');
     expect(
       within(recentNewsSection).getByText('No recent coverage found from news outlets or brand press pages.')
     ).toBeInTheDocument();

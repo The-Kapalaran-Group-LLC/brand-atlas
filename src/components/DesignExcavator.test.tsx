@@ -267,6 +267,8 @@ describe('BrandDeepDivePage', () => {
     expect(mobileResultsNav).toBeInTheDocument();
     expect(within(mobileResultsNav).getByRole('button', { name: 'Analysis Q&A' })).toBeInTheDocument();
     expect(within(mobileResultsNav).getByRole('button', { name: 'Aesop' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Aesop: Logo System' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Aesop: Color Palette' })).toBeInTheDocument();
     expect(within(mobileResultsNav).getByRole('button', { name: 'Opportunity Spaces' })).toBeInTheDocument();
     expect(within(mobileResultsNav).getByRole('button', { name: 'Strategic Recommendations' })).toBeInTheDocument();
     expect(within(mobileResultsNav).getByRole('button', { name: 'Sources' })).toBeInTheDocument();
