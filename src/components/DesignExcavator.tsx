@@ -2772,7 +2772,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         transition={{ duration: 0.5, delay: 0.1 }}
         onSubmit={(e) => e.preventDefault()}
         noValidate
-        className={`w-full mt-4 sm:mt-0 relative flex flex-col gap-4 space-y-4 ${isSearchControlsMinimized ? 'hidden' : ''}`}
+        className={`w-full mt-8 sm:mt-0 relative flex flex-col gap-4 space-y-4 ${isSearchControlsMinimized ? 'hidden' : ''}`}
       >
         <div>
           <div className="flex items-center justify-between mb-3">

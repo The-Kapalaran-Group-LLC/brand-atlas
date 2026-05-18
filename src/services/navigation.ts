@@ -4,6 +4,46 @@ const normalizeHashTarget = (target: string): string => {
   return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
 };
 
+const MOBILE_MAX_WIDTH_PX = 639;
+
+const scrollToTopOnMobile = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  if (window.innerWidth > MOBILE_MAX_WIDTH_PX) {
+    return;
+  }
+
+  try {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  } catch {
+    try {
+      window.scrollTo(0, 0);
+    } catch {
+      // no-op for environments without scroll support
+    }
+  }
+};
+
+const resetMobileScrollAfterNavigation = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  scrollToTopOnMobile();
+  if (typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(() => {
+      scrollToTopOnMobile();
+    });
+    return;
+  }
+
+  window.setTimeout(() => {
+    scrollToTopOnMobile();
+  }, 0);
+};
+
 export const navigateToHomeDashboard = (): void => {
   if (typeof window === 'undefined') {
     return;
@@ -18,11 +58,13 @@ export const navigateToHomeDashboard = (): void => {
   const nextUrl = '/?home=1';
   const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   if (currentUrl === nextUrl) {
+    resetMobileScrollAfterNavigation();
     window.dispatchEvent(new Event('popstate'));
     return;
   }
 
   window.history.pushState({}, '', nextUrl);
+  resetMobileScrollAfterNavigation();
   window.dispatchEvent(new Event('popstate'));
 };
 
@@ -43,9 +85,11 @@ export const navigateToHashRoute = (target: string): void => {
   });
 
   if (window.location.hash.toLowerCase() === normalizedTarget) {
+    resetMobileScrollAfterNavigation();
     window.dispatchEvent(new Event('hashchange'));
     return;
   }
 
   window.location.hash = normalizedTarget.slice(1);
+  resetMobileScrollAfterNavigation();
 };
