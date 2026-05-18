@@ -1810,7 +1810,7 @@ export default function BrandNavigator() {
               )}
             </AnimatePresence>
             <div className="mt-[2px] mb-[2px] px-2 sm:hidden">
-              <p data-testid="mobile-page-subcopy" className="text-center text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">
+              <p data-testid="mobile-page-subcopy" className="text-center text-[1.91rem] font-semibold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-fuchsia-500">
                 Audit any brand or competitive landscape.
               </p>
             </div>
