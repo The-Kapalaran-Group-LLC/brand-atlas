@@ -2619,7 +2619,7 @@ export default function BrandNavigator() {
               {isBrandResultsMode && (
                 <div id="brand-results-ask" className="mb-10 bg-indigo-50 rounded-3xl p-6 md:p-8 border border-indigo-100 shadow-sm no-print">
                   <h3 className="text-xl font-bold text-indigo-900 mb-4 flex items-center gap-2">
-                    <Search className="w-6 h-6" /> Ask Brand Navigator
+                    <Search className="w-6 h-6" /> Ask the Navigator
                   </h3>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <input

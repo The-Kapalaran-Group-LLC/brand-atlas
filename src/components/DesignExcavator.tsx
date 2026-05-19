@@ -2608,12 +2608,12 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
   return (
     <>
-      <div className="w-full px-2 sm:px-0">
+      <div className="w-full">
         <div
           data-testid="mobile-top-bar"
           className={`fixed top-0 left-0 right-0 z-[60] no-print border-b border-zinc-200/80 bg-white/92 backdrop-blur-sm transition-transform duration-200 sm:hidden ${isMobileTopBarVisible ? 'translate-y-0' : '-translate-y-full'}`}
         >
-          <div className="mx-auto flex h-14 max-w-4xl items-center gap-3 px-4">
+          <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
             <button
               type="button"
               data-testid="mobile-nav-trigger"
@@ -2789,13 +2789,13 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         </p>
       </motion.div>
 
-      <div className="w-full max-w-4xl mx-auto space-y-6 md:space-y-8">
+      <div className="w-full max-w-6xl mx-auto px-6 space-y-6 md:space-y-8">
 
       {isSearchControlsMinimized && report && (
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6 bg-white border border-zinc-200 rounded-2xl px-4 py-3 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 no-print"
+          className="w-full max-w-4xl mx-auto mt-8 mb-2 bg-white border border-zinc-200 rounded-2xl px-4 py-3 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 no-print"
         >
           <div className="text-left">
             <p className="text-xs uppercase tracking-wider text-zinc-500 font-semibold">Design Excavator</p>
@@ -2820,7 +2820,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         transition={{ duration: 0.5, delay: 0.1 }}
         onSubmit={(e) => e.preventDefault()}
         noValidate
-        className={`w-full mt-8 sm:mt-0 relative flex flex-col gap-4 space-y-4 ${isSearchControlsMinimized ? 'hidden' : ''}`}
+        className={`w-full max-w-4xl mx-auto mt-4 sm:mt-10 relative flex flex-col gap-4 pb-24 sm:pb-0 ${isSearchControlsMinimized ? 'hidden' : ''}`}
       >
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -3033,7 +3033,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="w-full max-w-4xl mx-auto mt-8 space-y-6"
+              className="w-full mt-8 space-y-6"
             >
             {/* ── Tab Bar ── */}
             <div className="flex gap-2 border-b border-zinc-200 pb-0">
@@ -3123,17 +3123,17 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             {resultTab === 'profiles' && (
               <>
                 {/* Ask About This Analysis section (moved above tabs) */}
-                <section id="design-results-ask" className="bg-zinc-50 rounded-3xl border border-zinc-200 p-6 mb-6">
-                  <h4 className="text-lg font-bold text-zinc-900 mb-4 flex items-center gap-2">
-                    <Search className="w-5 h-5 text-indigo-500" /> Ask About This Analysis
-                  </h4>
-                  <div className="flex gap-3">
+                <section id="design-results-ask" className="mb-10 bg-indigo-50 rounded-3xl p-6 md:p-8 border border-indigo-100 shadow-sm no-print">
+                  <h3 className="text-xl font-bold text-indigo-900 mb-4 flex items-center gap-2">
+                    <Search className="w-6 h-6" /> Ask the Excavator
+                  </h3>
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <input
                       type="text"
                       value={reportQuestion}
                       onChange={(e) => setReportQuestion(e.target.value.slice(0, MAX_EXCAVATOR_QUESTION_LENGTH))}
                       placeholder="e.g. Which brand has the most distinct color system?"
-                      className="flex-1 px-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm"
+                      className="flex-1 px-5 py-4 rounded-2xl border border-indigo-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-zinc-900 shadow-sm text-sm"
                       onKeyDown={(e) => e.key === 'Enter' && handleAskQuestion()}
                       disabled={isSubmittingPrompt}
                     />
@@ -3141,16 +3141,16 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                       type="button"
                       onClick={handleAskQuestion}
                       disabled={isSubmittingPrompt || !reportQuestion.trim()}
-                      className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                      className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-medium hover:bg-indigo-700 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-2 disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all flex items-center justify-center gap-2 shadow-sm"
                     >
-                      {isSubmittingPrompt ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Ask'}
+                      {isSubmittingPrompt ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Ask'}
                     </button>
                   </div>
                   {reportAnswer && (
                     <motion.div
-                      initial={{ opacity: 0, y: 8 }}
+                      initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="mt-4 p-4 bg-white rounded-2xl border border-zinc-100 text-sm text-zinc-700 leading-relaxed"
+                      className="mt-6 p-6 bg-white rounded-2xl border border-indigo-100 text-zinc-700 shadow-sm leading-relaxed"
                     >
                       {reportAnswer}
                     </motion.div>
@@ -3853,7 +3853,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       </AnimatePresence>
 
       {report && (
-        <div className="w-full max-w-4xl mx-auto mt-14 mb-20 no-print">
+        <div className="w-full mt-14 mb-20 no-print">
           <RecentResultsLibrary<DesignExcavatorRecentResult>
             mode={APP_RECENT_RESULTS_MODES.DESIGN_EXCAVATOR}
             title="Recent Projects"
@@ -3885,7 +3885,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
       {/* Your Library section is hidden for now. Code is preserved below for future use. */}
       {false && (
-        <section className="w-full max-w-4xl mx-auto mt-10 bg-white rounded-3xl border border-zinc-200 p-5">
+        <section className="w-full max-w-5xl mx-auto mt-10 bg-white rounded-3xl border border-zinc-200 p-5">
           <div className="flex items-center gap-2 mb-4">
             <Clock className="w-5 h-5 text-zinc-400" />
             <h3 className="text-xl font-semibold text-zinc-900">Your Library</h3>
