@@ -1,4 +1,6 @@
 import { AzureOpenAI } from 'openai';
+import { zodResponseFormat } from 'openai/helpers/zod';
+import { z } from 'zod';
 import { fetchSubredditQuotes, fetchSubredditQuotesFresh } from './fetchSubredditQuotes';
 
 const BING_SEARCH_ENDPOINT = 'https://api.bing.microsoft.com/v7.0/search';
@@ -24,6 +26,21 @@ type BingSearchFreshness = 'Day' | 'Week' | 'Month' | 'Year';
 type SearchProvider = 'google' | 'bing';
 type GptMethodology = 'previous' | 'current';
 type SearchProviderPreference = SearchProvider | 'auto';
+type ExperimentalInsightClassification = 'breaking' | 'structural';
+
+const EXPERIMENTAL_QUERY_COUNT = 4;
+const EXPERIMENTAL_SNIPPETS_PER_QUERY = 3;
+
+const ExperimentalQueryArraySchema = z.array(z.string()).min(EXPERIMENTAL_QUERY_COUNT);
+const ExperimentalSynthesisSchema = z.object({
+  insights: z.array(
+    z.object({
+      classification: z.enum(['breaking', 'structural']),
+      insight: z.string(),
+      source_citation: z.string(),
+    })
+  ),
+});
 
 type GoogleSearchResult = {
   title?: string;
@@ -428,6 +445,232 @@ export async function fetchAudienceContextPreviousMethodology(audience: string):
   });
 
   return `Previous Methodology (single-lane baseline):\n${result.value.join('\n\n')}`;
+}
+
+function parseJsonArrayFromText(value: string): string[] {
+  const normalized = String(value || '').trim();
+  if (!normalized) return [];
+
+  try {
+    const parsed = JSON.parse(normalized);
+    return Array.isArray(parsed) ? parsed.map((item) => normalizeWhitespace(String(item || ''))).filter(Boolean) : [];
+  } catch {
+    const match = normalized.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    try {
+      const parsed = JSON.parse(match[0]);
+      return Array.isArray(parsed) ? parsed.map((item) => normalizeWhitespace(String(item || ''))).filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+}
+
+async function generateExperimentalBroadIntakeQueries(audience: string): Promise<string[]> {
+  const client = getAzureClientForGrounding();
+  const deployment = getAzureGroundingDeploymentName();
+  const normalizedAudience = normalizeWhitespace(audience || '');
+
+  console.log('[grounding] Experimental broad-intake query expansion start.', {
+    audience: normalizedAudience,
+    deployment,
+  });
+
+  const completion = await client.chat.completions.create({
+    model: deployment,
+    temperature: 0.2,
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a cultural research assistant. Your job is to cast a wide net for information.',
+      },
+      {
+        role: 'user',
+        content: `Generate 4 diverse, natural-language search queries to uncover emerging macro-economic trends and daily behavioral rituals for the audience: "${normalizedAudience}". Do not use boolean operators. Return ONLY a JSON array of strings.`,
+      },
+    ],
+  });
+
+  const raw = extractCompletionText(completion.choices?.[0]?.message?.content);
+  const parsed = parseJsonArrayFromText(raw);
+
+  console.log('[grounding] Experimental broad-intake query expansion complete.', {
+    audience: normalizedAudience,
+    rawChars: raw.length,
+    queryCount: parsed.length,
+  });
+
+  const validated = ExperimentalQueryArraySchema.safeParse(parsed);
+  if (validated.success) {
+    return validated.data.slice(0, EXPERIMENTAL_QUERY_COUNT);
+  }
+
+  const fallback = [
+    `${normalizedAudience} macroeconomic pressure and spending behavior right now`,
+    `${normalizedAudience} daily rituals and routine behavior in work school and home life`,
+    `${normalizedAudience} creator trust practical utility trends in purchasing and adoption`,
+    `${normalizedAudience} value-first choices and identity signaling patterns`,
+  ];
+
+  console.log('[grounding] Experimental broad-intake query expansion fallback applied.', {
+    audience: normalizedAudience,
+    fallbackCount: fallback.length,
+  });
+
+  return fallback;
+}
+
+async function synthesizeExperimentalEvidenceDigest(
+  audience: string,
+  rawSnippets: Array<{ query: string; snippet: string }>
+): Promise<z.infer<typeof ExperimentalSynthesisSchema>> {
+  const client = getAzureClientForGrounding();
+  const deployment = getAzureGroundingDeploymentName();
+  const snippetsJson = JSON.stringify(rawSnippets, null, 2);
+
+  console.log('[grounding] Experimental strict synthesis start.', {
+    audience,
+    deployment,
+    snippetCount: rawSnippets.length,
+  });
+
+  const completion = await client.chat.completions.create({
+    model: deployment,
+    temperature: 0.1,
+    response_format: zodResponseFormat(ExperimentalSynthesisSchema, 'experimental_evidence_digest'),
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a strict Macro-Economic and Behavioral Analyst. You will be provided with raw web snippets from Google/Bing. Your task is to extract exact evidence and format it strictly according to the requested JSON schema. Rules: 1. NEVER hallucinate trends. If a trend is not explicitly supported by the snippets, omit it. 2. Every insight must include an exact, verbatim source_citation matching the provided snippet. 3. Classify each insight strictly as "breaking" (last 7 days) or "structural" (annual/macro).',
+      },
+      {
+        role: 'user',
+        content: `Audience: "${audience}"\nRaw Snippets: ${snippetsJson}\nExtract the evidence digest.`,
+      },
+    ],
+  });
+
+  const text = extractCompletionText(completion.choices?.[0]?.message?.content);
+  const parsed = ExperimentalSynthesisSchema.parse(JSON.parse(text || '{}'));
+
+  console.log('[grounding] Experimental strict synthesis complete.', {
+    audience,
+    insightCount: parsed.insights.length,
+  });
+
+  return parsed;
+}
+
+function buildExperimentalDigest(
+  audience: string,
+  queries: string[],
+  insights: Array<{ classification: ExperimentalInsightClassification; insight: string; source_citation: string }>
+): string {
+  const breaking = insights.filter((item) => item.classification === 'breaking');
+  const structural = insights.filter((item) => item.classification === 'structural');
+
+  const queryLines = queries
+    .slice(0, EXPERIMENTAL_QUERY_COUNT)
+    .map((query, index) => `${index + 1}) ${query}`)
+    .join('\n');
+
+  const formatInsightLines = (items: Array<{ insight: string; source_citation: string }>, emptyLabel: string): string => {
+    if (!items.length) return emptyLabel;
+    return items
+      .map((item, index) => `${index + 1}) ${item.insight}\n   citation: "${item.source_citation}"`)
+      .join('\n');
+  };
+
+  return `Experimental Methodology (broad-intake + strict synthesis):
+Audience: ${audience}
+
+Broad intake queries:
+${queryLines}
+
+Breaking (last 7 days):
+${formatInsightLines(breaking, 'No explicitly supported breaking insights found in provided snippets.')}
+
+Structural (annual + macro):
+${formatInsightLines(structural, 'No explicitly supported structural insights found in provided snippets.')}`;
+}
+
+export async function fetchAudienceContextExperimentalMethodology(
+  audience: string,
+  options?: {
+    provider?: SearchProviderPreference;
+    queryGenerator?: (audience: string) => Promise<string[]>;
+    synthesisGenerator?: (
+      params: { audience: string; rawSnippets: Array<{ query: string; snippet: string }> }
+    ) => Promise<z.infer<typeof ExperimentalSynthesisSchema>>;
+  }
+): Promise<string> {
+  const normalizedAudience = normalizeWhitespace(audience || '');
+  if (!normalizedAudience) {
+    throw new Error('Audience is required to fetch experimental grounding context.');
+  }
+
+  const provider = resolveSearchProvider(options?.provider);
+  const fetcher = provider === 'google' ? fetchGoogle : fetchBing;
+  const queryGenerator = options?.queryGenerator || generateExperimentalBroadIntakeQueries;
+  const synthesisGenerator = options?.synthesisGenerator
+    || ((params: { audience: string; rawSnippets: Array<{ query: string; snippet: string }> }) =>
+      synthesizeExperimentalEvidenceDigest(params.audience, params.rawSnippets));
+
+  console.log('[grounding] Experimental methodology start.', {
+    audience: normalizedAudience,
+    provider,
+  });
+
+  const rawQueries = await queryGenerator(normalizedAudience);
+  const uniqueQueries = Array.from(
+    new Set((rawQueries || []).map((query) => normalizeWhitespace(String(query || ''))).filter(Boolean))
+  ).slice(0, EXPERIMENTAL_QUERY_COUNT);
+
+  if (!uniqueQueries.length) {
+    throw new Error('Experimental methodology could not generate broad-intake queries.');
+  }
+
+  while (uniqueQueries.length < EXPERIMENTAL_QUERY_COUNT) {
+    uniqueQueries.push(`${normalizedAudience} trend signal ${uniqueQueries.length + 1}`);
+  }
+
+  const settled = await Promise.allSettled(uniqueQueries.map((query) => fetcher(query)));
+  const rawSnippets: Array<{ query: string; snippet: string }> = [];
+  settled.forEach((result, index) => {
+    if (result.status !== 'fulfilled') return;
+    result.value
+      .slice(0, EXPERIMENTAL_SNIPPETS_PER_QUERY)
+      .forEach((snippet) => rawSnippets.push({ query: uniqueQueries[index], snippet }));
+  });
+
+  if (!rawSnippets.length) {
+    return `Experimental Methodology (broad-intake + strict synthesis):
+Audience: ${normalizedAudience}
+No web results returned for broad-intake queries.`;
+  }
+
+  const synthesis = await synthesisGenerator({
+    audience: normalizedAudience,
+    rawSnippets,
+  });
+
+  const snippetSet = new Set(rawSnippets.map((item) => normalizeWhitespace(item.snippet)));
+  const strictlyGroundedInsights = synthesis.insights
+    .map((item) => ({
+      classification: item.classification,
+      insight: normalizeWhitespace(item.insight),
+      source_citation: normalizeWhitespace(item.source_citation),
+    }))
+    .filter((item) => item.insight && item.source_citation && snippetSet.has(item.source_citation));
+
+  console.log('[grounding] Experimental methodology complete.', {
+    audience: normalizedAudience,
+    queryCount: uniqueQueries.length,
+    snippetCount: rawSnippets.length,
+    groundedInsightCount: strictlyGroundedInsights.length,
+  });
+
+  return buildExperimentalDigest(normalizedAudience, uniqueQueries, strictlyGroundedInsights);
 }
 
 function inferCommunitySubredditCandidates(audience: string): string[] {

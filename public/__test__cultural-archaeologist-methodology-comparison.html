@@ -23,11 +23,7 @@
         background: radial-gradient(circle at top right, #ccfbf1 0%, var(--bg) 45%);
         color: var(--text);
       }
-      .container {
-        max-width: 1280px;
-        margin: 0 auto;
-        padding: 24px;
-      }
+      .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
       .panel {
         background: var(--surface);
         border: 1px solid var(--border);
@@ -35,11 +31,7 @@
         padding: 20px;
         box-shadow: 0 8px 24px rgba(2, 6, 23, 0.04);
       }
-      .controls {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-      }
+      .controls { display: flex; flex-wrap: wrap; gap: 12px; }
       input {
         flex: 1;
         min-width: 240px;
@@ -57,15 +49,8 @@
         background: var(--accent);
         cursor: pointer;
       }
-      button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-      .status {
-        margin-top: 12px;
-        color: var(--muted);
-        font-size: 13px;
-      }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .status { margin-top: 12px; color: var(--muted); font-size: 13px; }
       .status.error { color: var(--danger); font-weight: 600; }
       .summary-grid {
         margin-top: 16px;
@@ -79,19 +64,12 @@
         padding: 10px;
         background: #f9fafb;
       }
-      .stat .label {
-        color: var(--muted);
-        font-size: 12px;
-      }
-      .stat .value {
-        font-size: 18px;
-        font-weight: 700;
-        margin-top: 4px;
-      }
+      .stat .label { color: var(--muted); font-size: 12px; }
+      .stat .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
       .results {
         margin-top: 20px;
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
         gap: 16px;
       }
       h1 { margin: 0 0 8px 0; font-size: 24px; }
@@ -112,7 +90,7 @@
         border-radius: 10px;
         padding: 12px;
         background: #f8fafc;
-        max-height: 540px;
+        max-height: 620px;
         overflow: auto;
         white-space: pre-wrap;
         word-break: break-word;
@@ -120,41 +98,43 @@
         font-size: 12px;
         line-height: 1.45;
       }
-      code {
-        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
-      }
+      code { font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace; }
     </style>
   </head>
   <body>
     <div class="container">
       <section class="panel">
         <h1>Cultural Archaeologist Methodology Comparison</h1>
-        <p class="status">Compare previous and current evidence-digest methodologies side-by-side.</p>
+        <p class="status">Compare previous, current, and new experimental evidence-digest methodologies side-by-side.</p>
         <div class="controls">
-          <input id="audienceInput" data-testid="methodology-audience-input" value="Gen Z" placeholder="Audience (example: Gen Z)" />
+          <input id="audienceInput" data-testid="methodology-audience-input" value="__INITIAL_AUDIENCE__" placeholder="Audience (example: Gen Z)" />
           <button id="runButton" data-testid="methodology-run-button">Re-Run Comparison</button>
         </div>
-        <p id="status" class="status" data-testid="methodology-status">Preloaded comparison for "Gen Z".</p>
-        <p class="status">
-          Related page:
-          <a href="/__test__cultural-archaeologist-tone-methodology-comparison-static.html">Tone Methodology Comparison</a>
-        </p>
+        <p id="status" class="status" data-testid="methodology-status">__INITIAL_STATUS__</p>
         <div class="summary-grid">
           <div class="stat" data-testid="methodology-previous-lines">
             <div class="label">Previous Digest Lines</div>
-            <div id="previousLines" class="value">7</div>
+            <div id="previousLines" class="value">__INITIAL_PREVIOUS_LINES__</div>
           </div>
           <div class="stat" data-testid="methodology-current-lines">
             <div class="label">Current Digest Lines</div>
-            <div id="currentLines" class="value">12</div>
+            <div id="currentLines" class="value">__INITIAL_CURRENT_LINES__</div>
+          </div>
+          <div class="stat" data-testid="methodology-experimental-lines">
+            <div class="label">Experimental Digest Lines</div>
+            <div id="experimentalLines" class="value">__INITIAL_EXPERIMENTAL_LINES__</div>
           </div>
           <div class="stat" data-testid="methodology-current-breaking">
             <div class="label">Current Digest: Breaking Section</div>
-            <div id="currentHasBreaking" class="value">Yes</div>
+            <div id="currentHasBreaking" class="value">__INITIAL_HAS_BREAKING__</div>
           </div>
           <div class="stat" data-testid="methodology-current-structural">
             <div class="label">Current Digest: Structural Section</div>
-            <div id="currentHasStructural" class="value">Yes</div>
+            <div id="currentHasStructural" class="value">__INITIAL_HAS_STRUCTURAL__</div>
+          </div>
+          <div class="stat" data-testid="methodology-experimental-citations">
+            <div class="label">Experimental: Strict Citations</div>
+            <div id="experimentalHasStrictCitations" class="value">__INITIAL_HAS_STRICT_CITATIONS__</div>
           </div>
         </div>
       </section>
@@ -164,40 +144,21 @@
           <span class="pill">Previous</span>
           <h2>Single-Lane Baseline</h2>
           <p class="status">Legacy format with one broad query.</p>
-          <pre id="previousDigest" data-testid="methodology-previous-digest">Audience: Gen Z
-Methodology: Previous (single-lane baseline)
-
-1) Short-form video platforms continue to dominate daily attention and trend discovery.
-2) AI use among students and early-career workers is rising for productivity and experimentation.
-3) Cost-of-living pressure is shaping purchase timing, brand switching, and value sensitivity.
-4) Community belonging is often built through niche creator ecosystems and fandom spaces.
-5) Trust in institutions remains mixed, with stronger reliance on peers and transparent creators.
-6) Identity expression is increasingly visual and memetic across social channels.
-7) Mental wellness framing appears frequently in lifestyle and work-life discussions.</pre>
+          <pre id="previousDigest" data-testid="methodology-previous-digest">__INITIAL_PREVIOUS_DIGEST__</pre>
         </article>
 
         <article class="panel" data-testid="methodology-current-panel">
           <span class="pill">Current</span>
           <h2>Dual-Lane Macro Method</h2>
-          <p class="status">Breaking (`Day`) + structural macro (`Year` + annual report/macro trend).</p>
-          <pre id="currentDigest" data-testid="methodology-current-digest">Audience: Gen Z
-Methodology: Current (breaking + structural macro lanes)
+          <p class="status">Breaking (`Day/Week`) + structural macro (`Year` + annual report/macro trend).</p>
+          <pre id="currentDigest" data-testid="methodology-current-digest">__INITIAL_CURRENT_DIGEST__</pre>
+        </article>
 
-Breaking (last 7 days):
-1) AI assistants are being discussed less as novelty and more as default workflow tooling.
-2) Viral discourse continues to reward practical "how I used this today" examples over abstract AI hype.
-3) Back-to-school / early-career content spikes show increased interest in skill-stacking and portfolio-building.
-4) Creator-led explainers are outperforming brand-led thought leadership in perceived usefulness.
-
-Structural (annual + macro):
-1) Economic pressure has normalized "value-first" behavior: delayed purchases, dupe culture, and selective premium spend.
-2) Identity is increasingly performed through participatory formats (remix, stitch, duet, template trends).
-3) Trust formation continues to shift from institutional messaging toward peer proof and lived-experience narratives.
-4) Mental wellness language has moved from niche discourse to a default framing in productivity and lifestyle talk.
-5) Community legitimacy is granted by consistency, transparency, and shared constraints (not just aesthetics).
-6) Platform-native communication compresses tone: concise, referential, and symbol-heavy language dominates.
-7) Long-horizon implication: brands that show practical utility + cultural fluency outperform purely aspirational positioning.
-8) Long-horizon implication: audiences reward systems that reduce uncertainty and cognitive load, especially in volatile cycles.</pre>
+        <article class="panel" data-testid="methodology-experimental-panel">
+          <span class="pill">Experimental</span>
+          <h2>Broad Intake + Strict Synthesis</h2>
+          <p class="status">4 expanded queries + strict extraction with verbatim source citations and `breaking|structural` classification.</p>
+          <pre id="experimentalDigest" data-testid="methodology-experimental-digest">__INITIAL_EXPERIMENTAL_DIGEST__</pre>
         </article>
       </section>
     </div>
@@ -208,10 +169,13 @@ Structural (annual + macro):
       const statusEl = document.getElementById('status');
       const previousDigestEl = document.getElementById('previousDigest');
       const currentDigestEl = document.getElementById('currentDigest');
+      const experimentalDigestEl = document.getElementById('experimentalDigest');
       const previousLinesEl = document.getElementById('previousLines');
       const currentLinesEl = document.getElementById('currentLines');
+      const experimentalLinesEl = document.getElementById('experimentalLines');
       const currentHasBreakingEl = document.getElementById('currentHasBreaking');
       const currentHasStructuralEl = document.getElementById('currentHasStructural');
+      const experimentalHasStrictCitationsEl = document.getElementById('experimentalHasStrictCitations');
 
       function candidateApiBases() {
         const candidates = [
@@ -231,7 +195,6 @@ Structural (annual + macro):
         for (const base of bases) {
           const endpoint = `${base}/api/cultural-methodology-compare?audience=${encodeURIComponent(audience)}`;
           try {
-            console.log('[methodology-comparison-page] Trying comparison endpoint.', { endpoint });
             const response = await fetch(endpoint);
             const payload = await response.json().catch(() => ({}));
             if (!response.ok) {
@@ -265,42 +228,39 @@ Structural (annual + macro):
         runButton.disabled = true;
         statusEl.className = 'status';
         statusEl.textContent = `Running comparison for "${audience}"...`;
-        console.log('[methodology-comparison-page] Starting comparison run.', { audience });
 
         try {
-          const { payload, base } = await fetchComparisonPayload(audience);
-          console.log('[methodology-comparison-page] Comparison payload received.', { base });
+          const { payload } = await fetchComparisonPayload(audience);
 
           const previousDigest = String(payload?.previous?.digest || 'No previous digest returned.');
           const currentDigest = String(payload?.current?.digest || 'No current digest returned.');
+          const experimentalDigest = String(payload?.experimental?.digest || 'No experimental digest returned.');
 
           previousDigestEl.textContent = previousDigest;
           currentDigestEl.textContent = currentDigest;
+          experimentalDigestEl.textContent = experimentalDigest;
 
           const previousLines = countLines(previousDigest);
           const currentLines = countLines(currentDigest);
+          const experimentalLines = countLines(experimentalDigest);
+
           const hasBreaking = currentDigest.includes('Breaking (last 7 days):') || currentDigest.includes('Breaking (last 24h):');
           const hasStructural = currentDigest.includes('Structural (annual + macro):');
+          const hasStrictCitations = experimentalDigest.includes('citation: "');
 
           previousLinesEl.textContent = String(previousLines);
           currentLinesEl.textContent = String(currentLines);
+          experimentalLinesEl.textContent = String(experimentalLines);
           currentHasBreakingEl.textContent = hasBreaking ? 'Yes' : 'No';
           currentHasStructuralEl.textContent = hasStructural ? 'Yes' : 'No';
+          experimentalHasStrictCitationsEl.textContent = hasStrictCitations ? 'Yes' : 'No';
 
           statusEl.textContent = `Comparison complete for "${audience}".`;
           statusEl.className = 'status';
-          console.log('[methodology-comparison-page] Comparison complete.', {
-            audience,
-            previousLines,
-            currentLines,
-            hasBreaking,
-            hasStructural,
-          });
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Unknown error';
           statusEl.textContent = message;
           statusEl.className = 'status error';
-          console.error('[methodology-comparison-page] Comparison failed.', { audience, message });
         } finally {
           runButton.disabled = false;
         }

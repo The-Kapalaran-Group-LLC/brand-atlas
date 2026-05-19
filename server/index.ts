@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import {
   fetchAudienceContext,
+  fetchAudienceContextExperimentalMethodology,
   fetchAudienceContextPreviousMethodology,
   fetchCommunityContextBarbellMethodology,
   fetchCommunityContextPreviousMethodology,
@@ -114,6 +115,27 @@ Behavioral macro context (habit persistence + guides):
 5) Recent viral challenges still appear, but sustained rituals remain the stronger predictor of repeat behavior.`;
 };
 
+const buildExperimentalMethodologySnapshotDigest = (audience: string): string => `Experimental Methodology (broad-intake + strict synthesis):
+Audience: ${audience}
+
+Broad intake queries:
+1) Gen Z macro-economic pressure and value-first spending routines
+2) Gen Z daily behavioral rituals in work school and social life
+3) Gen Z creator-led practical utility trends and trust signals
+4) Gen Z identity signaling and selective premium spending patterns
+
+Breaking (last 7 days):
+1) Practical "show me how this helped today" content is outperforming abstract hype narratives.
+   citation: "Snippet: Creator-led explainers with concrete outcomes are trending in Gen Z feeds this week."
+2) Daily workflow AI usage is being framed as default utility rather than experimental novelty.
+   citation: "Snippet: Gen Z early-career users discuss AI assistants as baseline workflow support."
+
+Structural (annual + macro):
+1) Cost pressure continues to reinforce value-first behavior and delayed purchasing decisions.
+   citation: "Snippet: Gen Z consumers report sustained value-seeking and selective premium spending under macro pressure."
+2) Trust formation keeps shifting toward peer proof and lived-use demonstrations.
+   citation: "Snippet: Peer-led practical recommendations remain a stronger trust input than institutional messaging."`;
+
 const shouldUseBehaviorSnapshotFallback = (digest: string): boolean => {
   const normalized = (digest || '').toLowerCase();
   return (
@@ -216,9 +238,10 @@ async function renderMethodologyComparisonHtml(audience = 'Gen Z'): Promise<stri
   const template = await readFile(templatePath, 'utf8');
   const normalizedAudience = audience.trim() || 'Gen Z';
 
-  const [previousResult, currentResult] = await Promise.allSettled([
+  const [previousResult, currentResult, experimentalResult] = await Promise.allSettled([
     fetchAudienceContextWithGptSearch(normalizedAudience, 'previous'),
     fetchAudienceContextWithGptSearch(normalizedAudience, 'current'),
+    fetchAudienceContextExperimentalMethodology(normalizedAudience),
   ]);
 
   const previousDigest = previousResult.status === 'fulfilled'
@@ -227,21 +250,30 @@ async function renderMethodologyComparisonHtml(audience = 'Gen Z'): Promise<stri
   const currentDigest = currentResult.status === 'fulfilled'
     ? currentResult.value
     : buildComparisonFallbackDigest('current', currentResult.reason);
+  const experimentalDigest = experimentalResult.status === 'fulfilled'
+    ? experimentalResult.value
+    : buildExperimentalMethodologySnapshotDigest(normalizedAudience);
 
   const previousLines = countDigestLines(previousDigest);
   const currentLines = countDigestLines(currentDigest);
+  const experimentalLines = countDigestLines(experimentalDigest);
   const hasBreaking = (currentDigest.includes('Breaking (last 7 days):') || currentDigest.includes('Breaking (last 24h):')) ? 'Yes' : 'No';
   const hasStructural = currentDigest.includes('Structural (annual + macro):') ? 'Yes' : 'No';
+  const hasStrictCitations = experimentalDigest.includes('citation: "') ? 'Yes' : 'No';
   const initialStatus = `Preloaded comparison for "${normalizedAudience}".`;
 
   return template
     .replace('__INITIAL_STATUS__', escapeHtml(initialStatus))
+    .replaceAll('__INITIAL_AUDIENCE__', escapeHtml(normalizedAudience))
     .replace('__INITIAL_PREVIOUS_LINES__', String(previousLines))
     .replace('__INITIAL_CURRENT_LINES__', String(currentLines))
+    .replace('__INITIAL_EXPERIMENTAL_LINES__', String(experimentalLines))
     .replace('__INITIAL_HAS_BREAKING__', hasBreaking)
     .replace('__INITIAL_HAS_STRUCTURAL__', hasStructural)
+    .replace('__INITIAL_HAS_STRICT_CITATIONS__', hasStrictCitations)
     .replace('__INITIAL_PREVIOUS_DIGEST__', escapeHtml(previousDigest))
-    .replace('__INITIAL_CURRENT_DIGEST__', escapeHtml(currentDigest));
+    .replace('__INITIAL_CURRENT_DIGEST__', escapeHtml(currentDigest))
+    .replace('__INITIAL_EXPERIMENTAL_DIGEST__', escapeHtml(experimentalDigest));
 }
 
 async function renderBehaviorMethodologyComparisonHtml(audience = 'Gen Z'): Promise<string> {
@@ -411,7 +443,7 @@ app.get('/__test/cultural-archaeologist-methodology-comparison', async (_req, re
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown render error';
     console.error('[methodology-compare] Failed to render preloaded comparison page.', { message });
-    res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-methodology-comparison.html'));
+    res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-methodology-comparison-static.html'));
   }
 });
 app.get('/__test/cultural-archaeologist-methodology-comparison.html', async (_req, res) => {
@@ -423,7 +455,7 @@ app.get('/__test/cultural-archaeologist-methodology-comparison.html', async (_re
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown render error';
     console.error('[methodology-compare] Failed to render preloaded comparison page.', { message });
-    res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-methodology-comparison.html'));
+    res.sendFile(path.join(publicDir, '__test__cultural-archaeologist-methodology-comparison-static.html'));
   }
 });
 app.get('/__test/cultural-archaeologist-behaviors-methodology-comparison', async (_req, res) => {
@@ -1325,9 +1357,10 @@ app.get('/api/cultural-methodology-compare', async (req, res) => {
   console.log('[methodology-compare] Starting comparison request', { audience: normalizedAudience });
 
   try {
-    const [previousResult, currentResult] = await Promise.allSettled([
+    const [previousResult, currentResult, experimentalResult] = await Promise.allSettled([
       fetchAudienceContextWithGptSearch(normalizedAudience, 'previous'),
       fetchAudienceContextWithGptSearch(normalizedAudience, 'current'),
+      fetchAudienceContextExperimentalMethodology(normalizedAudience),
     ]);
 
     const previousDigest = previousResult.status === 'fulfilled'
@@ -1336,13 +1369,18 @@ app.get('/api/cultural-methodology-compare', async (req, res) => {
     const currentDigest = currentResult.status === 'fulfilled'
       ? currentResult.value
       : buildComparisonFallbackDigest('current', currentResult.reason);
+    const experimentalDigest = experimentalResult.status === 'fulfilled'
+      ? experimentalResult.value
+      : buildExperimentalMethodologySnapshotDigest(normalizedAudience);
 
     console.log('[methodology-compare] Comparison completed', {
       audience: normalizedAudience,
       previousStatus: previousResult.status,
       currentStatus: currentResult.status,
+      experimentalStatus: experimentalResult.status,
       previousLength: previousDigest.length,
       currentLength: currentDigest.length,
+      experimentalLength: experimentalDigest.length,
     });
 
     return res.json({
@@ -1354,6 +1392,10 @@ app.get('/api/cultural-methodology-compare', async (req, res) => {
       current: {
         methodology: 'Current (breaking + structural macro lanes)',
         digest: currentDigest,
+      },
+      experimental: {
+        methodology: 'Experimental (broad-intake + strict synthesis)',
+        digest: experimentalDigest,
       },
     });
   } catch (err: any) {

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   fetchAudienceContext,
+  fetchAudienceContextExperimentalMethodology,
   fetchAudienceContextPreviousMethodology,
   fetchCommunityContextBarbellMethodology,
   fetchCommunityContextPreviousMethodology,
@@ -301,6 +302,54 @@ describe('fetchAudienceContext', () => {
     expect(firstUrl.searchParams.get('freshness')).toBeNull();
     expect(context).toContain('Previous Methodology (single-lane baseline):');
     expect(context).toContain('Baseline signal about Gen Z spending pressure and creator income volatility.');
+  });
+
+  it('supports experimental methodology with broad-intake queries and strict synthesis output', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          webPages: {
+            value: [
+              { snippet: 'Snippet A: Gen Z increasingly relies on creator-led practical budgeting routines.' },
+              { snippet: 'Snippet B: Early-career Gen Z workers are using AI assistants in everyday workflow tasks.' },
+            ],
+          },
+        }),
+      } as Response);
+
+    const context = await fetchAudienceContextExperimentalMethodology('Gen Z', {
+      queryGenerator: async () => [
+        'Gen Z macro-economic pressure and spending rituals',
+        'Gen Z daily AI workflow routines early career',
+        'Gen Z creator trust and practical utility behavior',
+        'Gen Z identity and value-first consumer behavior',
+      ],
+      synthesisGenerator: async () => ({
+        insights: [
+          {
+            classification: 'breaking',
+            insight: 'Practical creator-led budgeting routines are rising in discussion among Gen Z.',
+            source_citation: 'Snippet A: Gen Z increasingly relies on creator-led practical budgeting routines.',
+          },
+          {
+            classification: 'structural',
+            insight: 'AI assistants are becoming default workflow infrastructure for early-career Gen Z.',
+            source_citation: 'Snippet B: Early-career Gen Z workers are using AI assistants in everyday workflow tasks.',
+          },
+        ],
+      }),
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(context).toContain('Experimental Methodology (broad-intake + strict synthesis):');
+    expect(context).toContain('Broad intake queries:');
+    expect(context).toContain('Breaking (last 7 days):');
+    expect(context).toContain('Structural (annual + macro):');
+    expect(context).toContain('citation: "Snippet A: Gen Z increasingly relies on creator-led practical budgeting routines."');
+    expect(context).toContain('citation: "Snippet B: Early-career Gen Z workers are using AI assistants in everyday workflow tasks."');
   });
 
   it('supports previous community methodology with a single baseline lane', async () => {

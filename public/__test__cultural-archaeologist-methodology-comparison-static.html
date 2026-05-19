@@ -22,11 +22,7 @@
         background: radial-gradient(circle at top right, #ccfbf1 0%, var(--bg) 45%);
         color: var(--text);
       }
-      .container {
-        max-width: 1280px;
-        margin: 0 auto;
-        padding: 24px;
-      }
+      .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
       .panel {
         background: var(--surface);
         border: 1px solid var(--border);
@@ -46,28 +42,17 @@
         padding: 10px;
         background: #f9fafb;
       }
-      .stat .label {
-        color: var(--muted);
-        font-size: 12px;
-      }
-      .stat .value {
-        font-size: 18px;
-        font-weight: 700;
-        margin-top: 4px;
-      }
+      .stat .label { color: var(--muted); font-size: 12px; }
+      .stat .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
       .results {
         margin-top: 20px;
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
         gap: 16px;
       }
       h1 { margin: 0 0 8px 0; font-size: 24px; }
       h2 { margin: 0 0 6px 0; font-size: 18px; }
-      .status {
-        margin-top: 12px;
-        color: var(--muted);
-        font-size: 13px;
-      }
+      .status { margin-top: 12px; color: var(--muted); font-size: 13px; }
       .pill {
         display: inline-block;
         margin-bottom: 8px;
@@ -84,7 +69,7 @@
         border-radius: 10px;
         padding: 12px;
         background: #f8fafc;
-        max-height: 540px;
+        max-height: 620px;
         overflow: auto;
         white-space: pre-wrap;
         word-break: break-word;
@@ -92,9 +77,7 @@
         font-size: 12px;
         line-height: 1.45;
       }
-      code {
-        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
-      }
+      code { font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace; }
     </style>
   </head>
   <body>
@@ -102,10 +85,6 @@
       <section class="panel">
         <h1>Cultural Archaeologist Methodology Comparison</h1>
         <p class="status">Static comparison snapshot for <strong>Audience: Gen Z</strong> (pre-populated).</p>
-        <p class="status">
-          Related page:
-          <a href="/__test__cultural-archaeologist-tone-methodology-comparison-static.html">Tone Methodology Comparison</a>
-        </p>
         <div class="summary-grid">
           <div class="stat">
             <div class="label">Audience</div>
@@ -120,7 +99,15 @@
             <div class="value">12</div>
           </div>
           <div class="stat">
+            <div class="label">Experimental Digest Lines</div>
+            <div class="value">19</div>
+          </div>
+          <div class="stat">
             <div class="label">Current Includes Breaking + Structural</div>
+            <div class="value">Yes</div>
+          </div>
+          <div class="stat">
+            <div class="label">Experimental Strict Citations</div>
             <div class="value">Yes</div>
           </div>
         </div>
@@ -165,6 +152,32 @@ Structural (annual + macro):
 6) Platform-native communication compresses tone: concise, referential, and symbol-heavy language dominates.
 7) Long-horizon implication: brands that show practical utility + cultural fluency outperform purely aspirational positioning.
 8) Long-horizon implication: audiences reward systems that reduce uncertainty and cognitive load, especially in volatile cycles.</pre>
+        </article>
+
+        <article class="panel">
+          <span class="pill">Experimental</span>
+          <h2>Broad Intake + Strict Synthesis</h2>
+          <p class="status">Two-step method: query expansion + strict citation-validated extraction.</p>
+          <pre>Experimental Methodology (broad-intake + strict synthesis):
+Audience: Gen Z
+
+Broad intake queries:
+1) Gen Z macro-economic pressure and value-first spending routines
+2) Gen Z daily behavioral rituals in work school and social life
+3) Gen Z creator-led practical utility trends and trust signals
+4) Gen Z identity signaling and selective premium spending patterns
+
+Breaking (last 7 days):
+1) Practical "show me how this helped today" content is outperforming abstract hype narratives.
+   citation: "Snippet: Creator-led explainers with concrete outcomes are trending in Gen Z feeds this week."
+2) Daily workflow AI usage is being framed as default utility rather than experimental novelty.
+   citation: "Snippet: Gen Z early-career users discuss AI assistants as baseline workflow support."
+
+Structural (annual + macro):
+1) Cost pressure continues to reinforce value-first behavior and delayed purchasing decisions.
+   citation: "Snippet: Gen Z consumers report sustained value-seeking and selective premium spending under macro pressure."
+2) Trust formation keeps shifting toward peer proof and lived-use demonstrations.
+   citation: "Snippet: Peer-led practical recommendations remain a stronger trust input than institutional messaging."</pre>
         </article>
       </section>
     </div>
