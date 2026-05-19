@@ -274,6 +274,25 @@ describe('BrandDeepDivePage', () => {
     expect(within(mobileResultsNav).getByRole('button', { name: 'Sources' })).toBeInTheDocument();
   });
 
+  it('renders a Show thinking dropdown for design results that is closed by default', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    const showThinkingDetails = await screen.findByTestId('design-show-thinking-container');
+    expect(showThinkingDetails).not.toHaveAttribute('open');
+
+    fireEvent.click(screen.getByTestId('design-show-thinking-summary'));
+
+    expect(showThinkingDetails).toHaveAttribute('open');
+    expect(
+      screen.getByText('Ran multimodal retrieval + analysis: parsed visual/UI signals, retrieved comparable design patterns, scored alignment against current conventions, and produced evidence-backed improvement opportunities.')
+    ).toBeInTheDocument();
+  });
+
   it('uses a mobile hamburger for navigation links and keeps desktop top links at sm+', () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 

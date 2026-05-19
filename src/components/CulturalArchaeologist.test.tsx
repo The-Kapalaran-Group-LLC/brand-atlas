@@ -180,6 +180,24 @@ describe('CulturalArchaeologist', () => {
     expect(within(mobileResultsNav).getByRole('button', { name: 'Sources' })).toBeInTheDocument();
   });
 
+  it('renders a Show thinking dropdown for cultural results that is closed by default', async () => {
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    const showThinkingDetails = await screen.findByTestId('cultural-show-thinking-container');
+    expect(showThinkingDetails).not.toHaveAttribute('open');
+
+    fireEvent.click(screen.getByTestId('cultural-show-thinking-summary'));
+
+    expect(showThinkingDetails).toHaveAttribute('open');
+    expect(
+      screen.getByText('Applied retrieval-grounded synthesis: collected language, behavior, and community artifacts, clustered recurring motifs and tensions, and generated a structured cultural map with source-grounded claims.')
+    ).toBeInTheDocument();
+  });
+
   it('uses a mobile hamburger for navigation links and keeps desktop top links at sm+', async () => {
     render(<CulturalArchaeologist />);
 

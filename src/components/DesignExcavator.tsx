@@ -95,10 +95,13 @@ import {
 } from '../services/design-excavator-prefill';
 import { MobileTwoLineSubcopy } from './MobileTwoLineSubcopy';
 import { MobileResultsNav } from './MobileResultsNav';
+import { ShowThinkingDropdown } from './ShowThinkingDropdown';
 
 interface VisualDesignPageProps {
   onBack: () => void;
 }
+
+const DESIGN_EXCAVATOR_SHOW_THINKING_TEXT = 'Ran multimodal retrieval + analysis: parsed visual/UI signals, retrieved comparable design patterns, scored alignment against current conventions, and produced evidence-backed improvement opportunities.';
 
 type VisualMethod = 'deterministic' | 'screenshot';
 
@@ -3109,6 +3112,11 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             <MobileResultsNav
               testId="mobile-results-nav-design"
               items={designResultNavItems}
+            />
+
+            <ShowThinkingDropdown
+              methodologyText={DESIGN_EXCAVATOR_SHOW_THINKING_TEXT}
+              testIdPrefix="design-show-thinking"
             />
 
             {/* ── Profiles Tab ── */}

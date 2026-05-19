@@ -41,6 +41,7 @@ import {
 import { SourceLinkRow } from './SourceLinkRow';
 import { MobileTwoLineSubcopy } from './MobileTwoLineSubcopy';
 import { MobileResultsNav } from './MobileResultsNav';
+import { ShowThinkingDropdown } from './ShowThinkingDropdown';
 
 
 
@@ -113,6 +114,7 @@ const EVIDENCE_FILTERS: EvidenceLabelFilter[] = ['known', 'inferred', 'speculati
 const CULTURAL_ARCHAEOLOGIST_TABLE = 'Cultural_Archaeologist';
 const CULTURAL_ARCHAEOLOGIST_TABLE_CANDIDATES = [CULTURAL_ARCHAEOLOGIST_TABLE, 'CulturalArchaeologist', 'searches'] as const;
 const TREND_STAGE_FILTERS: TrendStageFilter[] = ['peaking', 'emerging', 'declining'];
+const CULTURAL_ARCHAEOLOGIST_SHOW_THINKING_TEXT = 'Applied retrieval-grounded synthesis: collected language, behavior, and community artifacts, clustered recurring motifs and tensions, and generated a structured cultural map with source-grounded claims.';
 
 const isMissingResultTextValue = (value?: string | null): boolean => {
   const normalized = (value || '').trim().toLowerCase();
@@ -3280,6 +3282,10 @@ export default function CulturalArchaeologist() {
               </div>
 
               {/* Matrix Search Tool */}
+              <ShowThinkingDropdown
+                methodologyText={CULTURAL_ARCHAEOLOGIST_SHOW_THINKING_TEXT}
+                testIdPrefix="cultural-show-thinking"
+              />
               <MobileResultsNav
                 testId="mobile-results-nav-culture"
                 items={culturalResultNavItems}

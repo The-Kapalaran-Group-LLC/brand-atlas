@@ -69,8 +69,10 @@ import {
 import { saveDesignExcavatorPrefill } from '../services/design-excavator-prefill';
 import { MobileTwoLineSubcopy } from './MobileTwoLineSubcopy';
 import { MobileResultsNav } from './MobileResultsNav';
+import { ShowThinkingDropdown } from './ShowThinkingDropdown';
 
 const BRAND_NAVIGATOR_TABLE = 'Brand_Navigator';
+const BRAND_NAVIGATOR_SHOW_THINKING_TEXT = 'Used a RAG pipeline: retrieved high-signal brand/category sources, re-ranked for relevance, extracted structured positioning evidence, and generated recommendations grounded in cited inputs.';
 
 type BrandMatrixMeta = {
   audience: string;
@@ -2601,6 +2603,11 @@ export default function BrandNavigator() {
                 {matrixMeta.sourcesType && matrixMeta.sourcesType.length > 0 && <p className="text-xl text-zinc-600 mb-2">Sources: {matrixMeta.sourcesType.join(', ')}</p>}
                 <p className="text-zinc-500">Generated on {new Date().toLocaleDateString()}</p>
               </div>
+
+              <ShowThinkingDropdown
+                methodologyText={BRAND_NAVIGATOR_SHOW_THINKING_TEXT}
+                testIdPrefix="brand-show-thinking"
+              />
 
               {isBrandResultsMode && (
                 <MobileResultsNav

@@ -316,6 +316,30 @@ describe('BrandNavigator', () => {
     expect(within(mobileResultsNav).getByRole('button', { name: 'Sources' })).toBeInTheDocument();
   });
 
+  it('renders a Show thinking dropdown for brand results that is closed by default', async () => {
+    generateBrandResearchMatrix.mockResolvedValueOnce(matrixWithResults);
+
+    render(<BrandNavigator />);
+
+    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+
+    fireEvent.click(screen.getByRole('button', { name: /generate analysis/i }));
+
+    const showThinkingDetails = await screen.findByTestId('brand-show-thinking-container');
+    expect(showThinkingDetails).not.toHaveAttribute('open');
+
+    fireEvent.click(screen.getByTestId('brand-show-thinking-summary'));
+
+    expect(showThinkingDetails).toHaveAttribute('open');
+    expect(
+      screen.getByText('Used a RAG pipeline: retrieved high-signal brand/category sources, re-ranked for relevance, extracted structured positioning evidence, and generated recommendations grounded in cited inputs.')
+    ).toBeInTheDocument();
+  });
+
   it('opens research experience immediately when hash route targets brand navigator', async () => {
     window.history.pushState({}, '', '/#brand-navigator');
     render(<BrandNavigator />);
