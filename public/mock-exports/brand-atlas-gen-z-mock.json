@@ -1,0 +1,107 @@
+{
+  "version": "1.0",
+  "meta": {
+    "brand": "Brand Atlas Demo Brand",
+    "audience": "Gen Z",
+    "generatedAtIso": "2026-05-19T17:29:08.678Z",
+    "reportTitle": "Gen Z Brand Atlas Snapshot"
+  },
+  "theme": {
+    "colors": {
+      "pageBackground": "#FFFDF8",
+      "primary": "#111827",
+      "secondary": "#334155",
+      "body": "#1F2937",
+      "muted": "#64748B",
+      "accent": "#F43F5E"
+    },
+    "typography": {
+      "titleFont": "Helvetica",
+      "bodyFont": "Helvetica",
+      "titleSizePt": 34,
+      "bodySizePt": 12,
+      "captionSizePt": 10
+    },
+    "spacing": {
+      "pageMarginPt": 36,
+      "blockGapPt": 14,
+      "lineGapPt": 4
+    }
+  },
+  "pages": [
+    {
+      "id": "cover",
+      "title": "Gen Z Brand Atlas",
+      "subtitle": "Cultural signal map for fast-moving youth behavior",
+      "blocks": [
+        {
+          "type": "text",
+          "text": "Built from a canonical JSON document so PDF and PPTX preserve hierarchy, spacing, and typography."
+        },
+        {
+          "type": "stat",
+          "label": "Confidence",
+          "value": "High",
+          "support": "Cross-source trend alignment in social, commerce, and creator channels."
+        }
+      ]
+    },
+    {
+      "id": "mindset",
+      "title": "Audience Mindset",
+      "subtitle": "What resonates now",
+      "blocks": [
+        {
+          "type": "bullets",
+          "title": "Core Themes",
+          "items": [
+            "Hyper-visual storytelling beats text-heavy narratives.",
+            "Authenticity and creator transparency outperform polished brand ads.",
+            "Micro-communities shape adoption faster than mass campaigns."
+          ]
+        },
+        {
+          "type": "quote",
+          "text": "If it looks generic, it feels inauthentic.",
+          "source": "Gen Z respondent synthesis"
+        }
+      ]
+    },
+    {
+      "id": "creative-system",
+      "title": "Creative Direction",
+      "subtitle": "Retain look-and-feel in all exports",
+      "blocks": [
+        {
+          "type": "bullets",
+          "title": "Design Tokens",
+          "items": [
+            "Accent color for calls-to-action and headline underlines.",
+            "Consistent type scale mapped to PDF pt and PPTX pt.",
+            "Modular card rhythm with fixed spacing tokens."
+          ]
+        },
+        {
+          "type": "text",
+          "text": "Renderer adapters should only translate primitives, never reinterpret content hierarchy."
+        }
+      ]
+    },
+    {
+      "id": "activation",
+      "title": "Activation Playbook",
+      "subtitle": "Execution plan",
+      "blocks": [
+        {
+          "type": "bullets",
+          "title": "Next 30 Days",
+          "items": [
+            "Pilot creator-led launch narrative with 3 short-form concepts.",
+            "Ship weekly trend pulse slides auto-generated from canonical JSON.",
+            "Run visual regression checks between web, PDF, and PPTX exports."
+          ]
+        }
+      ]
+    }
+  ]
+}

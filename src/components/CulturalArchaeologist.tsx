@@ -42,6 +42,12 @@ import { SourceLinkRow } from './SourceLinkRow';
 import { MobileTwoLineSubcopy } from './MobileTwoLineSubcopy';
 import { MobileResultsNav } from './MobileResultsNav';
 import { ShowThinkingDropdown } from './ShowThinkingDropdown';
+import { buildExportFileBase } from '../services/export-filenames';
+import {
+  exportBrandAtlasDocumentToPdf,
+  exportBrandAtlasDocumentToPptx,
+  type BrandAtlasExportDocument,
+} from '../services/brand-atlas-themed-export';
 
 
 
@@ -115,6 +121,16 @@ const CULTURAL_ARCHAEOLOGIST_TABLE = 'Cultural_Archaeologist';
 const CULTURAL_ARCHAEOLOGIST_TABLE_CANDIDATES = [CULTURAL_ARCHAEOLOGIST_TABLE, 'CulturalArchaeologist', 'searches'] as const;
 const TREND_STAGE_FILTERS: TrendStageFilter[] = ['peaking', 'emerging', 'declining'];
 const CULTURAL_ARCHAEOLOGIST_SHOW_THINKING_TEXT = 'Applied retrieval-grounded synthesis: collected language, behavior, and community artifacts, clustered recurring motifs and tensions, and generated a structured cultural map with source-grounded claims.';
+
+const getExportErrorDetail = (error: unknown): string | null => {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim();
+  }
+  if (typeof error === 'string' && error.trim().length > 0) {
+    return error.trim();
+  }
+  return null;
+};
 
 const isMissingResultTextValue = (value?: string | null): boolean => {
   const normalized = (value || '').trim().toLowerCase();
@@ -1759,170 +1775,104 @@ export default function CulturalArchaeologist() {
     return pres;
   };
 
+  const buildCulturalExportDocument = (): BrandAtlasExportDocument | null => {
+    if (!matrix || !matrixMeta) return null;
+    const cleanDemographics = sanitizeDemographics(matrix.demographics);
+    const sections = [
+      { title: 'Moments', data: matrix.moments },
+      { title: 'Beliefs', data: matrix.beliefs },
+      { title: 'Tone', data: matrix.tone },
+      { title: 'Language', data: matrix.language },
+      { title: 'Behaviors', data: matrix.behaviors },
+      { title: 'Contradictions', data: matrix.contradictions },
+      { title: 'Community', data: matrix.community },
+      { title: 'Influencers', data: matrix.influencers },
+    ].map((section) => ({
+      title: section.title,
+      cards: section.data.map((item, index) => ({
+        title: `Insight ${index + 1}`,
+        lines: [
+          item.text,
+          `Confidence: ${(item.confidenceLevel || 'medium').toUpperCase()}`,
+          item.sourceType ? `Source Type: ${item.sourceType}` : '',
+          item.deepDive?.expandedContext ? `Context: ${item.deepDive.expandedContext}` : '',
+        ].filter(Boolean),
+      })),
+    }));
+
+    if ((matrix.sources || []).length > 0) {
+      sections.push({
+        title: 'Sources',
+        cards: (matrix.sources || []).slice(0, 24).map((source) => ({
+          title: source.title,
+          lines: [source.url],
+        })),
+      });
+    }
+
+    return {
+      reportTitle: 'Cultural Archaeologist',
+      reportSubtitle: 'Brand Atlas Cultural Lens Report',
+      audience: matrixMeta.audience || 'N/A',
+      contextLines: [
+        matrixMeta.brand ? `Context: ${matrixMeta.brand}` : '',
+        matrixMeta.topicFocus ? `Topic: ${matrixMeta.topicFocus}` : '',
+        matrixMeta.sourcesType?.length ? `Sources: ${matrixMeta.sourcesType.join(', ')}` : '',
+        `Demographics: Age ${cleanDemographics.age} | Race ${cleanDemographics.race} | Gender ${cleanDemographics.gender}`,
+      ].filter(Boolean),
+      sections,
+    };
+  };
+
   const exportToPPTX = async () => {
+    if (!matrixMeta) return;
+    const fileBase = buildExportFileBase(matrixMeta.audience, 'Cultural_Archaeologist');
+    const exportDocument = buildCulturalExportDocument();
+    if (!exportDocument) return;
     setExportError(null);
+    setIsExporting(true);
+    setToast('Generating PPTX...');
     try {
       await runUserAction({
-        actionName: 'export-cultural-pptx',
+        actionName: 'export-cultural-pptx-themed',
         action: async () => {
-          const pres = generatePPTX();
-          if (!pres) throw new Error('No presentation generated');
-          await pres.writeFile({ fileName: `${matrixMeta?.audience.replace(/\s+/g, '_')}_Cultural_Archaeologist.pptx` });
+          await exportBrandAtlasDocumentToPptx(exportDocument, `${fileBase}_Cultural_Archaeologist.pptx`);
           return true;
         },
       });
+      setToast('PPTX exported successfully!');
     } catch (err) {
       const normalized = normalizeAppError(err);
+      const detail = getExportErrorDetail(err);
       logger.error('Failed to export cultural PPTX', { err, normalized });
-      setExportError({ type: 'pptx', message: normalized.message || 'Failed to export PPTX.' });
+      setExportError({ type: 'pptx', message: detail ? `Failed to export PPTX: ${detail}` : (normalized.message || 'Failed to export PPTX.') });
       setToast('Failed to export PPTX.');
+    } finally {
+      setIsExporting(false);
     }
   };
 
   const exportToPDF = async () => {
     if (!matrix || !matrixMeta) return;
-    
+    const fileBase = buildExportFileBase(matrixMeta.audience, 'Cultural_Archaeologist');
+    const exportDocument = buildCulturalExportDocument();
+    if (!exportDocument) return;
     setExportError(null);
     setIsExporting(true);
-    setToast("Generating PDF...");
+    setToast('Generating PDF...');
     try {
-      const { jsPDF } = await import('jspdf');
-      try {
-        const cleanDemographics = sanitizeDemographics(matrix.demographics);
-
-        const doc = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        });
-        
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-        const margin = 20;
-        const contentWidth = pageWidth - margin * 2;
-        
-        const addWrappedText = (text: string, x: number, y: number, fontSize: number, isBold: boolean = false, color: number[] = [0, 0, 0]) => {
-          doc.setFontSize(fontSize);
-          doc.setFont("helvetica", isBold ? "bold" : "normal");
-          doc.setTextColor(color[0], color[1], color[2]);
-          
-          const lines = doc.splitTextToSize(text, contentWidth - (x - margin));
-          const lineHeightMm = fontSize * 0.352778 * 1.5;
-          
-          for (let i = 0; i < lines.length; i++) {
-            if (y > pageHeight - margin) {
-              doc.addPage();
-              y = margin + lineHeightMm;
-              doc.setFontSize(fontSize);
-              doc.setFont("helvetica", isBold ? "bold" : "normal");
-              doc.setTextColor(color[0], color[1], color[2]);
-            }
-            doc.text(lines[i], x, y);
-            y += lineHeightMm;
-          }
-          return y + 2;
-        };
-        
-        // Title Page
-        let y = margin + 10;
-        y = addWrappedText("Cultural Archaeologist Report", margin, y, 24, true, [24, 24, 27]);
-        y += 10;
-        
-        y = addWrappedText(`Audience: ${matrixMeta.audience}`, margin, y, 16, true, [79, 70, 229]);
-        y += 5;
-        
-        if (matrixMeta.brand) {
-          y = addWrappedText(`Context: ${matrixMeta.brand}`, margin, y, 12, false, [82, 82, 91]);
-        }
-        if (matrixMeta.topicFocus) {
-          y = addWrappedText(`Topic Focus: ${matrixMeta.topicFocus}`, margin, y, 12, false, [82, 82, 91]);
-        }
-        if (matrixMeta.generations && matrixMeta.generations.length > 0) {
-          y = addWrappedText(`Generations: ${matrixMeta.generations.join(', ')}`, margin, y, 12, false, [82, 82, 91]);
-        }
-        
-        y += 15;
-        y = addWrappedText("Demographics", margin, y, 14, true, [24, 24, 27]);
-        y += 2;
-        y = addWrappedText(`Average Age: ${cleanDemographics.age}`, margin, y, 11, false, [63, 63, 70]);
-        y = addWrappedText(`Race / Ethnicity: ${cleanDemographics.race}`, margin, y, 11, false, [63, 63, 70]);
-        y = addWrappedText(`Gender: ${cleanDemographics.gender}`, margin, y, 11, false, [63, 63, 70]);
-        
-        const categories = [
-          { title: 'Moments', data: matrix.moments },
-          { title: 'Beliefs', data: matrix.beliefs },
-          { title: 'Tone', data: matrix.tone },
-          { title: 'Language', data: matrix.language },
-          { title: 'Behaviors', data: matrix.behaviors },
-          { title: 'Contradictions', data: matrix.contradictions },
-          { title: 'Community', data: matrix.community },
-          { title: 'Influencers', data: matrix.influencers },
-        ];
-        
-        categories.forEach(cat => {
-          if (!cat.data || cat.data.length === 0) return;
-          
-          cat.data.forEach((item, index) => {
-            doc.addPage();
-            let currentY = margin + 5;
-            
-            // Category Header
-            currentY = addWrappedText(`${cat.title.toUpperCase()} - Insight ${index + 1}`, margin, currentY, 10, true, [161, 161, 170]);
-            currentY += 2;
-            
-            // Insight Text
-            currentY = addWrappedText(item.text, margin, currentY, 16, true, [24, 24, 27]);
-            currentY += 8;
-            currentY = addWrappedText(`Confidence: ${(item.confidenceLevel || 'medium').toUpperCase()}`, margin, currentY, 10, true, [79, 70, 229]);
-            if (item.sourceType) {
-              currentY = addWrappedText(`Source Type: ${item.sourceType}`, margin, currentY, 10, false, [82, 82, 91]);
-            }
-            currentY += 4;
-            
-            if (item.deepDive) {
-              // Origination & Relevance
-              currentY = addWrappedText(`Originated: ${item.deepDive.originationDate}`, margin, currentY, 10, true, [79, 70, 229]);
-              currentY = addWrappedText(`Relevance: ${item.deepDive.relevance}`, margin, currentY, 11, false, [16, 185, 129]);
-              currentY += 6;
-              
-              // Expanded Context
-              currentY = addWrappedText("Expanded Context", margin, currentY, 12, true, [24, 24, 27]);
-              currentY = addWrappedText(item.deepDive.expandedContext, margin, currentY, 10, false, [63, 63, 70]);
-              currentY += 6;
-              
-              // Strategic Implications
-              currentY = addWrappedText("Strategic Implications", margin, currentY, 12, true, [24, 24, 27]);
-              item.deepDive.strategicImplications.forEach(imp => {
-                currentY = addWrappedText(`• ${imp}`, margin + 5, currentY, 10, false, [63, 63, 70]);
-              });
-              currentY += 6;
-              
-              // Real World Examples
-              currentY = addWrappedText("Real World Examples", margin, currentY, 12, true, [24, 24, 27]);
-              item.deepDive.realWorldExamples.forEach(ex => {
-                currentY = addWrappedText(`• ${ex}`, margin + 5, currentY, 10, false, [63, 63, 70]);
-              });
-            } else {
-              currentY = addWrappedText("(Deep dive not generated for this insight yet)", margin, currentY, 10, false, [161, 161, 170]);
-            }
-          });
-        });
-        
-        doc.save(`${matrixMeta?.audience.replace(/\s+/g, '_')}_Cultural_Archaeologist.pdf`);
-        setToast("PDF exported successfully!");
-      } catch (err) {
-        const normalized = normalizeAppError(err);
-        logger.error('Failed to generate cultural PDF', { err, normalized });
-        setExportError({ type: 'pdf', message: normalized.message || 'Failed to generate PDF.' });
-        setToast("Failed to generate PDF.");
-      } finally {
-        setIsExporting(false);
-      }
+      await exportBrandAtlasDocumentToPdf(exportDocument, `${fileBase}_Cultural_Archaeologist.pdf`);
+      setToast('PDF exported successfully!');
     } catch (err) {
       const normalized = normalizeAppError(err);
-      logger.error('Failed to import jspdf for cultural export', { err, normalized });
-      setExportError({ type: 'pdf', message: normalized.message || 'Failed to generate PDF.' });
-      setToast("Failed to generate PDF.");
+      const detail = getExportErrorDetail(err);
+      logger.error('Failed to export cultural PDF', { err, normalized });
+      setExportError({
+        type: 'pdf',
+        message: detail ? `Failed to generate PDF: ${detail}` : (normalized.message || 'Failed to generate PDF.'),
+      });
+      setToast('Failed to generate PDF.');
+    } finally {
       setIsExporting(false);
     }
   };

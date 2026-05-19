@@ -96,6 +96,11 @@ import {
 import { MobileTwoLineSubcopy } from './MobileTwoLineSubcopy';
 import { MobileResultsNav } from './MobileResultsNav';
 import { ShowThinkingDropdown } from './ShowThinkingDropdown';
+import {
+  exportElementRefToPdf,
+  exportElementRefToPptx,
+  withVisualExportErrorHandling,
+} from '../services/visual-export';
 
 interface VisualDesignPageProps {
   onBack: () => void;
@@ -767,6 +772,7 @@ function useNativeEyedropper() {
 }
 
 export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
+  const exportCaptureRef = useRef<HTMLDivElement>(null);
   const brandNameInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const pendingBrandNameFocusIndexRef = useRef<number | null>(null);
   const [brands, setBrands] = useState<Array<{ id: string; name: string; website: string }>>([
@@ -2394,64 +2400,18 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     if (!report) return;
     setExportError(null);
     setIsExporting(true);
-    setToast('Generating PowerPoint...');
+    setToast('Generating visual PowerPoint...');
     try {
-      const pres = new PptxGenJS();
-      pres.layout = 'LAYOUT_16x9';
-      const titleSlide = pres.addSlide();
-      titleSlide.background = { color: 'FAFAFA' };
-      titleSlide.addText('Design Excavator Report', { x: 0.5, y: 0.5, w: 9, h: 0.6, fontSize: 48, bold: true, color: '18181B' });
-      if (analysisObjective) {
-        titleSlide.addText(`Objective: ${analysisObjective}`, { x: 0.5, y: 1.3, w: 9, h: 0.6, fontSize: 16, color: '4F46E5' });
-      }
-      if (targetAudience) {
-        titleSlide.addText(`Target Audience: ${targetAudience}`, { x: 0.5, y: 2.0, w: 9, h: 0.4, fontSize: 14, color: '52525B' });
-      }
-      titleSlide.addText(`Generated on ${new Date().toLocaleDateString()}`, { x: 0.5, y: 5.5, w: 9, h: 0.4, fontSize: 12, color: 'A1A1AA' });
-      for (const profile of report.brandProfiles) {
-        const exportImages = await collectProfileExportImages(profile);
-        const slide = pres.addSlide();
-        slide.background = { color: 'FAFAFA' };
-        slide.addText(profile.brandName, { x: 0.5, y: 0.3, w: 9, h: 0.5, fontSize: 32, bold: true, color: '18181B' });
-        if (profile.website) {
-          slide.addText(profile.website, { x: 0.5, y: 0.85, w: 9, h: 0.3, fontSize: 12, color: '52525B' });
-        }
-        let currentY = 1.3;
-        slide.addText('Distinctiveness', { x: 0.5, y: currentY, w: 9, h: 0.3, fontSize: 12, bold: true, color: '18181B' });
-        currentY += 0.35;
-        slide.addText(profile.distinctivenessAssessment, { x: 0.5, y: currentY, w: 9, h: 1.0, fontSize: 10, color: '3F3F46', valign: 'top' });
-        currentY += 1.0;
-        currentY += 0.2;
-        slide.addText('Logo System', { x: 0.5, y: currentY, w: 4, h: 0.3, fontSize: 12, bold: true, color: '18181B' });
-        currentY += 0.35;
-        slide.addText(`Primary: ${profile.logo.mainLogo}`, { x: 0.5, y: currentY, w: 4, h: 0.25, fontSize: 10, color: '3F3F46' });
-        currentY += 0.3;
-        slide.addText(`Wordmark: ${profile.logo.wordmarkLogotype}`, { x: 0.5, y: currentY, w: 4, h: 0.25, fontSize: 10, color: '3F3F46' });
-        currentY += 0.4;
-        if (exportImages.logoDataUrl) {
-          slide.addImage({ data: exportImages.logoDataUrl, x: 0.5, y: currentY, w: 1.8, h: 0.9 });
-        }
-        if (exportImages.visualDataUrls[0]) {
-          slide.addImage({ data: exportImages.visualDataUrls[0], x: 2.6, y: currentY, w: 2.2, h: 1.2 });
-        }
-        if (exportImages.visualDataUrls[1]) {
-          slide.addImage({ data: exportImages.visualDataUrls[1], x: 4.95, y: currentY, w: 2.2, h: 1.2 });
-        }
-        currentY += 1.35;
-        slide.addText('Primary Colors', { x: 5.2, y: 1.3, w: 4, h: 0.3, fontSize: 12, bold: true, color: '18181B' });
-        let colorY = 1.65;
-        profile.colorPalette.primaryColors.slice(0, 3).forEach((color) => {
-          const colorBox = { x: 5.2, y: colorY, w: 0.3, h: 0.25, fill: { color: color.hex.replace('#', '') } };
-          slide.addShape(pres.ShapeType.rect, colorBox);
-          slide.addText(`${color.name} (${color.hex})`, { x: 5.6, y: colorY, w: 3.6, h: 0.25, fontSize: 9, color: '3F3F46' });
-          colorY += 0.3;
+      await withVisualExportErrorHandling('design excavator pptx export', async () => {
+        await exportElementRefToPptx({
+          ref: exportCaptureRef,
+          fileName: `Design_Excavator_${new Date().toISOString().split('T')[0]}.pptx`,
         });
-      }
-      await pres.writeFile({ fileName: `Design_Excavator_${new Date().toISOString().split('T')[0]}.pptx` });
+      });
       setToast('PowerPoint exported successfully!');
     } catch (err) {
       const normalized = normalizeAppError(err);
-      logger.error('Failed to generate design PPTX', { err, normalized });
+      logger.error('Failed to generate visual design PPTX', { err, normalized });
       setExportError({ type: 'pptx', message: normalized.message || 'Failed to generate PowerPoint.' });
       setToast('Failed to generate PowerPoint.');
     } finally {
@@ -2463,142 +2423,18 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     if (!report) return;
     setExportError(null);
     setIsExporting(true);
-    setToast('Generating PDF...');
+    setToast('Generating visual PDF...');
     try {
-      const { jsPDF } = await import('jspdf');
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 15;
-      const contentWidth = pageWidth - margin * 2;
-      const addWrappedText = (text: string, x: number, y: number, fontSize: number, isBold: boolean = false, color: number[] = [0, 0, 0]) => {
-        doc.setFontSize(fontSize);
-        doc.setFont('helvetica', isBold ? 'bold' : 'normal');
-        doc.setTextColor(color[0], color[1], color[2]);
-        const lines = doc.splitTextToSize(text, contentWidth);
-        const lineHeightMm = fontSize * 0.352778 * 1.5;
-        for (let i = 0; i < lines.length; i++) {
-          if (y > pageHeight - margin) {
-            doc.addPage();
-            y = margin;
-          }
-          doc.text(lines[i], x, y);
-          y += lineHeightMm;
-        }
-        return y + 2;
-      };
-      const addBulletedLines = (items: string[], fallbackText: string, x: number, y: number): number => {
-        if (!items.length) {
-          return addWrappedText(fallbackText, x, y, 9, false, [113, 113, 122]);
-        }
-        let nextY = y;
-        items.forEach((item) => {
-          nextY = addWrappedText(`• ${item}`, x + 3, nextY, 9, false, [82, 82, 91]);
+      await withVisualExportErrorHandling('design excavator pdf export', async () => {
+        await exportElementRefToPdf({
+          ref: exportCaptureRef,
+          fileName: `Design_Excavator_${new Date().toISOString().split('T')[0]}.pdf`,
         });
-        return nextY;
-      };
-      let y = margin;
-      y = addWrappedText('Design Excavator Report', margin, y, 22, true, [24, 24, 27]);
-      y += 5;
-      if (analysisObjective) {
-        addWrappedText(`Objective: ${analysisObjective}`, margin, y, 11, true, [79, 70, 229]);
-        y += 8;
-      }
-      if (targetAudience) {
-        addWrappedText(`Target Audience: ${targetAudience}`, margin, y, 11, false, [82, 82, 91]);
-        y += 6;
-      }
-      y += 3;
-      for (let profileIdx = 0; profileIdx < report.brandProfiles.length; profileIdx += 1) {
-        const profile = report.brandProfiles[profileIdx];
-        const exportImages = await collectProfileExportImages(profile);
-        if (y > pageHeight - margin - 60) {
-          doc.addPage();
-          y = margin;
-        }
-        y = addWrappedText(profile.brandName, margin, y, 16, true, [24, 24, 27]);
-        if (profile.website) {
-          y = addWrappedText(profile.website, margin, y, 10, false, [82, 82, 91]);
-        }
-        y += 3;
-        if (exportImages.logoDataUrl || exportImages.visualDataUrls.length > 0) {
-          const imageTop = y;
-          if (exportImages.logoDataUrl) {
-            doc.addImage(exportImages.logoDataUrl, getPdfImageFormat(exportImages.logoDataUrl), margin, imageTop, 35, 18, undefined, 'FAST');
-          }
-          if (exportImages.visualDataUrls[0]) {
-            doc.addImage(exportImages.visualDataUrls[0], getPdfImageFormat(exportImages.visualDataUrls[0]), margin + 40, imageTop, 55, 31, undefined, 'FAST');
-          }
-          if (exportImages.visualDataUrls[1]) {
-            doc.addImage(exportImages.visualDataUrls[1], getPdfImageFormat(exportImages.visualDataUrls[1]), margin + 98, imageTop, 55, 31, undefined, 'FAST');
-          }
-          y += 36;
-        }
-        y = addWrappedText('Distinctiveness', margin, y, 11, true, [24, 24, 27]);
-        y = addWrappedText(profile.distinctivenessAssessment, margin, y, 10, false, [63, 63, 70]);
-        y += 3;
-        y = addWrappedText('Logo System', margin, y, 11, true, [24, 24, 27]);
-        y = addWrappedText(`Primary: ${profile.logo.mainLogo}`, margin, y, 10, false, [63, 63, 70]);
-        y = addWrappedText(`Wordmark: ${profile.logo.wordmarkLogotype}`, margin, y, 10, false, [63, 63, 70]);
-        y += 2;
-        y = addWrappedText('Variations', margin, y, 10, true, [63, 63, 70]);
-        y = addBulletedLines(profile.logo.logoVariations, 'No variations documented.', margin, y);
-        y = addWrappedText('Symbols & Icons', margin, y, 10, true, [63, 63, 70]);
-        y = addBulletedLines(profile.logo.symbolsIcons, 'No symbol data documented.', margin, y);
-        y += 2;
-        y = addWrappedText('Typography', margin, y, 11, true, [24, 24, 27]);
-        y = addWrappedText(`Families: ${profile.typography.fontFamilies.join(', ') || 'Not available'}`, margin, y, 10, false, [63, 63, 70]);
-        y = addWrappedText(`H1: ${profile.typography.hierarchy.h1 || 'Not available'}`, margin, y, 9, false, [82, 82, 91]);
-        y = addWrappedText(`H2: ${profile.typography.hierarchy.h2 || 'Not available'}`, margin, y, 9, false, [82, 82, 91]);
-        y = addWrappedText(`Body: ${profile.typography.hierarchy.body || 'Not available'}`, margin, y, 9, false, [82, 82, 91]);
-        y = addWrappedText('Usage Rules', margin, y, 10, true, [63, 63, 70]);
-        y = addBulletedLines(profile.typography.usageRules, 'No usage rules documented.', margin, y);
-        y += 2;
-        y = addWrappedText('Primary Colors', margin, y, 11, true, [24, 24, 27]);
-        y = addBulletedLines(profile.colorPalette.primaryColors.map((color) => `${color.name} (${color.hex})`), 'Not available', margin, y);
-        y += 2;
-        y = addWrappedText('Accent Colors', margin, y, 11, true, [24, 24, 27]);
-        y = addBulletedLines(profile.colorPalette.secondaryAccentColors.map((color) => `${color.name} (${color.hex})`), 'Not available', margin, y);
-        y += 2;
-        y = addWrappedText('Neutral Colors', margin, y, 11, true, [24, 24, 27]);
-        y = addBulletedLines(profile.colorPalette.neutrals.map((color) => `${color.name} (${color.hex})`), 'Not available', margin, y);
-        y += 2;
-        y = addWrappedText('Supporting Visual Elements', margin, y, 11, true, [24, 24, 27]);
-        y = addWrappedText('Imagery Style', margin, y, 10, true, [63, 63, 70]);
-        y = addBulletedLines(profile.supportingVisualElements.imageryStyle, 'Not available', margin, y);
-        y += 1;
-        y = addWrappedText('Icons', margin, y, 10, true, [63, 63, 70]);
-        y = addBulletedLines(profile.supportingVisualElements.icons, 'Not available', margin, y);
-        y += 1;
-        y = addWrappedText('Patterns & Textures', margin, y, 10, true, [63, 63, 70]);
-        y = addBulletedLines(profile.supportingVisualElements.patternsTextures, 'Not available', margin, y);
-        y += 1;
-        y = addWrappedText('Shapes', margin, y, 10, true, [63, 63, 70]);
-        y = addBulletedLines(profile.supportingVisualElements.shapes, 'Not available', margin, y);
-        y += 1;
-        y = addWrappedText('Data Visualization', margin, y, 10, true, [63, 63, 70]);
-        y = addBulletedLines(profile.supportingVisualElements.dataVisualization, 'Not available', margin, y);
-        y += 4;
-        if (profileIdx < report.brandProfiles.length - 1) {
-          doc.addPage();
-          y = margin;
-        }
-      }
-      if (report.crossBrandReadout && report.crossBrandReadout.length > 0) {
-        if (y > pageHeight - margin - 20) {
-          doc.addPage();
-          y = margin;
-        }
-        y = addWrappedText('Opportunity Spaces', margin, y, 14, true, [24, 24, 27]);
-        report.crossBrandReadout.forEach((item) => {
-          y = addWrappedText(`• ${item}`, margin + 3, y, 10, false, [82, 82, 91]);
-        });
-      }
-      doc.save(`Design_Excavator_${new Date().toISOString().split('T')[0]}.pdf`);
+      });
       setToast('PDF exported successfully!');
     } catch (err) {
       const normalized = normalizeAppError(err);
-      logger.error('Failed to generate design PDF', { err, normalized });
+      logger.error('Failed to generate visual design PDF', { err, normalized });
       setExportError({ type: 'pdf', message: normalized.message || 'Failed to generate PDF.' });
       setToast('Failed to generate PDF.');
     } finally {
@@ -3029,6 +2865,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
         {report && (
           <SectionErrorBoundary title="Design Results">
             <motion.div
+              ref={exportCaptureRef}
               key="visual-design-report"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}

@@ -2442,14 +2442,15 @@ ${RESEARCH_ACCURACY_PROTOCOL}`;
   }
 }
 
-export function buildInsightDeepDivePrompt(params: {
+type InsightDeepDivePromptParams = {
   audience: string;
-  deepDiveFocus: string;
   providedContext: string;
   brandContext?: string;
   generations?: string[];
   topicFocus?: string;
-}): string {
+};
+
+function buildInsightDeepDiveContextHeader(params: InsightDeepDivePromptParams & { deepDiveFocus: string }): string {
   const generationsLabel = (params.generations || []).filter(Boolean).join(', ');
   return `You are an expert Cultural Archaeologist and Brand Strategist.
 Target Audience: "${params.audience}"
@@ -2457,9 +2458,10 @@ Deep Dive Focus: "${params.deepDiveFocus}"
 ${params.brandContext ? `Brand Context: ${params.brandContext}` : ''}
 ${generationsLabel ? `Generations: ${generationsLabel}` : ''}
 ${params.topicFocus ? `Topic Focus: ${params.topicFocus}` : ''}
-Provided Context: ${params.providedContext}
+Provided Context: ${params.providedContext}`;
+}
 
-Methodology: Dual-Lane Macro (only)
+const DUAL_LANE_MACRO_SINGLE_BLOCK = `Methodology: Dual-Lane Macro (only)
 
 Lane 1 - Breaking (last 7 days):
 - Extract short-horizon shifts and emerging signals relevant to this insight.
@@ -2474,32 +2476,9 @@ Execution requirements:
 - In expandedContext, clearly separate breaking vs structural signal.
 - In strategicImplications, include at least one implication tied to each lane.
 - If one lane is weak, explicitly state that limitation instead of filling with speculation.
-- First internally work through competing interpretations before finalizing output.
+- First internally work through competing interpretations before finalizing output.`;
 
-${RESEARCH_ACCURACY_PROTOCOL}`;
-}
-
-export function buildInsightDeepDiveBatchPrompt(params: {
-  audience: string;
-  insights: string[];
-  providedContext: string;
-  brandContext?: string;
-  generations?: string[];
-  topicFocus?: string;
-}): string {
-  const generationsLabel = (params.generations || []).filter(Boolean).join(', ');
-  return `You are an expert Cultural Archaeologist and Brand Strategist.
-Target Audience: "${params.audience}"
-Deep Dive Focus: "${params.insights.join(' | ')}"
-${params.brandContext ? `Brand Context: ${params.brandContext}` : ''}
-${generationsLabel ? `Generations: ${generationsLabel}` : ''}
-${params.topicFocus ? `Topic Focus: ${params.topicFocus}` : ''}
-Provided Context: ${params.providedContext}
-
-Insights:
-${params.insights.map((insight, index) => `${index + 1}. "${insight}"`).join('\n')}
-
-Methodology: Dual-Lane Macro (only)
+const DUAL_LANE_MACRO_BATCH_BLOCK = `Methodology: Dual-Lane Macro (only)
 
 Lane 1 - Breaking (last 7 days):
 - For EACH insight, identify near-term shifts from the provided context.
@@ -2510,7 +2489,29 @@ Lane 2 - Structural (annual + macro):
 Execution requirements:
 - Apply both lanes independently for EACH insight report.
 - Keep each report balanced: breaking + structural perspective.
-- If a lane is weak for a specific insight, explicitly note the limitation rather than inventing detail.
+- If a lane is weak for a specific insight, explicitly note the limitation rather than inventing detail.`;
+
+export function buildInsightDeepDivePrompt(params: InsightDeepDivePromptParams & { deepDiveFocus: string }): string {
+  return `${buildInsightDeepDiveContextHeader(params)}
+
+${DUAL_LANE_MACRO_SINGLE_BLOCK}
+
+${RESEARCH_ACCURACY_PROTOCOL}`;
+}
+
+export function buildInsightDeepDiveBatchPrompt(params: InsightDeepDivePromptParams & {
+  insights: string[];
+}): string {
+  const header = buildInsightDeepDiveContextHeader({
+    ...params,
+    deepDiveFocus: params.insights.join(' | '),
+  });
+  return `${header}
+
+Insights:
+${params.insights.map((insight, index) => `${index + 1}. "${insight}"`).join('\n')}
+
+${DUAL_LANE_MACRO_BATCH_BLOCK}
 
 ${RESEARCH_ACCURACY_PROTOCOL}`;
 }

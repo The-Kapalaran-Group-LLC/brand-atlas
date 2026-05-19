@@ -70,6 +70,12 @@ import { saveDesignExcavatorPrefill } from '../services/design-excavator-prefill
 import { MobileTwoLineSubcopy } from './MobileTwoLineSubcopy';
 import { MobileResultsNav } from './MobileResultsNav';
 import { ShowThinkingDropdown } from './ShowThinkingDropdown';
+import { buildExportFileBase } from '../services/export-filenames';
+import {
+  exportBrandAtlasDocumentToPdf,
+  exportBrandAtlasDocumentToPptx,
+  type BrandAtlasExportDocument,
+} from '../services/brand-atlas-themed-export';
 
 const BRAND_NAVIGATOR_TABLE = 'Brand_Navigator';
 const BRAND_NAVIGATOR_SHOW_THINKING_TEXT = 'Used a RAG pipeline: retrieved high-signal brand/category sources, re-ranked for relevance, extracted structured positioning evidence, and generated recommendations grounded in cited inputs.';
@@ -258,6 +264,16 @@ const renderEvidenceLabelChip = (
 
 const shouldShowSplashOnInit = (isDirectBrandNavigatorRoute: boolean): boolean =>
   !isDirectBrandNavigatorRoute && !isTestEnvironment();
+
+const getExportErrorDetail = (error: unknown): string | null => {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim();
+  }
+  if (typeof error === 'string' && error.trim().length > 0) {
+    return error.trim();
+  }
+  return null;
+};
 
 const buildBrandNavigatorCustomName = (
   brands: string[],
@@ -1511,107 +1527,86 @@ export default function BrandNavigator() {
     return pres;
   };
 
-  const exportToPPTX = () => {
+  const exportToPPTX = async () => {
+    if (!matrixMeta || brandResults.length === 0) return;
+    const fileBase = buildExportFileBase(matrixMeta.audience, 'Brand_Navigator');
+    const exportDocument: BrandAtlasExportDocument = {
+      reportTitle: 'Brand Navigator',
+      reportSubtitle: 'Brand Atlas Competitive Audit',
+      audience: matrixMeta.audience || 'N/A',
+      contextLines: [
+        matrixMeta.brand ? `Brands: ${matrixMeta.brand}` : '',
+        matrixMeta.topicFocus ? `Topic: ${matrixMeta.topicFocus}` : '',
+        matrixMeta.sourcesType?.length ? `Sources: ${matrixMeta.sourcesType.join(', ')}` : '',
+      ].filter(Boolean),
+      sections: brandResults.map((brand, index) => ({
+        title: brand.brandName || `Brand ${index + 1}`,
+        cards: BRAND_RESULT_SECTION_KEYS.map((sectionKey) => ({
+          title: sectionTitleMap[sectionKey],
+          lines: sectionLinesForBrand(brand, sectionKey).slice(0, 6),
+        })),
+      })),
+    };
+
+    setExportError(null);
+    setIsExporting(true);
+    setToast('Generating PPTX...');
     try {
-      const pres = generatePPTX();
-      if (!pres) throw new Error('No presentation generated');
-      pres.writeFile({ fileName: `${matrixMeta?.audience.replace(/\s+/g, '_')}_Brand_Navigator.pptx` });
-      setExportError(null);
+      await exportBrandAtlasDocumentToPptx(exportDocument, `${fileBase}_Brand_Navigator.pptx`);
+      setToast('PPTX exported successfully!');
     } catch (err) {
-      logger.error('Failed to export PPTX', err);
-      setExportError({ type: 'pptx', message: 'Failed to export PPTX. Please retry.' });
+      const normalized = normalizeAppError(err);
+      const detail = getExportErrorDetail(err);
+      logger.error('Failed to export visual PPTX', { err, normalized });
+      setExportError({
+        type: 'pptx',
+        message: detail ? `Failed to export PPTX: ${detail}` : (normalized.message || 'Failed to export PPTX. Please retry.'),
+      });
       setToast('Failed to export PPTX.');
+    } finally {
+      setIsExporting(false);
     }
   };
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     if (!matrixMeta || brandResults.length === 0) return;
-    
+    const fileBase = buildExportFileBase(matrixMeta.audience, 'Brand_Navigator');
+    const exportDocument: BrandAtlasExportDocument = {
+      reportTitle: 'Brand Navigator',
+      reportSubtitle: 'Brand Atlas Competitive Audit',
+      audience: matrixMeta.audience || 'N/A',
+      contextLines: [
+        matrixMeta.brand ? `Brands: ${matrixMeta.brand}` : '',
+        matrixMeta.topicFocus ? `Topic: ${matrixMeta.topicFocus}` : '',
+        matrixMeta.sourcesType?.length ? `Sources: ${matrixMeta.sourcesType.join(', ')}` : '',
+      ].filter(Boolean),
+      sections: brandResults.map((brand, index) => ({
+        title: brand.brandName || `Brand ${index + 1}`,
+        cards: BRAND_RESULT_SECTION_KEYS.map((sectionKey) => ({
+          title: sectionTitleMap[sectionKey],
+          lines: sectionLinesForBrand(brand, sectionKey).slice(0, 8),
+        })),
+      })),
+    };
+
+    setExportError(null);
     setIsExporting(true);
-    setToast("Generating PDF...");
-    
-    import('jspdf').then(({ jsPDF }) => {
-      try {
-
-        const doc = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        });
-        
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-        const margin = 20;
-        const contentWidth = pageWidth - margin * 2;
-        
-        const addWrappedText = (text: string, x: number, y: number, fontSize: number, isBold: boolean = false, color: number[] = [0, 0, 0]) => {
-          doc.setFontSize(fontSize);
-          doc.setFont("helvetica", isBold ? "bold" : "normal");
-          doc.setTextColor(color[0], color[1], color[2]);
-          
-          const lines = doc.splitTextToSize(text, contentWidth - (x - margin));
-          const lineHeightMm = fontSize * 0.352778 * 1.5;
-          
-          for (let i = 0; i < lines.length; i++) {
-            if (y > pageHeight - margin) {
-              doc.addPage();
-              y = margin + lineHeightMm;
-              doc.setFontSize(fontSize);
-              doc.setFont("helvetica", isBold ? "bold" : "normal");
-              doc.setTextColor(color[0], color[1], color[2]);
-            }
-            doc.text(lines[i], x, y);
-            y += lineHeightMm;
-          }
-          return y + 2;
-        };
-        
-        // Title Page
-        let y = margin + 10;
-        y = addWrappedText("Brand Navigator Report", margin, y, 24, true, [24, 24, 27]);
-        y += 10;
-        
-        y = addWrappedText(`Audience: ${matrixMeta.audience || 'N/A'}`, margin, y, 16, true, [79, 70, 229]);
-        y += 5;
-        
-        if (matrixMeta.brand) {
-          y = addWrappedText(`Brands: ${matrixMeta.brand}`, margin, y, 12, false, [82, 82, 91]);
-        }
-        if (matrixMeta.topicFocus) {
-          y = addWrappedText(`Topic Focus: ${matrixMeta.topicFocus}`, margin, y, 12, false, [82, 82, 91]);
-        }
-        if (matrixMeta.generations && matrixMeta.generations.length > 0) {
-          y = addWrappedText(`Generations: ${matrixMeta.generations.join(', ')}`, margin, y, 12, false, [82, 82, 91]);
-        }
-        
-        brandResults.forEach((brand, brandIndex) => {
-          doc.addPage();
-          let currentY = margin + 5;
-          const brandName = brand.brandName || `Brand ${brandIndex + 1}`;
-          currentY = addWrappedText(brandName, margin, currentY, 18, true, [24, 24, 27]);
-          currentY += 2;
-
-          BRAND_RESULT_SECTION_KEYS.forEach((sectionKey) => {
-            const title = sectionTitleMap[sectionKey];
-            const lines = sectionLinesForBrand(brand, sectionKey);
-            currentY = addWrappedText(title, margin, currentY, 11, true, [79, 70, 229]);
-            lines.forEach((line) => {
-              currentY = addWrappedText(`• ${line}`, margin + 3, currentY, 10, false, [63, 63, 70]);
-            });
-            currentY += 2;
-          });
-        });
-        
-        doc.save(`${matrixMeta?.audience.replace(/\s+/g, '_')}_Brand_Navigator.pdf`);
-        setToast("PDF exported successfully!");
-      } catch (err) {
-        logger.error('Failed to generate PDF', err);
-        setExportError({ type: 'pdf', message: 'Failed to generate PDF. Please retry.' });
-        setToast("Failed to generate PDF.");
-      } finally {
-        setIsExporting(false);
-      }
-    });
+    setToast('Generating PDF...');
+    try {
+      await exportBrandAtlasDocumentToPdf(exportDocument, `${fileBase}_Brand_Navigator.pdf`);
+      setToast('PDF exported successfully!');
+    } catch (err) {
+      const normalized = normalizeAppError(err);
+      const detail = getExportErrorDetail(err);
+      logger.error('Failed to export visual PDF', { err, normalized });
+      setExportError({
+        type: 'pdf',
+        message: detail ? `Failed to generate PDF: ${detail}` : (normalized.message || 'Failed to generate PDF. Please retry.'),
+      });
+      setToast('Failed to generate PDF.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
 // Removed Google Slides export logic

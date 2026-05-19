@@ -38,7 +38,7 @@ export default function MenuPage({
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45 }}
-      className={`${sectionClassName} relative mx-auto text-center min-h-[78vh] flex flex-col overflow-hidden`}
+      className={`${sectionClassName} relative mx-auto text-center min-h-[78vh] flex flex-col overflow-visible`}
       data-testid="menu-page"
     >
       <div className="absolute inset-x-0 top-[64px] -bottom-[64px] z-0 pointer-events-none">
