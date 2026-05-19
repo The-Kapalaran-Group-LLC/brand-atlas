@@ -1,4 +1,6 @@
 import { AzureOpenAI } from 'openai';
+import { zodResponseFormat } from 'openai/helpers/zod';
+import { z } from 'zod';
 import { fetchSubredditQuotes, fetchSubredditQuotesFresh } from './fetchSubredditQuotes';
 
 const BING_SEARCH_ENDPOINT = 'https://api.bing.microsoft.com/v7.0/search';
@@ -42,6 +44,8 @@ export type LanguageSignals = {
   urbanDefinitions: Array<{ term: string; definition: string; thumbsUp: number }>;
   verbatimText: string;
 };
+
+const GatekeeperFilteredQuotesSchema = z.array(z.string());
 
 function normalizeWhitespace(value: string): string {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -293,6 +297,103 @@ function formatVerbatimSignals(
   return lines.join('\n');
 }
 
+function formatCurrentMethodologyVerbatimSignals(
+  audience: string,
+  bingSnippets: string[],
+  highSignalCommunityQuotes: string[]
+): string {
+  const lines: string[] = [];
+  lines.push(`Audience: ${audience}`);
+  lines.push('');
+  lines.push('Most recent Bing snippets (freshness=Week):');
+  lines.push(...(bingSnippets.length ? bingSnippets.map((line, index) => `${index + 1}) ${line}`) : ['1) No Bing snippets returned.']));
+  lines.push('');
+  lines.push('High-signal community vernacular (gatekeeper score >= 7):');
+  lines.push(...(highSignalCommunityQuotes.length
+    ? highSignalCommunityQuotes.map((line, index) => `${index + 1}) ${line}`)
+    : ['1) No high-signal community quotes passed the gatekeeper filter.']));
+
+  return lines.join('\n');
+}
+
+function applyFallbackGatekeeperFilter(rawSignals: string[]): string[] {
+  const highRiskPattern = /\b(?:explicit|nsfw|sexual|violent|abuse|harass|hate)\b/i;
+  return rawSignals
+    .map((quote) => normalizeWhitespace(quote))
+    .filter(Boolean)
+    .filter((quote) => !highRiskPattern.test(quote))
+    .slice(0, 16);
+}
+
+async function runCommunityGatekeeperFilter(audience: string, rawSignals: string[]): Promise<string[]> {
+  if (!rawSignals.length) return [];
+
+  const hasAzureConfig = Boolean(
+    process.env.AZURE_OPENAI_API_KEY?.trim()
+    && process.env.AZURE_OPENAI_ENDPOINT?.trim()
+  );
+  if (!hasAzureConfig) {
+    console.log('[language-methodology] Gatekeeper filter using local fallback (missing Azure config).', {
+      audience,
+      rawSignals: rawSignals.length,
+    });
+    return applyFallbackGatekeeperFilter(rawSignals);
+  }
+
+  try {
+    const client = getAzureClientForGrounding();
+    const deployment = getAzureGroundingDeploymentName();
+
+    console.log('[language-methodology] Gatekeeper filter start.', {
+      audience,
+      deployment,
+      rawSignals: rawSignals.length,
+    });
+
+    const completion = await client.chat.completions.create({
+      model: deployment,
+      temperature: 0.1,
+      response_format: zodResponseFormat(GatekeeperFilteredQuotesSchema, 'gatekeeper_filtered_quotes'),
+      messages: [
+        {
+          role: 'system',
+          content: [
+            'You are a Brand Safety and Semantic Relevance filter.',
+            `You are evaluating raw community quotes (Reddit, Urban Dictionary) for the audience: "${audience}".`,
+            'Task:',
+            '1. REMOVE any quote that contains hate speech, extreme toxicity, or explicit NSFW content.',
+            '2. SCORE the remaining quotes from 1-10 based on how deeply they reveal the core psychology, slang, or hidden tensions of this specific audience.',
+            '3. Return a JSON array of ONLY the quotes that score 7 or higher.',
+          ].join('\n'),
+        },
+        {
+          role: 'user',
+          content: `Raw Signals: ${JSON.stringify(rawSignals)}\nFilter and return the high-signal vernacular.`,
+        },
+      ],
+    });
+
+    const text = extractCompletionText(completion.choices?.[0]?.message?.content);
+    const parsed = GatekeeperFilteredQuotesSchema.parse(JSON.parse(text || '[]'));
+
+    const normalized = Array.from(new Set(parsed.map((quote) => normalizeWhitespace(quote)).filter(Boolean)));
+    console.log('[language-methodology] Gatekeeper filter success.', {
+      audience,
+      rawSignals: rawSignals.length,
+      keptSignals: normalized.length,
+    });
+    return normalized;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown gatekeeper error';
+    console.log('[language-methodology] Gatekeeper filter fallback applied.', {
+      audience,
+      message,
+      rawSignals: rawSignals.length,
+    });
+    return applyFallbackGatekeeperFilter(rawSignals);
+  }
+}
+
 async function findBestSubredditSignals(audience: string): Promise<{ subreddit: string; newQuotes: string[]; hotQuotes: string[] }> {
   const candidates = inferSubredditCandidates(audience);
   const defaultResult = { subreddit: candidates[0] || 'GenZ', newQuotes: [], hotQuotes: [] };
@@ -318,7 +419,12 @@ async function findBestSubredditSignals(audience: string): Promise<{ subreddit: 
   return defaultResult;
 }
 
-export async function collectCurrentLanguageSignals(audience: string): Promise<LanguageSignals> {
+export async function collectCurrentLanguageSignals(
+  audience: string,
+  options?: {
+    gatekeeperFilter?: (audience: string, rawSignals: string[]) => Promise<string[]>;
+  }
+): Promise<LanguageSignals> {
   const normalizedAudience = normalizeWhitespace(audience);
   if (!normalizedAudience) {
     throw new Error('Audience is required.');
@@ -334,7 +440,18 @@ export async function collectCurrentLanguageSignals(audience: string): Promise<L
     ...reddit.hotQuotes,
   ]);
   const urbanDefinitions = await fetchUrbanDefinitions(candidateTerms);
-  const verbatimText = formatVerbatimSignals(normalizedAudience, bingSnippets, reddit, urbanDefinitions);
+  const rawCommunitySignals = [
+    ...reddit.newQuotes.map((quote) => `Reddit /new: ${quote}`),
+    ...reddit.hotQuotes.map((quote) => `Reddit /hot: ${quote}`),
+    ...urbanDefinitions.map((entry) => `Urban Dictionary (${entry.term}): ${entry.definition}`),
+  ];
+  const gatekeeperFilter = options?.gatekeeperFilter || runCommunityGatekeeperFilter;
+  const highSignalCommunityQuotes = await gatekeeperFilter(normalizedAudience, rawCommunitySignals);
+  const verbatimText = formatCurrentMethodologyVerbatimSignals(
+    normalizedAudience,
+    bingSnippets,
+    highSignalCommunityQuotes
+  );
 
   console.log('[language-methodology] Current language signals collected.', {
     audience: normalizedAudience,
@@ -343,6 +460,7 @@ export async function collectCurrentLanguageSignals(audience: string): Promise<L
     newQuotes: reddit.newQuotes.length,
     hotQuotes: reddit.hotQuotes.length,
     urbanDefinitions: urbanDefinitions.length,
+    highSignalCommunityQuotes: highSignalCommunityQuotes.length,
   });
 
   return {

@@ -88,4 +88,63 @@ describe('collectCurrentLanguageSignals', () => {
     expect(requests.some((url) => url.includes('/r/GenZ/hot.json'))).toBe(true);
     expect(requests.some((url) => url.includes('api.urbandictionary.com/v0/define?term='))).toBe(true);
   });
+
+  it('applies gatekeeper filter before building verbatim digest payload', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('api.bing.microsoft.com/v7.0/search')) {
+        return mockJsonResponse({
+          webPages: {
+            value: [
+              { snippet: 'Gen Z visual code includes emoji stacks and lowercase irony.' },
+            ],
+          },
+        });
+      }
+
+      if (url.includes('/r/GenZ/new.json')) {
+        return mockJsonResponse({
+          data: {
+            children: [
+              { data: { title: 'safe quote', selftext: 'this is high signal' } },
+            ],
+          },
+        });
+      }
+
+      if (url.includes('/r/GenZ/hot.json')) {
+        return mockJsonResponse({
+          data: {
+            children: [
+              { data: { title: 'filtered out', selftext: 'low signal quote' } },
+            ],
+          },
+        });
+      }
+
+      if (url.includes('api.urbandictionary.com/v0/define')) {
+        return mockJsonResponse({
+          list: [
+            {
+              word: 'rizz',
+              definition: 'Charm game.',
+              thumbs_up: 1200,
+            },
+          ],
+        });
+      }
+
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    const signals = await collectCurrentLanguageSignals('Gen Z', {
+      gatekeeperFilter: async (_audience, rawSignals) => rawSignals.filter((quote) => quote.includes('safe quote')),
+    });
+
+    expect(signals.verbatimText).toContain('High-signal community vernacular (gatekeeper score >= 7):');
+    expect(signals.verbatimText).toContain('safe quote');
+    expect(signals.verbatimText).not.toContain('filtered out');
+    expect(signals.verbatimText).not.toContain('Urban Dictionary validation:');
+  });
 });
