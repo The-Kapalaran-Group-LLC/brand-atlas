@@ -2442,27 +2442,93 @@ ${RESEARCH_ACCURACY_PROTOCOL}`;
   }
 }
 
+export function buildInsightDeepDivePrompt(params: {
+  audience: string;
+  deepDiveFocus: string;
+  providedContext: string;
+  brandContext?: string;
+  generations?: string[];
+  topicFocus?: string;
+}): string {
+  const generationsLabel = (params.generations || []).filter(Boolean).join(', ');
+  return `You are an expert Cultural Archaeologist and Brand Strategist.
+Target Audience: "${params.audience}"
+Deep Dive Focus: "${params.deepDiveFocus}"
+${params.brandContext ? `Brand Context: ${params.brandContext}` : ''}
+${generationsLabel ? `Generations: ${generationsLabel}` : ''}
+${params.topicFocus ? `Topic Focus: ${params.topicFocus}` : ''}
+Provided Context: ${params.providedContext}
+
+Methodology: Dual-Lane Macro (only)
+
+Lane 1 - Breaking (last 7 days):
+- Extract short-horizon shifts and emerging signals relevant to this insight.
+- Prioritize recent evidence from the provided context.
+
+Lane 2 - Structural (annual + macro):
+- Extract durable, macro-level forces shaping the same insight over longer cycles.
+- Prioritize recurring and corroborated patterns in the provided context.
+
+Execution requirements:
+- Synthesize BOTH lanes into one coherent deep dive report.
+- In expandedContext, clearly separate breaking vs structural signal.
+- In strategicImplications, include at least one implication tied to each lane.
+- If one lane is weak, explicitly state that limitation instead of filling with speculation.
+- First internally work through competing interpretations before finalizing output.
+
+${RESEARCH_ACCURACY_PROTOCOL}`;
+}
+
+export function buildInsightDeepDiveBatchPrompt(params: {
+  audience: string;
+  insights: string[];
+  providedContext: string;
+  brandContext?: string;
+  generations?: string[];
+  topicFocus?: string;
+}): string {
+  const generationsLabel = (params.generations || []).filter(Boolean).join(', ');
+  return `You are an expert Cultural Archaeologist and Brand Strategist.
+Target Audience: "${params.audience}"
+Deep Dive Focus: "${params.insights.join(' | ')}"
+${params.brandContext ? `Brand Context: ${params.brandContext}` : ''}
+${generationsLabel ? `Generations: ${generationsLabel}` : ''}
+${params.topicFocus ? `Topic Focus: ${params.topicFocus}` : ''}
+Provided Context: ${params.providedContext}
+
+Insights:
+${params.insights.map((insight, index) => `${index + 1}. "${insight}"`).join('\n')}
+
+Methodology: Dual-Lane Macro (only)
+
+Lane 1 - Breaking (last 7 days):
+- For EACH insight, identify near-term shifts from the provided context.
+
+Lane 2 - Structural (annual + macro):
+- For EACH insight, identify durable macro drivers from the provided context.
+
+Execution requirements:
+- Apply both lanes independently for EACH insight report.
+- Keep each report balanced: breaking + structural perspective.
+- If a lane is weak for a specific insight, explicitly note the limitation rather than inventing detail.
+
+${RESEARCH_ACCURACY_PROTOCOL}`;
+}
+
 export async function generateDeepDive(
   insight: MatrixItem,
   context: { audience: string; brand: string; generations: string[]; topicFocus?: string }
 ): Promise<DeepDiveReport> {
   const evidenceDigest = await gatherEvidenceForTopic(`Deep dive on insight: ${insight.text}`, 'cultural');
 
-  const prompt = `You are an expert Cultural Archaeologist and Brand Strategist.
-  I am providing you with a specific cultural insight about the following audience:
-  Audience: ${context.audience}
-  Brand Context: ${context.brand}
-  Generations: ${context.generations.join(', ')}
-  ${context.topicFocus ? `Topic Focus: ${context.topicFocus}` : ''}
-  
-  Insight: "${insight.text}"
-  
-  Please provide a deep dive into this specific insight to help me build strategies.
-  First internally work through competing interpretations before finalizing output.
-
-  Evidence digest:\n${evidenceDigest}
-
-  ${RESEARCH_ACCURACY_PROTOCOL}`;
+  const prompt = buildInsightDeepDivePrompt({
+    audience: context.audience,
+    deepDiveFocus: insight.text,
+    providedContext: evidenceDigest,
+    brandContext: context.brand,
+    generations: context.generations,
+    topicFocus: context.topicFocus,
+  });
 
   const parsed = await runStructuredCall({
     schema: DeepDiveReportSchema,
@@ -2495,19 +2561,18 @@ export async function generateDeepDivesBatch(
   insights: MatrixItem[],
   context: { audience: string; brand: string; generations: string[]; topicFocus?: string }
 ): Promise<DeepDiveReport[]> {
-  const prompt = `You are an expert Cultural Archaeologist and Brand Strategist.
-  I am providing you with a list of specific cultural insights about the following audience:
-  Audience: ${context.audience}
-  Brand Context: ${context.brand}
-  Generations: ${context.generations.join(', ')}
-  ${context.topicFocus ? `Topic Focus: ${context.topicFocus}` : ''}
-  
-  Insights:
-  ${insights.map((insight, index) => `${index + 1}. "${insight.text}"`).join('\n')}
-  
-  Please provide a deep dive into EACH of these specific insights to help me build strategies.
-
-  ${RESEARCH_ACCURACY_PROTOCOL}`;
+  const evidenceDigest = await gatherEvidenceForTopic(
+    `Deep dive batch on insights: ${insights.map((item) => item.text).join(' | ')}`,
+    'cultural'
+  );
+  const prompt = buildInsightDeepDiveBatchPrompt({
+    audience: context.audience,
+    insights: insights.map((item) => item.text),
+    providedContext: evidenceDigest,
+    brandContext: context.brand,
+    generations: context.generations,
+    topicFocus: context.topicFocus,
+  });
 
   const parsed = await runStructuredCall({
     schema: z.object({ reports: z.array(DeepDiveReportSchema) }),

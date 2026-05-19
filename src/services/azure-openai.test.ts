@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   applyBrandMissionFallbacks,
   buildBrandEvidenceRulesBlock,
+  buildInsightDeepDiveBatchPrompt,
+  buildInsightDeepDivePrompt,
   buildCategoryRoleBlock,
   buildBrandDeepDiveQuestionSearchTopic,
   computeRetryDelayMs,
@@ -273,6 +275,46 @@ describe('brand deep dive question search topic builder', () => {
     expect(topic).toContain('Audience: Design leaders');
     expect(topic).toContain('Time Horizon: 12 months');
     expect(topic).toContain('Question: How is Apple evolving visual language?');
+  });
+});
+
+describe('insight deep dive dual-lane macro prompt builders', () => {
+  it('uses dual-lane macro requirements in single deep-dive prompts', () => {
+    const prompt = buildInsightDeepDivePrompt({
+      audience: 'Gen Z',
+      deepDiveFocus: 'Value-first purchase rituals',
+      providedContext: 'Cached evidence + language signals',
+      brandContext: 'Nike',
+      generations: ['Gen Z (1997–2012)'],
+      topicFocus: 'Footwear and identity',
+    });
+
+    expect(prompt).toContain('Target Audience: "Gen Z"');
+    expect(prompt).toContain('Deep Dive Focus: "Value-first purchase rituals"');
+    expect(prompt).toContain('Provided Context: Cached evidence + language signals');
+    expect(prompt).toContain('Methodology: Dual-Lane Macro (only)');
+    expect(prompt).toContain('Lane 1 - Breaking (last 7 days):');
+    expect(prompt).toContain('Lane 2 - Structural (annual + macro):');
+    expect(prompt).toContain('include at least one implication tied to each lane');
+  });
+
+  it('uses per-insight dual-lane macro requirements in batch deep-dive prompts', () => {
+    const prompt = buildInsightDeepDiveBatchPrompt({
+      audience: 'Gen Z',
+      insights: ['Signal one', 'Signal two'],
+      providedContext: 'Batch cached context',
+      brandContext: 'Nike',
+      generations: ['Gen Z (1997–2012)'],
+    });
+
+    expect(prompt).toContain('Deep Dive Focus: "Signal one | Signal two"');
+    expect(prompt).toContain('Insights:');
+    expect(prompt).toContain('1. "Signal one"');
+    expect(prompt).toContain('2. "Signal two"');
+    expect(prompt).toContain('Methodology: Dual-Lane Macro (only)');
+    expect(prompt).toContain('Lane 1 - Breaking (last 7 days):');
+    expect(prompt).toContain('Lane 2 - Structural (annual + macro):');
+    expect(prompt).toContain('Apply both lanes independently for EACH insight report.');
   });
 });
 
