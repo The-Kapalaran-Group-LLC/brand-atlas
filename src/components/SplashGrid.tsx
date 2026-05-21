@@ -365,7 +365,7 @@ export function SplashGrid({
   qualityMode = 'auto',
   startLongitude = DEFAULT_START_LONGITUDE,
   interactive = false,
-  usePreRenderedLoop = true,
+  usePreRenderedLoop = false,
 }: SplashGridProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isLiveMode, setIsLiveMode] = useState(!usePreRenderedLoop);

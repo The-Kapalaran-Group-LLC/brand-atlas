@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "generate:splash-data": "node scripts/generate-splash-globe-data.mjs",
+    "generate:menupage-loop:gif": "node scripts/generate-menupage-loop-gif.mjs",
+    "generate:menupage-loop": "npm run generate:menupage-loop:gif",
     "generate:brand-atlas-mock-exports": "node --import tsx scripts/generate-brand-atlas-mock-exports.ts",
     "generate:menupage-gif:deployed": "node scripts/capture-deployed-menupage-gif.mjs",
     "dev": "/bin/zsh -lc 'PORT=3001 node --import tsx server/index.ts & vite --port=3000 --host=127.0.0.1'",

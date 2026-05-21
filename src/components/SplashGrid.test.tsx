@@ -3,8 +3,17 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { SplashGrid } from './SplashGrid';
 
 describe('SplashGrid', () => {
-  it('renders a pre-rendered splash loop by default for smoother idle playback', () => {
+  it('renders the live canvas by default to avoid background content duplication', () => {
     render(<SplashGrid />);
+
+    const canvas = screen.getByTestId('splash-globe-canvas');
+
+    expect(canvas).toBeInTheDocument();
+    expect(screen.queryByTestId('splash-globe-preview')).not.toBeInTheDocument();
+  });
+
+  it('supports pre-rendered loop mode when explicitly enabled', () => {
+    render(<SplashGrid usePreRenderedLoop />);
 
     const preview = screen.getByTestId('splash-globe-preview');
 
@@ -22,7 +31,7 @@ describe('SplashGrid', () => {
   });
 
   it('switches from pre-rendered loop to live canvas after pointer interaction when interactive', () => {
-    render(<SplashGrid interactive />);
+    render(<SplashGrid interactive usePreRenderedLoop />);
 
     const activationLayer = screen.getByTestId('splash-globe-activate-live');
     fireEvent.pointerDown(activationLayer, { pointerId: 1, clientX: 100, clientY: 100 });

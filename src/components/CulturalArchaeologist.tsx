@@ -1987,7 +1987,7 @@ export default function CulturalArchaeologist() {
                 sizeMultiplier={1.25}
                 qualityMode="fast"
                 startLongitude={-74.006}
-                interactive={isSplashManualMode}
+                interactive={false}
               />
             </div>
             
