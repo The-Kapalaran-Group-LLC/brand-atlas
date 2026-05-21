@@ -258,20 +258,15 @@ const getImageProxyBaseUrl = (): string => {
     return configured.replace(/\/$/, '');
   }
 
-  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') {
-    return '';
-  }
-
-  if (typeof window !== 'undefined') {
-    const { protocol, hostname } = window.location;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return `${protocol}//${hostname}:3001`;
-    }
-    return window.location.origin.replace(/\/$/, '');
-  }
-
+  // Default to same-origin relative `/api` so Vite proxy and deployed routes both work.
   return '';
 };
+
+function buildApiUrl(pathname: string): string {
+  const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  const base = getImageProxyBaseUrl();
+  return base ? `${base}${normalizedPath}` : normalizedPath;
+}
 
 function pickFirstNonEmptyUrl(...candidates: Array<string | null | undefined>): string | null {
   for (const candidate of candidates) {
@@ -281,25 +276,40 @@ function pickFirstNonEmptyUrl(...candidates: Array<string | null | undefined>): 
   return null;
 }
 
+function extractOriginalImageUrlFromProxy(rawUrl: string): string | null {
+  if (!rawUrl || !rawUrl.includes('/api/image-proxy')) return null;
+
+  try {
+    const parsed = rawUrl.startsWith('http://') || rawUrl.startsWith('https://')
+      ? new URL(rawUrl)
+      : new URL(rawUrl, 'http://localhost');
+    const proxied = parsed.searchParams.get('url');
+    return normalizeHttpUrl(proxied || '');
+  } catch {
+    return null;
+  }
+}
+
 function withImageProxy(rawUrl: string): string {
   if (!rawUrl || rawUrl.startsWith('data:image')) {
     return rawUrl;
   }
 
-  if (rawUrl.includes('/api/image-proxy?url=')) {
-    return rawUrl;
+  const normalized = normalizeHttpUrl(rawUrl);
+  const proxiedOriginal = extractOriginalImageUrlFromProxy(rawUrl);
+  const proxyBase = getImageProxyBaseUrl();
+
+  if (proxiedOriginal) {
+    return proxyBase ? rawUrl : proxiedOriginal;
   }
 
-  const normalized = normalizeHttpUrl(rawUrl);
   if (!normalized) {
     return rawUrl;
   }
 
-  const proxyBase = getImageProxyBaseUrl();
-  if (!proxyBase) {
-    return normalized;
-  }
-
+  // Prefer direct browser image loading by default. This keeps visuals working
+  // even when the local API proxy server is unavailable.
+  if (!proxyBase) return normalized;
   return `${proxyBase}/api/image-proxy?url=${encodeURIComponent(normalized)}`;
 }
 
@@ -587,6 +597,17 @@ function isFaviconLikeAssetUrl(url?: string | null): boolean {
 
 function advanceImageFallbackOrHide(event: React.SyntheticEvent<HTMLImageElement>) {
   const target = event.currentTarget;
+  const attemptedSource = target.currentSrc || target.src;
+  const unproxiedSource = extractOriginalImageUrlFromProxy(attemptedSource);
+  const unproxiedAttempted = target.dataset.unproxiedAttempted === 'true';
+  if (unproxiedSource && !unproxiedAttempted && attemptedSource !== unproxiedSource) {
+    target.dataset.unproxiedAttempted = 'true';
+    target.dataset.revealed = 'false';
+    target.style.opacity = '0';
+    target.src = unproxiedSource;
+    return;
+  }
+
   const fallbackChain = (target.dataset.fallbackChain || '')
     .split('|')
     .map((item) => item.trim())
@@ -599,6 +620,8 @@ function advanceImageFallbackOrHide(event: React.SyntheticEvent<HTMLImageElement
 
   if (nextFallback && target.src !== nextFallback) {
     target.dataset.fallbackChain = fallbackChain.join('|');
+    target.dataset.revealed = 'false';
+    target.style.opacity = '0';
     target.src = nextFallback;
     return;
   }
@@ -641,6 +664,17 @@ function buildDeterministicPlaceholderCards(brandName: string): BrandVisualCard[
 
 function advanceImageFallback(event: React.SyntheticEvent<HTMLImageElement>) {
   const target = event.currentTarget;
+  const attemptedSource = target.currentSrc || target.src;
+  const unproxiedSource = extractOriginalImageUrlFromProxy(attemptedSource);
+  const unproxiedAttempted = target.dataset.unproxiedAttempted === 'true';
+  if (unproxiedSource && !unproxiedAttempted && attemptedSource !== unproxiedSource) {
+    target.dataset.unproxiedAttempted = 'true';
+    target.dataset.revealed = 'false';
+    target.style.opacity = '0';
+    target.src = unproxiedSource;
+    return;
+  }
+
   const fallbackChain = (target.dataset.fallbackChain || '')
     .split('|')
     .map((item) => item.trim())
@@ -653,12 +687,23 @@ function advanceImageFallback(event: React.SyntheticEvent<HTMLImageElement>) {
 
   if (nextFallback && target.src !== nextFallback) {
     target.dataset.fallbackChain = fallbackChain.join('|');
+    target.dataset.revealed = 'false';
+    target.style.opacity = '0';
     target.src = nextFallback;
     return;
   }
 
   target.onerror = null;
+  target.dataset.revealed = 'false';
+  target.style.opacity = '0';
   target.src = buildInlineFallbackImageSvg(target.alt || 'Preview unavailable');
+}
+
+function revealImageOnLoad(event: React.SyntheticEvent<HTMLImageElement>) {
+  const target = event.currentTarget;
+  if (target.dataset.revealed === 'true') return;
+  target.dataset.revealed = 'true';
+  target.style.opacity = '1';
 }
 
 function buildScreenshotPreviewUrl(pageUrl: string): string {
@@ -675,7 +720,16 @@ function canonicalizeVisualUrl(rawUrl: string): string {
 
   try {
     const parsed = new URL(normalized);
-    return `${parsed.origin}${parsed.pathname}`.toLowerCase();
+    if (parsed.pathname.endsWith('/api/image-proxy')) {
+      const proxiedRawUrl = parsed.searchParams.get('url');
+      const normalizedProxiedUrl = normalizeHttpUrl(proxiedRawUrl || '');
+      if (normalizedProxiedUrl) {
+        const proxiedParsed = new URL(normalizedProxiedUrl);
+        return `${proxiedParsed.origin}${proxiedParsed.pathname}${proxiedParsed.search}`.toLowerCase();
+      }
+    }
+
+    return `${parsed.origin}${parsed.pathname}${parsed.search}`.toLowerCase();
   } catch {
     return normalized.toLowerCase();
   }
@@ -1137,15 +1191,12 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   }, [resultTab, report]);
 
   useEffect(() => {
-    const proxyBase = getImageProxyBaseUrl();
-    if (!proxyBase) return;
-
     Object.entries(bestVisualsByBrand).forEach(([brandName, visuals]) => {
       const logoUrl = visuals.deterministicLogoUrl;
       if (!logoUrl || requestedLogosRef.current.has(brandName)) return;
 
       requestedLogosRef.current.add(brandName);
-      fetch(`${proxyBase}/api/process-image?url=${encodeURIComponent(logoUrl)}`)
+      fetch(buildApiUrl(`/api/process-image?url=${encodeURIComponent(logoUrl)}`))
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
         .then((data: { base64Placeholder: string; dominantColorHex: string }) => {
           setProcessedLogos((prev) => ({
@@ -1165,7 +1216,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       if (!website || requestedHeroRef.current.has(profile.brandName)) return;
 
       requestedHeroRef.current.add(profile.brandName);
-      fetch(`${proxyBase}/api/brand-images?domain=${encodeURIComponent(website)}`)
+      fetch(buildApiUrl(`/api/brand-images?domain=${encodeURIComponent(website)}`))
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
         .then((data: { logoUrl: string | null; heroImageUrl: string | null }) => {
           setLogoImages((prev) => ({ ...prev, [profile.brandName]: data.logoUrl }));
@@ -1182,7 +1233,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       if (!website || requestedTypographyRef.current.has(profile.brandName)) return;
 
       requestedTypographyRef.current.add(profile.brandName);
-      const endpoint = `${proxyBase}/api/extract-typography?url=${encodeURIComponent(website)}&maxSamplesPerTag=3`;
+      const endpoint = buildApiUrl(`/api/extract-typography?url=${encodeURIComponent(website)}&maxSamplesPerTag=3`);
       console.log('[DesignExcavator] Requesting live typography extraction.', {
         brandName: profile.brandName,
         website,
@@ -2999,10 +3050,10 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                     {report.brandProfiles.map((profile, idx) => {
                       const visuals = bestVisualsByBrand[profile.brandName];
                       const navPrimaryLogoUrl = pickFirstNonEmptyUrl(
-                        processedLogos[profile.brandName]?.base64Placeholder,
                         normalizeHttpUrl(profile.logoImageUrl || ''),
                         visuals?.deterministicLogoUrl,
                         logoImages[profile.brandName],
+                        processedLogos[profile.brandName]?.base64Placeholder,
                       );
                       const navFallbackChain = buildFaviconPreferredBadgeChain(profile.website, navPrimaryLogoUrl);
                       const navBadgeUrl = navFallbackChain[0] || (navPrimaryLogoUrl ? withImageProxy(navPrimaryLogoUrl) : null);
@@ -3026,7 +3077,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                                 src={navBadgeUrl}
                                 alt={`${profile.brandName} navigation logo`}
                                 data-fallback-chain={navRemainingFallbacks.join('|')}
-                                className="w-full h-full rounded-lg object-contain p-0.5 absolute inset-0 bg-transparent"
+                                className="w-full h-full rounded-lg object-contain p-0.5 absolute inset-0 bg-transparent opacity-0 transition-opacity duration-200"
+                                onLoad={revealImageOnLoad}
                                 onError={advanceImageFallbackOrHide}
                               />
                             )}
@@ -3042,10 +3094,10 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                   {report.brandProfiles.map((profile, idx) => {
                     const visuals = bestVisualsByBrand[profile.brandName];
                     const logoUrl = pickFirstNonEmptyUrl(
-                      processedLogos[profile.brandName]?.base64Placeholder,
                       normalizeHttpUrl(profile.logoImageUrl || ''),
                       visuals?.deterministicLogoUrl,
                       logoImages[profile.brandName],
+                      processedLogos[profile.brandName]?.base64Placeholder,
                     );
                     const brandBadgeFallbackChain = buildSquareLogoPreferredBadgeChain(profile.website, logoUrl);
                     const brandBadgeUrl = brandBadgeFallbackChain[0] || (logoUrl ? withImageProxy(logoUrl) : null);
@@ -3099,8 +3151,11 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                                 src={brandBadgeUrl}
                                 alt={`${profile.brandName} logo`}
                                 data-fallback-chain={brandBadgeRemainingFallbacks.join('|')}
-                                className="w-full h-full object-contain p-1 absolute inset-0 z-10 bg-transparent"
-                                onLoad={handleImageLoad}
+                                className="w-full h-full object-contain p-1 absolute inset-0 z-10 bg-transparent opacity-0 transition-opacity duration-200"
+                                onLoad={(e) => {
+                                  revealImageOnLoad(e);
+                                  handleImageLoad();
+                                }}
                                 onError={(e) => { handleImageError(); advanceImageFallback(e); }}
                               />
                             )}
@@ -3156,8 +3211,11 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                                       alt={card.label}
                                       data-original-src={card.url}
                                       data-fallback-chain={fallbackChain.join('|')}
-                                      className="w-full h-full object-cover"
-                                      onLoad={handleImageLoad}
+                                      className="w-full h-full object-cover opacity-0 transition-opacity duration-200"
+                                      onLoad={(e) => {
+                                        revealImageOnLoad(e);
+                                        handleImageLoad();
+                                      }}
                                       onError={(e) => handleVisualImageError(e, cardKey)}
                                       onClick={() => clearVisualFailureState(cardKey)}
                                     />
