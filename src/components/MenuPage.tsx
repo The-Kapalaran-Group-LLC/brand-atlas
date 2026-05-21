@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
 import { SplashGrid } from './SplashGrid';
+import { SPLASH_GLOBE_STATIC_PROPS } from './splashGlobeDefaults';
 
 const DEFAULT_BADGE_CLASS_NAME =
   'align-super ml-3 inline-block px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold tracking-wide border border-indigo-200';
@@ -42,7 +43,7 @@ export default function MenuPage({
       data-testid="menu-page"
     >
       <div className="absolute inset-x-0 top-[64px] -bottom-[64px] z-0 pointer-events-none">
-        <SplashGrid sizeMultiplier={1.25} qualityMode="fast" startLongitude={-74.006} />
+        <SplashGrid {...SPLASH_GLOBE_STATIC_PROPS} />
       </div>
       <div className="relative z-10 w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-3 mx-auto">
         <Sparkles className="w-5 h-5" />

@@ -70,6 +70,7 @@ import { saveDesignExcavatorPrefill } from '../services/design-excavator-prefill
 import { MobileTwoLineSubcopy } from './MobileTwoLineSubcopy';
 import { MobileResultsNav } from './MobileResultsNav';
 import { ShowThinkingDropdown } from './ShowThinkingDropdown';
+import { SPLASH_GLOBE_STATIC_PROPS } from './splashGlobeDefaults';
 import { buildExportFileBase } from '../services/export-filenames';
 import {
   exportBrandAtlasDocumentToPdf,
@@ -1706,12 +1707,7 @@ export default function BrandNavigator() {
             onClick={handleSplashManualDismiss}
           >
             <div className="absolute inset-0 z-0 translate-y-[20px]">
-              <SplashGrid
-                sizeMultiplier={1.25}
-                qualityMode="fast"
-                startLongitude={-74.006}
-                interactive={false}
-              />
+              <SplashGrid {...SPLASH_GLOBE_STATIC_PROPS} />
             </div>
             
             {!isSplashManualMode && (
