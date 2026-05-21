@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   getFrameDeltaMs,
+  getSmoothedFrameDeltaMs,
   getNextQualityStep,
   getRenderStride,
   getStripeClusterDensity,
@@ -291,6 +292,7 @@ type SplashGridProps = {
   qualityMode?: 'auto' | 'fast';
   startLongitude?: number;
   interactive?: boolean;
+  usePreRenderedLoop?: boolean;
 };
 
 type PrecomputedSplashDotData = {
@@ -307,6 +309,7 @@ const COUNTRIES_GEOJSON_CACHE_KEY = 'splash_globe_countries_geojson_v1';
 const COUNTRIES_GEOJSON_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
 const COUNTRIES_REMOTE_FAILURE_KEY = 'splash_globe_countries_remote_failure_ts_v1';
 const COUNTRIES_REMOTE_RETRY_BACKOFF_MS = 1000 * 60 * 60 * 6; // 6 hours
+const PRE_RENDERED_GLOBE_LOOP_SRC = '/assets/menupage-globe-loop.gif';
 
 let cachedLandGeoJson: GeoJsonData | null = null;
 let cachedCountriesGeoJson: GeoJsonData | null = null;
@@ -362,10 +365,18 @@ export function SplashGrid({
   qualityMode = 'auto',
   startLongitude = DEFAULT_START_LONGITUDE,
   interactive = false,
+  usePreRenderedLoop = true,
 }: SplashGridProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isLiveMode, setIsLiveMode] = useState(!usePreRenderedLoop);
 
   useEffect(() => {
+    setIsLiveMode(!usePreRenderedLoop);
+  }, [usePreRenderedLoop]);
+
+  useEffect(() => {
+    if (!isLiveMode) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -385,6 +396,8 @@ export function SplashGrid({
     let dpr = 1;
     let elapsedSeconds = 0;
     let lastFrameNow = 0;
+    let smoothedDeltaMs: number | null = null;
+    let qualitySampleAccumulatorMs = 0;
     let adaptiveQualityStep = qualityMode === 'fast' ? 2 : 0;
     let isMobileViewport = false;
     let dragYaw = 0;
@@ -1108,12 +1121,17 @@ export function SplashGrid({
       if (lastFrameNow === 0) lastFrameNow = now;
       const rawDeltaMs = now - lastFrameNow;
       lastFrameNow = now;
-      const frameDeltaMs = getFrameDeltaMs(rawDeltaMs);
+      smoothedDeltaMs = getSmoothedFrameDeltaMs(rawDeltaMs, smoothedDeltaMs);
+      const frameDeltaMs = smoothedDeltaMs;
       elapsedSeconds += frameDeltaMs * 0.001;
-      const qualityDeltaMs = isMobileViewport
-        ? Math.min(rawDeltaMs, 30)
-        : rawDeltaMs;
-      adaptiveQualityStep = getNextQualityStep(adaptiveQualityStep, qualityDeltaMs);
+      qualitySampleAccumulatorMs += getFrameDeltaMs(rawDeltaMs);
+      if (qualitySampleAccumulatorMs >= 80) {
+        const qualityDeltaMs = isMobileViewport
+          ? Math.min(qualitySampleAccumulatorMs, 30)
+          : qualitySampleAccumulatorMs;
+        adaptiveQualityStep = getNextQualityStep(adaptiveQualityStep, qualityDeltaMs);
+        qualitySampleAccumulatorMs = 0;
+      }
 
       ctx.clearRect(0, 0, width, height);
 
@@ -1375,19 +1393,52 @@ export function SplashGrid({
       window.removeEventListener('resize', resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [sizeMultiplier, qualityMode, startLongitude, interactive]);
+  }, [sizeMultiplier, qualityMode, startLongitude, interactive, isLiveMode]);
+
+  const showPreRenderedLoop = usePreRenderedLoop && !isLiveMode;
+  const activateLiveMode = () => {
+    if (!showPreRenderedLoop) return;
+    console.log('[SplashGlobe] switching from pre-rendered loop to live canvas mode');
+    setIsLiveMode(true);
+  };
 
   return (
-    <canvas
-      ref={canvasRef}
-      data-testid="splash-globe-canvas"
-      data-quality-mode={qualityMode}
-      className="absolute inset-0 h-full w-full"
-      style={{
-        touchAction: interactive ? 'none' : 'auto',
-        cursor: interactive ? 'grab' : 'default',
-        userSelect: 'none',
-      }}
-    />
+    <>
+      {showPreRenderedLoop && (
+        <>
+          <img
+            src={PRE_RENDERED_GLOBE_LOOP_SRC}
+            alt=""
+            aria-hidden="true"
+            data-testid="splash-globe-preview"
+            className="absolute inset-0 h-full w-full object-cover"
+            draggable={false}
+          />
+          {interactive && (
+            <button
+              type="button"
+              data-testid="splash-globe-activate-live"
+              aria-label="Enable interactive globe"
+              className="absolute inset-0 h-full w-full cursor-grab bg-transparent"
+              onPointerDown={activateLiveMode}
+              onClick={activateLiveMode}
+            />
+          )}
+        </>
+      )}
+      {!showPreRenderedLoop && (
+        <canvas
+          ref={canvasRef}
+          data-testid="splash-globe-canvas"
+          data-quality-mode={qualityMode}
+          className="absolute inset-0 h-full w-full"
+          style={{
+            touchAction: interactive ? 'none' : 'auto',
+            cursor: interactive ? 'grab' : 'default',
+            userSelect: 'none',
+          }}
+        />
+      )}
+    </>
   );
 }

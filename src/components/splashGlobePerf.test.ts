@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getFrameDeltaMs,
   getInertiaDamping,
+  getSmoothedFrameDeltaMs,
   getNextQualityStep,
   getRenderStride,
   getStripeClusterDensity,
@@ -13,6 +14,19 @@ describe('splashGlobePerf', () => {
     expect(getFrameDeltaMs(-1)).toBeCloseTo(16.67, 2);
     expect(getFrameDeltaMs(2)).toBe(8);
     expect(getFrameDeltaMs(90)).toBe(40);
+  });
+
+  it('smooths frame deltas so rotation speed changes are gradual', () => {
+    const first = getSmoothedFrameDeltaMs(16.67, null);
+    expect(first).toBeCloseTo(16.67, 2);
+
+    const stepped = getSmoothedFrameDeltaMs(40, first);
+    expect(stepped).toBeGreaterThan(first);
+    expect(stepped).toBeLessThan(22);
+
+    const settled = getSmoothedFrameDeltaMs(40, stepped);
+    expect(settled).toBeGreaterThan(stepped);
+    expect(settled).toBeLessThan(40);
   });
 
   it('ramps quality down under frame pressure and up when fast', () => {

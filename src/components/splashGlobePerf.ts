@@ -18,6 +18,19 @@ export const getFrameDeltaMs = (rawDeltaMs: number): number => {
   return clamp(rawDeltaMs, MIN_FRAME_DELTA_MS, MAX_FRAME_DELTA_MS);
 };
 
+export const getSmoothedFrameDeltaMs = (
+  rawDeltaMs: number,
+  previousSmoothedDeltaMs: number | null,
+): number => {
+  const clamped = getFrameDeltaMs(rawDeltaMs);
+  if (previousSmoothedDeltaMs === null || !Number.isFinite(previousSmoothedDeltaMs)) {
+    return clamped;
+  }
+
+  const alpha = 0.18;
+  return previousSmoothedDeltaMs + (clamped - previousSmoothedDeltaMs) * alpha;
+};
+
 export const getNextQualityStep = (currentStep: number, rawDeltaMs: number): number => {
   const step = clamp(Math.round(currentStep), 0, MAX_QUALITY_STEP);
 
