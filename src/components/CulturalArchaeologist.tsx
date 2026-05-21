@@ -93,10 +93,10 @@ interface OAuthTokenResponse {
 type MatrixInsightKey =
   | 'moments'
   | 'beliefs'
-  | 'tone'
-  | 'language'
   | 'behaviors'
   | 'contradictions'
+  | 'tone'
+  | 'language'
   | 'community'
   | 'influencers';
 
@@ -108,10 +108,10 @@ type TrendStageFilter = 'emerging' | 'peaking' | 'declining';
 const MATRIX_INSIGHT_KEYS: MatrixInsightKey[] = [
   'moments',
   'beliefs',
-  'tone',
-  'language',
   'behaviors',
   'contradictions',
+  'tone',
+  'language',
   'community',
   'influencers',
 ];
@@ -665,10 +665,10 @@ export default function CulturalArchaeologist() {
       { id: 'cultural-results-filters', label: 'Filters' },
       { id: 'cultural-result-section-moments', label: 'Moments' },
       { id: 'cultural-result-section-beliefs', label: 'Beliefs' },
-      { id: 'cultural-result-section-tone', label: 'Tone' },
-      { id: 'cultural-result-section-language', label: 'Language' },
       { id: 'cultural-result-section-behaviors', label: 'Behaviors' },
       { id: 'cultural-result-section-contradictions', label: 'Contradictions' },
+      { id: 'cultural-result-section-tone', label: 'Tone' },
+      { id: 'cultural-result-section-language', label: 'Language' },
       { id: 'cultural-result-section-community', label: 'Community' },
       { id: 'cultural-result-section-influencers', label: 'Influencers' },
     ];
@@ -1675,10 +1675,10 @@ export default function CulturalArchaeologist() {
     const categories = [
       { title: 'Moments', data: matrix.moments },
       { title: 'Beliefs', data: matrix.beliefs },
-      { title: 'Tone', data: matrix.tone },
-      { title: 'Language', data: matrix.language },
       { title: 'Behaviors', data: matrix.behaviors },
       { title: 'Contradictions', data: matrix.contradictions },
+      { title: 'Tone', data: matrix.tone },
+      { title: 'Language', data: matrix.language },
       { title: 'Community', data: matrix.community },
       { title: 'Influencers', data: matrix.influencers },
     ];
@@ -1782,10 +1782,10 @@ export default function CulturalArchaeologist() {
     const sections = [
       { title: 'Moments', data: matrix.moments },
       { title: 'Beliefs', data: matrix.beliefs },
-      { title: 'Tone', data: matrix.tone },
-      { title: 'Language', data: matrix.language },
       { title: 'Behaviors', data: matrix.behaviors },
       { title: 'Contradictions', data: matrix.contradictions },
+      { title: 'Tone', data: matrix.tone },
+      { title: 'Language', data: matrix.language },
       { title: 'Community', data: matrix.community },
       { title: 'Influencers', data: matrix.influencers },
     ].map((section) => ({
@@ -2617,7 +2617,7 @@ export default function CulturalArchaeologist() {
                   <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
                   <div
                     data-testid="cultural-brands-input-shell"
-                    className={`w-full min-h-14 pl-12 pr-12 py-2 flex gap-2 flex-wrap ${normalizedBrands.length > 0 ? 'items-start' : 'items-center'}`}
+                    className={`w-full min-h-14 pl-12 pr-10 py-2 flex gap-2 flex-wrap ${normalizedBrands.length > 0 ? 'items-start' : 'items-center'}`}
                   >
                     {normalizedBrands.map((brandChip, chipIndex) => (
                       <span
@@ -2659,7 +2659,7 @@ export default function CulturalArchaeologist() {
                         }
                       }}
                       placeholder={normalizedBrands.length > 0 ? 'Add more brands or category' : 'Brands or Category (Optional)'}
-                      className={`flex-1 min-w-[140px] bg-transparent text-zinc-900 placeholder-zinc-400 focus:outline-none ${normalizedBrands.length > 0 ? 'py-1' : 'h-10'}`}
+                      className={`bg-transparent text-zinc-900 text-left placeholder:text-left placeholder-zinc-400 focus:outline-none ${normalizedBrands.length > 0 ? 'flex-1 min-w-[140px] py-1 pr-1' : 'w-full min-w-0 h-10 pr-0'}`}
                       disabled={isLoading}
                     />
                   </div>
@@ -3524,14 +3524,14 @@ export default function CulturalArchaeologist() {
 
               <div
                 data-testid="matrix-cards-layout"
-                className="columns-1 md:columns-2 lg:columns-3 gap-6"
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
               >
                 <MatrixCard title="Moments" sectionKey="moments" sectionAnchorId="cultural-result-section-moments" subtext="External forces shaping their behavior" items={displayMatrix?.moments || []} delay={0.1} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.moments || []).length === 0 || (displayMatrix?.moments || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('moments', 'Moments'); }} />
                 <MatrixCard title="Beliefs" sectionKey="beliefs" sectionAnchorId="cultural-result-section-beliefs" subtext="Values they’re operating from" items={displayMatrix?.beliefs || []} delay={0.2} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.beliefs || []).length === 0 || (displayMatrix?.beliefs || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('beliefs', 'Beliefs'); }} />
-                <MatrixCard title="Tone" sectionKey="tone" sectionAnchorId="cultural-result-section-tone" subtext="What & how they feel" items={displayMatrix?.tone || []} delay={0.3} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.tone || []).length === 0 || (displayMatrix?.tone || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('tone', 'Tone'); }} />
-                <MatrixCard title="Language" sectionKey="language" sectionAnchorId="cultural-result-section-language" subtext="How they communicate" items={displayMatrix?.language || []} delay={0.4} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} onOpenVocabularyExtractor={() => setIsVocabularyOpen(true)} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.language || []).length === 0 || (displayMatrix?.language || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('language', 'Language'); }} />
-                <MatrixCard title="Behaviors" sectionKey="behaviors" sectionAnchorId="cultural-result-section-behaviors" subtext="How they act/interact" items={displayMatrix?.behaviors || []} delay={0.5} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.behaviors || []).length === 0 || (displayMatrix?.behaviors || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('behaviors', 'Behaviors'); }} />
-                <MatrixCard title="Contradictions" sectionKey="contradictions" sectionAnchorId="cultural-result-section-contradictions" subtext="Emerging tensions or shift in values or behavior" items={displayMatrix?.contradictions || []} delay={0.6} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.contradictions || []).length === 0 || (displayMatrix?.contradictions || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('contradictions', 'Contradictions'); }} />
+                <MatrixCard title="Behaviors" sectionKey="behaviors" sectionAnchorId="cultural-result-section-behaviors" subtext="How they act/interact" items={displayMatrix?.behaviors || []} delay={0.3} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.behaviors || []).length === 0 || (displayMatrix?.behaviors || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('behaviors', 'Behaviors'); }} />
+                <MatrixCard title="Contradictions" sectionKey="contradictions" sectionAnchorId="cultural-result-section-contradictions" subtext="Emerging tensions or shift in values or behavior" items={displayMatrix?.contradictions || []} delay={0.4} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.contradictions || []).length === 0 || (displayMatrix?.contradictions || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('contradictions', 'Contradictions'); }} />
+                <MatrixCard title="Tone" sectionKey="tone" sectionAnchorId="cultural-result-section-tone" subtext="What & how they feel" items={displayMatrix?.tone || []} delay={0.5} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.tone || []).length === 0 || (displayMatrix?.tone || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('tone', 'Tone'); }} />
+                <MatrixCard title="Language" sectionKey="language" sectionAnchorId="cultural-result-section-language" subtext="How they communicate" items={displayMatrix?.language || []} delay={0.6} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} onOpenVocabularyExtractor={() => setIsVocabularyOpen(true)} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.language || []).length === 0 || (displayMatrix?.language || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('language', 'Language'); }} />
                 <MatrixCard title="Community" sectionKey="community" sectionAnchorId="cultural-result-section-community" subtext="Who people look to for identity & belonging" items={displayMatrix?.community || []} delay={0.7} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.community || []).length === 0 || (displayMatrix?.community || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('community', 'Community'); }} />
                 <MatrixCard title="Influencers" sectionKey="influencers" sectionAnchorId="cultural-result-section-influencers" subtext="People who are shaping their beliefs & behavior" items={displayMatrix?.influencers || []} delay={0.8} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.influencers || []).length === 0 || (displayMatrix?.influencers || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('influencers', 'Influencers'); }} />
               </div>
