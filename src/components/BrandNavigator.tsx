@@ -77,9 +77,14 @@ import {
   exportBrandAtlasDocumentToPptx,
   type BrandAtlasExportDocument,
 } from '../services/brand-atlas-themed-export';
+import {
+  playCompletionSound,
+  type CompletionSoundId,
+} from '../services/completion-sound';
 
 const BRAND_NAVIGATOR_TABLE = 'Brand_Navigator';
 const BRAND_NAVIGATOR_SHOW_THINKING_TEXT = 'Used a RAG pipeline: retrieved high-signal brand/category sources, re-ranked for relevance, extracted structured positioning evidence, and generated recommendations grounded in cited inputs.';
+const RESULTS_COMPLETE_SOUND_ID: CompletionSoundId = 'classic-chime';
 
 type BrandMatrixMeta = {
   audience: string;
@@ -1198,35 +1203,7 @@ export default function BrandNavigator() {
         setSaveWarning('Report generated, but we could not save this search history. You can still continue using the results.');
       }
 
-      // Play chime sound using Web Audio API
-      try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        const ctx = new AudioContext();
-        const osc1 = ctx.createOscillator();
-        const osc2 = ctx.createOscillator();
-        const gainNode = ctx.createGain();
-
-        osc1.type = 'sine';
-        osc2.type = 'sine';
-
-        osc1.frequency.setValueAtTime(1046.50, ctx.currentTime);
-        osc2.frequency.setValueAtTime(1318.51, ctx.currentTime);
-
-        gainNode.gain.setValueAtTime(0, ctx.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2);
-
-        osc1.connect(gainNode);
-        osc2.connect(gainNode);
-        gainNode.connect(ctx.destination);
-
-        osc1.start();
-        osc2.start();
-        osc1.stop(ctx.currentTime + 2);
-        osc2.stop(ctx.currentTime + 2);
-      } catch (e) {
-        logger.warn('Failed to play sound', e);
-      }
+      await playCompletionSound(RESULTS_COMPLETE_SOUND_ID);
 
     } catch (err: unknown) {
       const normalized = normalizeAppError(err);

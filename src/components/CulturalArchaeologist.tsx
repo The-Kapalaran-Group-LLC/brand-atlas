@@ -49,6 +49,10 @@ import {
   exportBrandAtlasDocumentToPptx,
   type BrandAtlasExportDocument,
 } from '../services/brand-atlas-themed-export';
+import {
+  playCompletionSound,
+  type CompletionSoundId,
+} from '../services/completion-sound';
 
 
 
@@ -122,6 +126,7 @@ const CULTURAL_ARCHAEOLOGIST_TABLE = 'Cultural_Archaeologist';
 const CULTURAL_ARCHAEOLOGIST_TABLE_CANDIDATES = [CULTURAL_ARCHAEOLOGIST_TABLE, 'CulturalArchaeologist', 'searches'] as const;
 const TREND_STAGE_FILTERS: TrendStageFilter[] = ['peaking', 'emerging', 'declining'];
 const CULTURAL_ARCHAEOLOGIST_SHOW_THINKING_TEXT = 'Applied retrieval-grounded synthesis: collected language, behavior, and community artifacts, clustered recurring motifs and tensions, and generated a structured cultural map with source-grounded claims.';
+const RESULTS_COMPLETE_SOUND_ID: CompletionSoundId = 'classic-chime';
 
 const getExportErrorDetail = (error: unknown): string | null => {
   if (error instanceof Error && error.message.trim().length > 0) {
@@ -1289,34 +1294,7 @@ export default function CulturalArchaeologist() {
         setSaveWarning('Insights generated, but this report could not be saved right now.');
       }
 
-      try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        const ctx = new AudioContext();
-        const osc1 = ctx.createOscillator();
-        const osc2 = ctx.createOscillator();
-        const gainNode = ctx.createGain();
-
-        osc1.type = 'sine';
-        osc2.type = 'sine';
-
-        osc1.frequency.setValueAtTime(1046.50, ctx.currentTime);
-        osc2.frequency.setValueAtTime(1318.51, ctx.currentTime);
-
-        gainNode.gain.setValueAtTime(0, ctx.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2);
-
-        osc1.connect(gainNode);
-        osc2.connect(gainNode);
-        gainNode.connect(ctx.destination);
-
-        osc1.start();
-        osc2.start();
-        osc1.stop(ctx.currentTime + 2);
-        osc2.stop(ctx.currentTime + 2);
-      } catch (e) {
-        logger.warn('Failed to play completion sound', e);
-      }
+      await playCompletionSound(RESULTS_COMPLETE_SOUND_ID);
 
       runBackgroundDeepDives(nextMatrix, {
         audience: audienceValue,
