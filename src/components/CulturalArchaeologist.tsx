@@ -3342,7 +3342,7 @@ export default function CulturalArchaeologist() {
                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
                     showHighlyUniqueOnly
                       ? 'border-indigo-200 bg-white text-indigo-700'
-                      : 'border-zinc-200 bg-transparent text-zinc-600 hover:border-zinc-300'
+                      : 'border-transparent bg-transparent text-zinc-600 hover:border-transparent'
                   }`}
                 >
                   <Sparkles className={`w-4 h-4 ${showHighlyUniqueOnly ? 'text-indigo-600' : 'text-indigo-500'}`} />
