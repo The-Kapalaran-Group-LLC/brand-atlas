@@ -135,6 +135,46 @@ describe('CulturalArchaeologist', () => {
     expect(supabaseFrom).toHaveBeenCalledWith('Cultural_Archaeologist');
   });
 
+  it('filters results to only highly unique observations when the highly unique filter is selected', async () => {
+    generateCulturalMatrix.mockResolvedValueOnce({
+      ...mockMatrix,
+      moments: [
+        {
+          text: '[KNOWN] Highly unique signal',
+          isHighlyUnique: true,
+          sourceType: 'Mainstream',
+          confidenceLevel: 'high' as const,
+          trendLifecycle: 'peaking' as const,
+        },
+        {
+          text: '[KNOWN] General signal',
+          isHighlyUnique: false,
+          sourceType: 'Mainstream',
+          confidenceLevel: 'high' as const,
+          trendLifecycle: 'peaking' as const,
+        },
+      ],
+    });
+
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    expect(await screen.findByText('Highly unique signal')).toBeInTheDocument();
+    expect(await screen.findByText('General signal')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /highly unique observation/i }));
+
+    expect(await screen.findByText('Highly unique signal')).toBeInTheDocument();
+    expect(screen.queryByText('General signal')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /highly unique observation/i }));
+
+    expect(await screen.findByText('General signal')).toBeInTheDocument();
+  });
+
   it('shows per-section refresh for incomplete results and reruns a fresh search when clicked', async () => {
     generateCulturalMatrix
       .mockResolvedValueOnce(incompleteMatrix)
@@ -236,9 +276,12 @@ describe('CulturalArchaeologist', () => {
     expect(mobileMenu.className).toContain('top-16');
     expect(mobileMenu.className).toContain('left-4');
     expect(mobileMenu.className).toContain('right-4');
-    expect(within(mobileMenu).getByRole('button', { name: /back to home/i })).toBeInTheDocument();
-    expect(within(mobileMenu).getByRole('button', { name: /brand navigator/i })).toBeInTheDocument();
-    expect(within(mobileMenu).getByRole('button', { name: /design excavator/i })).toBeInTheDocument();
+    expect(within(mobileMenu).getByRole('link', { name: /back to home/i })).toHaveAttribute('href', '/?home=1');
+    expect(within(mobileMenu).getByRole('link', { name: /brand navigator/i })).toHaveAttribute('href', '/#brand-navigator');
+    expect(within(mobileMenu).getByRole('link', { name: /design excavator/i })).toHaveAttribute('href', '/#design-excavator');
+
+    expect(within(actionContainer).getByRole('link', { name: /brand navigator/i })).toHaveAttribute('href', '/#brand-navigator');
+    expect(within(actionContainer).getByRole('link', { name: /design excavator/i })).toHaveAttribute('href', '/#design-excavator');
   });
 
   it('renders mobile New Search as an icon button to the right of generate insights', async () => {

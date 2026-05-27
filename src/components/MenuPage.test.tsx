@@ -15,7 +15,7 @@ vi.mock('./SplashGrid', () => ({
 }));
 
 describe('MenuPage', () => {
-  it('renders cards and routes click actions through handlers', () => {
+  it('renders cards as links and routes primary clicks through handlers', () => {
     const onFirstClick = vi.fn();
     const onSecondClick = vi.fn();
 
@@ -26,6 +26,7 @@ describe('MenuPage', () => {
         description: 'Generate sharper insights.',
         bullets: ['Audience research'],
         icon: <Search className="w-4 h-4" />,
+        href: '/#cultural-archaeologist',
         onClick: onFirstClick,
       },
       {
@@ -34,6 +35,7 @@ describe('MenuPage', () => {
         description: 'Compare design systems.',
         bullets: ['Competitive research'],
         icon: <Search className="w-4 h-4" />,
+        href: '/#design-excavator',
         onClick: onSecondClick,
         badgeText: 'Beta',
       },
@@ -61,10 +63,46 @@ describe('MenuPage', () => {
       })
     );
 
-    fireEvent.click(screen.getByTestId('menu-page-card-cultural-archaeologist'));
-    fireEvent.click(screen.getByTestId('menu-page-card-design-excavator'));
+    const firstCardLink = screen.getByRole('link', { name: /cultural archaeologist/i });
+    const secondCardLink = screen.getByRole('link', { name: /design excavator/i });
+
+    expect(firstCardLink).toHaveAttribute('href', '/#cultural-archaeologist');
+    expect(secondCardLink).toHaveAttribute('href', '/#design-excavator');
+
+    fireEvent.click(firstCardLink);
+    fireEvent.click(secondCardLink);
 
     expect(onFirstClick).toHaveBeenCalledTimes(1);
     expect(onSecondClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps default browser link behavior for modified clicks', () => {
+    const onClick = vi.fn();
+
+    const cards: MenuPageCard[] = [
+      {
+        id: 'brand-navigator',
+        title: 'Brand Navigator',
+        description: 'Audit multiple brands.',
+        bullets: ['Opportunity space identification'],
+        icon: <Search className="w-4 h-4" />,
+        href: '/#brand-navigator',
+        onClick,
+      },
+    ];
+
+    render(
+      <MenuPage
+        subtitle="Start with cultural research."
+        cards={cards}
+      />
+    );
+
+    const cardLink = screen.getByRole('link', { name: /brand navigator/i });
+
+    fireEvent.click(cardLink, { metaKey: true });
+    fireEvent.click(cardLink, { ctrlKey: true });
+
+    expect(onClick).not.toHaveBeenCalled();
   });
 });

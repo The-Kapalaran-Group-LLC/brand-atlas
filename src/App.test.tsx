@@ -25,7 +25,7 @@ describe('App Component', () => {
   }
 
   async function openResearchExperience() {
-    fireEvent.click(screen.getByRole('button', { name: /cultural archaeologist/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-cultural-archaeologist'));
     await screen.findByPlaceholderText(/Brands? or Category \(Optional\)/i);
   }
 
@@ -133,8 +133,11 @@ describe('App Component', () => {
     fireEvent.click(screen.getByTestId('mobile-nav-trigger'));
     const mobileMenu = await screen.findByTestId('mobile-nav-menu');
     expect(mobileMenu).toBeInTheDocument();
-    expect(within(mobileMenu).getByRole('button', { name: /back to home/i })).toBeInTheDocument();
-    expect(within(mobileMenu).getByRole('button', { name: /brand navigator/i })).toBeInTheDocument();
-    expect(within(mobileMenu).getByRole('button', { name: /design excavator/i })).toBeInTheDocument();
+    expect(within(mobileMenu).getByRole('link', { name: /back to home/i })).toHaveAttribute('href', '/?home=1');
+    expect(within(mobileMenu).getByRole('link', { name: /brand navigator/i })).toHaveAttribute('href', '/#brand-navigator');
+    expect(within(mobileMenu).getByRole('link', { name: /design excavator/i })).toHaveAttribute('href', '/#design-excavator');
+
+    expect(within(actionBar).getByRole('link', { name: /brand navigator/i })).toHaveAttribute('href', '/#brand-navigator');
+    expect(within(actionBar).getByRole('link', { name: /design excavator/i })).toHaveAttribute('href', '/#design-excavator');
   });
 });

@@ -162,7 +162,7 @@ describe('BrandNavigator', () => {
   it('uses brand chips and supports enter/comma/backspace/remove interactions', async () => {
     render(<BrandNavigator />);
 
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
 
@@ -195,7 +195,7 @@ describe('BrandNavigator', () => {
     suggestBrandWebsite.mockResolvedValue('https://www.nike.com/');
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Nike' } });
@@ -214,7 +214,7 @@ describe('BrandNavigator', () => {
   it('allows long brand chips to wrap so full names remain visible', async () => {
     render(<BrandNavigator />);
 
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     const longBrandName = 'Rivian Automotive and Electric Adventure Vehicles International';
@@ -231,7 +231,7 @@ describe('BrandNavigator', () => {
   it('shows brand dropdown guidance on first character typed', async () => {
     render(<BrandNavigator />);
 
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'N' } });
@@ -243,7 +243,7 @@ describe('BrandNavigator', () => {
     suggestBrands.mockResolvedValue([]);
     render(<BrandNavigator />);
 
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Ni' } });
@@ -254,7 +254,7 @@ describe('BrandNavigator', () => {
   it('requires only brands for generate and treats audience as optional', async () => {
     render(<BrandNavigator />);
 
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const generateButton = await screen.findByRole('button', { name: /generate analysis/i });
     fireEvent.click(generateButton);
@@ -279,7 +279,7 @@ describe('BrandNavigator', () => {
       .mockResolvedValueOnce(incompleteMatrix);
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -301,7 +301,7 @@ describe('BrandNavigator', () => {
     generateBrandResearchMatrix.mockResolvedValueOnce(matrixWithResults);
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -321,7 +321,7 @@ describe('BrandNavigator', () => {
 
     render(<BrandNavigator />);
 
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -349,7 +349,7 @@ describe('BrandNavigator', () => {
 
   it('uses a mobile hamburger for navigation links and keeps desktop top links at sm+', async () => {
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const mobileTopBar = await screen.findByTestId('mobile-top-bar');
     expect(mobileTopBar.className).toContain('fixed');
@@ -391,14 +391,17 @@ describe('BrandNavigator', () => {
     expect(mobileMenu.className).toContain('top-16');
     expect(mobileMenu.className).toContain('left-4');
     expect(mobileMenu.className).toContain('right-4');
-    expect(within(mobileMenu).getByRole('button', { name: /back to home/i })).toBeInTheDocument();
-    expect(within(mobileMenu).getByRole('button', { name: /cultural archaeologist/i })).toBeInTheDocument();
-    expect(within(mobileMenu).getByRole('button', { name: /design excavator/i })).toBeInTheDocument();
+    expect(within(mobileMenu).getByRole('link', { name: /back to home/i })).toHaveAttribute('href', '/?home=1');
+    expect(within(mobileMenu).getByRole('link', { name: /cultural archaeologist/i })).toHaveAttribute('href', '/#cultural-archaeologist');
+    expect(within(mobileMenu).getByRole('link', { name: /design excavator/i })).toHaveAttribute('href', '/#design-excavator');
+
+    expect(within(actionContainer).getByRole('link', { name: /cultural archaeologist/i })).toHaveAttribute('href', '/#cultural-archaeologist');
+    expect(within(actionContainer).getByRole('link', { name: /design excavator/i })).toHaveAttribute('href', '/#design-excavator');
   });
 
   it('renders mobile New Search as an icon button to the right of generate analysis', async () => {
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
     const generateButton = await screen.findByRole('button', { name: /generate analysis/i });
     const newSearchButton = screen.getByTestId('new-search-below-generate');
     expect(newSearchButton).toHaveAccessibleName(/new search/i);
@@ -408,7 +411,7 @@ describe('BrandNavigator', () => {
 
   it('left aligns text in the brand, audience, and topic inputs', async () => {
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     const audienceInput = screen.getByTestId('audience-input');
@@ -424,7 +427,7 @@ describe('BrandNavigator', () => {
 
   it('vertically centers brand input when empty and keeps chip layout when populated', async () => {
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     const brandsInputShell = screen.getByTestId('brands-input-shell');
@@ -468,7 +471,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -540,7 +543,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Delta, United Airlines' } });
@@ -598,7 +601,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Delta' } });
@@ -654,7 +657,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -703,7 +706,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Emirates' } });
@@ -753,7 +756,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Emirates' } });
@@ -810,7 +813,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -868,7 +871,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -925,7 +928,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -974,7 +977,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -1019,7 +1022,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -1065,7 +1068,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -1108,7 +1111,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -1158,7 +1161,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Cadre AI' } });
@@ -1204,7 +1207,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Cadre AI' } });
@@ -1251,7 +1254,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Cadre AI' } });
@@ -1310,7 +1313,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -1359,7 +1362,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -1382,7 +1385,7 @@ describe('BrandNavigator', () => {
 
   it('saves Brand Navigator results to the Brand_Navigator table with a custom_name', async () => {
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
@@ -1456,7 +1459,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia, Nike' } });
@@ -1528,7 +1531,7 @@ describe('BrandNavigator', () => {
 
     try {
       render(<BrandNavigator />);
-      fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+      fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
       const brandsInput = await screen.findByTestId('brands-input');
       fireEvent.change(brandsInput, { target: { value: 'Patagonia, Nike' } });
@@ -1580,7 +1583,7 @@ describe('BrandNavigator', () => {
     });
 
     render(<BrandNavigator />);
-    fireEvent.click(screen.getByRole('button', { name: /brand navigator/i }));
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
 
     const brandsInput = await screen.findByTestId('brands-input');
     fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });

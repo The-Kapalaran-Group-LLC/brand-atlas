@@ -593,6 +593,7 @@ export default function CulturalArchaeologist() {
   const [selectedEvidenceFilters, setSelectedEvidenceFilters] = useState<EvidenceLabelFilter[]>([]);
   const [selectedTrendStageFilters, setSelectedTrendStageFilters] = useState<TrendStageFilter[]>([]);
   const [selectedSourceFilters, setSelectedSourceFilters] = useState<string[]>([]);
+  const [showHighlyUniqueOnly, setShowHighlyUniqueOnly] = useState(false);
   const [isResearchControlsMinimized, setIsResearchControlsMinimized] = useState(false);
   const [recentResultsRefreshNonce, setRecentResultsRefreshNonce] = useState(0);
 
@@ -631,11 +632,19 @@ export default function CulturalArchaeologist() {
 
     const nextMatrix: CulturalMatrix = { ...matrix };
     MATRIX_INSIGHT_KEYS.forEach((key) => {
-      nextMatrix[key] = (matrix[key] || []).filter((item) => matchesMatrixItemFilters(item, activeRerunFilters));
+      nextMatrix[key] = (matrix[key] || []).filter((item) => {
+        if (!matchesMatrixItemFilters(item, activeRerunFilters)) {
+          return false;
+        }
+        if (showHighlyUniqueOnly && !item.isHighlyUnique) {
+          return false;
+        }
+        return true;
+      });
     });
 
     return nextMatrix;
-  }, [matrix, activeRerunFilters]);
+  }, [matrix, activeRerunFilters, showHighlyUniqueOnly]);
 
   const sourceFilterOptions = useMemo(() => {
     const configuredSources = (matrixMeta?.sourcesType || [])
@@ -653,7 +662,8 @@ export default function CulturalArchaeologist() {
     selectedConfidenceFilters.length +
     selectedEvidenceFilters.length +
     selectedTrendStageFilters.length +
-    selectedSourceFilters.length;
+    selectedSourceFilters.length +
+    (showHighlyUniqueOnly ? 1 : 0);
   const hasActiveResultFilters = activeFilterCount > 0;
   const displayMatrix = filteredMatrix || matrix;
   const hasVisibleInsights =
@@ -1180,6 +1190,22 @@ export default function CulturalArchaeologist() {
     setSuggestionsRetryNonce(0);
     setFileReadErrors([]);
     setExportError(null);
+  };
+
+  const shouldKeepDefaultLinkBehavior = (event: React.MouseEvent<HTMLAnchorElement>): boolean => {
+    return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
+  };
+
+  const handlePrimaryLinkNavigation = (
+    event: React.MouseEvent<HTMLAnchorElement>,
+    navigate: () => void,
+  ): void => {
+    if (shouldKeepDefaultLinkBehavior(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    navigate();
   };
 
   const runCulturalMatrixGeneration = async ({
@@ -1919,6 +1945,7 @@ export default function CulturalArchaeologist() {
       description: 'Generate sharper insights about any audience through a cultural lens.',
       bullets: ['Audience research', 'Strategy development', 'Campaign & content ideation', 'Creative briefs', 'Pitches'],
       icon: <Search className="w-4 h-4" />,
+      href: '/#cultural-archaeologist',
       onClick: () => navigateToHashRoute('cultural-archaeologist'),
       bulletsMarginClassName: 'mt-4',
     },
@@ -1928,6 +1955,7 @@ export default function CulturalArchaeologist() {
       description: 'Audit multiple brands to compare positionings, messages, campaigns, etc.',
       bullets: ['Brand audits & competitive analysis', 'Opportunity space identification', 'Messaging development', 'Creative briefs', 'Pitches'],
       icon: <CompassRoseIcon className="w-4 h-4" />,
+      href: '/#brand-navigator',
       onClick: () => navigateToHashRoute('brand-navigator'),
       bulletsMarginClassName: 'mt-4',
     },
@@ -1937,6 +1965,7 @@ export default function CulturalArchaeologist() {
       description: 'Compare design systems across brands: logos, colors, typography, visual cues.',
       bullets: ['Competitive research', 'Branding strategy development', 'Visual identity exploration', 'Creative briefs', 'Pitches'],
       icon: <Palette className="w-4 h-4" />,
+      href: '/#design-excavator',
       onClick: () => navigateToHashRoute('design-excavator'),
       badgeText: 'Beta',
       badgeClassName:
@@ -2043,34 +2072,34 @@ export default function CulturalArchaeologist() {
                   exit={{ opacity: 0, y: -8 }}
                   className="fixed top-16 left-4 right-4 z-[55] rounded-2xl border border-zinc-200 bg-white/95 p-2 shadow-lg backdrop-blur-sm no-print sm:hidden"
                 >
-                  <button
-                    type="button"
-                    onClick={() => {
+                  <a
+                    href="/?home=1"
+                    onClick={(event) => handlePrimaryLinkNavigation(event, () => {
                       setIsMobileNavOpen(false);
                       navigateToHomeDashboard();
-                    }}
+                    })}
                     className="inline-flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-50"
                   >
                     <ArrowLeft className="w-4 h-4" />
                     Back to Home
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
+                  </a>
+                  <a
+                    href="/#brand-navigator"
+                    onClick={(event) => handlePrimaryLinkNavigation(event, () => {
                       setIsMobileNavOpen(false);
                       navigateToHashRoute('brand-navigator');
-                    }}
+                    })}
                     className="inline-flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-50"
                   >
                     <CompassRoseIcon className="w-4 h-4" />
                     Brand Navigator
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
+                  </a>
+                  <a
+                    href="/#design-excavator"
+                    onClick={(event) => handlePrimaryLinkNavigation(event, () => {
                       setIsMobileNavOpen(false);
                       navigateToHashRoute('design-excavator');
-                    }}
+                    })}
                     className="inline-flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-50"
                   >
                     <Palette className="w-4 h-4" />
@@ -2078,7 +2107,7 @@ export default function CulturalArchaeologist() {
                     <span className="ml-1 inline-block rounded-full border border-indigo-200 bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
                       Beta
                     </span>
-                  </button>
+                  </a>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -2090,34 +2119,37 @@ export default function CulturalArchaeologist() {
               </div>
             )}
             <div className="absolute top-6 left-6 z-50 no-print hidden sm:block">
-              <button
-                onClick={() => navigateToHomeDashboard()}
+              <a
+                href="/?home=1"
+                onClick={(event) => handlePrimaryLinkNavigation(event, () => navigateToHomeDashboard())}
                 className="inline-flex h-10 items-center gap-2 text-sm font-medium leading-none text-zinc-500 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400/40 focus:ring-offset-2 rounded-md"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Back to Home
-              </button>
+              </a>
             </div>
             {/* Top Navigation / Actions */}
             <div
               data-testid="top-action-buttons"
               className="absolute top-6 left-auto right-6 z-50 no-print hidden sm:flex sm:w-auto sm:flex-row sm:items-center sm:justify-end sm:gap-2"
             >
-              <button
-                onClick={() => navigateToHashRoute('brand-navigator')}
+              <a
+                href="/#brand-navigator"
+                onClick={(event) => handlePrimaryLinkNavigation(event, () => navigateToHashRoute('brand-navigator'))}
                 className="inline-flex h-10 w-full items-center justify-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm sm:w-auto"
               >
                 <CompassRoseIcon className="w-4 h-4" /> Brand Navigator
-              </button>
-              <button
-                onClick={() => navigateToHashRoute('design-excavator')}
+              </a>
+              <a
+                href="/#design-excavator"
+                onClick={(event) => handlePrimaryLinkNavigation(event, () => navigateToHashRoute('design-excavator'))}
                 className="inline-flex h-10 w-full items-center justify-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm sm:w-auto"
               >
                 <Palette className="w-4 h-4" /> Design Excavator
                 <span className="align-super ml-3 inline-block px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold tracking-wide border border-indigo-200">
                   Beta
                 </span>
-              </button>
+              </a>
               <button
                 onClick={handleReset}
                 className="inline-flex h-10 w-full items-center justify-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-zinc-200 text-zinc-700 rounded-full font-medium leading-none hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm sm:w-auto"
@@ -3298,10 +3330,24 @@ export default function CulturalArchaeologist() {
               </div>
 
               <div className="flex flex-wrap items-center gap-6 mb-6 px-2 no-print">
-                <div className="flex items-center gap-2 text-sm text-zinc-600">
-                  <Sparkles className="w-4 h-4 text-indigo-500" />
+                <button
+                  type="button"
+                  data-testid="highly-unique-filter-button"
+                  aria-pressed={showHighlyUniqueOnly}
+                  onClick={() => {
+                    const nextValue = !showHighlyUniqueOnly;
+                    console.log('[CulturalArchaeologist] Toggled highly unique filter.', { enabled: nextValue });
+                    setShowHighlyUniqueOnly(nextValue);
+                  }}
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                    showHighlyUniqueOnly
+                      ? 'border-indigo-200 bg-transparent text-indigo-700'
+                      : 'border-zinc-200 bg-transparent text-zinc-600 hover:border-zinc-300'
+                  }`}
+                >
+                  <Sparkles className={`w-4 h-4 ${showHighlyUniqueOnly ? 'text-indigo-600' : 'text-indigo-500'}`} />
                   <span>Highly unique observation</span>
-                </div>
+                </button>
                 {matrixMeta?.hasUploadedDocuments && MATRIX_INSIGHT_KEYS.some((cat) =>
                   displayMatrix?.[cat]?.some((item) => item.isFromDocument)
                 ) && (
@@ -3327,6 +3373,7 @@ export default function CulturalArchaeologist() {
                         setSelectedEvidenceFilters([]);
                         setSelectedTrendStageFilters([]);
                         setSelectedSourceFilters([]);
+                        setShowHighlyUniqueOnly(false);
                       }}
                       className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
                     >

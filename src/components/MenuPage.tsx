@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
 import { SplashGrid } from './SplashGrid';
 import { SPLASH_GLOBE_STATIC_PROPS } from './splashGlobeDefaults';
@@ -15,6 +15,7 @@ export type MenuPageCard = {
   description: string;
   bullets: string[];
   icon: ReactNode;
+  href: string;
   onClick: () => void;
   badgeText?: string;
   badgeClassName?: string;
@@ -34,6 +35,32 @@ export default function MenuPage({
   sectionClassName = 'max-w-6xl',
   cardsGridClassName = 'grid grid-cols-1 md:grid-cols-3 gap-8 items-start',
 }: MenuPageProps) {
+  const shouldKeepDefaultLinkBehavior = (event: MouseEvent<HTMLAnchorElement>): boolean => {
+    return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
+  };
+
+  const handleCardNavigation = (event: MouseEvent<HTMLAnchorElement>, card: MenuPageCard) => {
+    if (shouldKeepDefaultLinkBehavior(event)) {
+      console.log('[MenuPage] Keeping default browser navigation for modified click.', {
+        cardId: card.id,
+        href: card.href,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        button: event.button,
+      });
+      return;
+    }
+
+    event.preventDefault();
+    console.log('[MenuPage] Handling primary card navigation in-app.', {
+      cardId: card.id,
+      href: card.href,
+    });
+    card.onClick();
+  };
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 14 }}
@@ -58,9 +85,10 @@ export default function MenuPage({
         <p className="subheader-copy text-zinc-700 mb-10 text-lg md:text-xl font-medium">{subtitle}</p>
         <div className={cardsGridClassName}>
           {cards.map((card) => (
-            <button
+            <a
               key={card.id}
-              onClick={card.onClick}
+              href={card.href}
+              onClick={(event) => handleCardNavigation(event, card)}
               className={MENU_CARD_CLASS_NAME}
               data-testid={`menu-page-card-${card.id}`}
             >
@@ -85,7 +113,7 @@ export default function MenuPage({
                   </li>
                 ))}
               </ul>
-            </button>
+            </a>
           ))}
         </div>
       </div>
