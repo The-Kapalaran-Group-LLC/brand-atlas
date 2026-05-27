@@ -3341,7 +3341,7 @@ export default function CulturalArchaeologist() {
                   }}
                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
                     showHighlyUniqueOnly
-                      ? 'border-indigo-200 bg-transparent text-indigo-700'
+                      ? 'border-indigo-200 bg-white text-indigo-700'
                       : 'border-zinc-200 bg-transparent text-zinc-600 hover:border-zinc-300'
                   }`}
                 >
