@@ -11,6 +11,18 @@
 }
 @import "tailwindcss";
 
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+a[href],
+summary {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 h1,
 h2,
 h3,
