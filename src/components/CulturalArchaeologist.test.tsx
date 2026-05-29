@@ -8,6 +8,7 @@ const {
   askMatrixQuestion,
   generateDeepDive,
   generateDeepDivesBatch,
+  generateAudienceSegmentation,
   supabaseFrom,
   supabaseInsert,
   supabaseLimit,
@@ -17,6 +18,7 @@ const {
   askMatrixQuestion: vi.fn(),
   generateDeepDive: vi.fn(),
   generateDeepDivesBatch: vi.fn(),
+  generateAudienceSegmentation: vi.fn(),
   supabaseFrom: vi.fn(),
   supabaseInsert: vi.fn(async () => ({ data: null, error: null })),
   supabaseLimit: vi.fn(async () => ({ data: [], error: null })),
@@ -28,6 +30,7 @@ vi.mock('../services/azure-openai', () => ({
   askMatrixQuestion,
   generateDeepDive,
   generateDeepDivesBatch,
+  generateAudienceSegmentation,
 }));
 
 vi.mock('../services/telemetry', () => ({
@@ -105,15 +108,75 @@ const incompleteMatrix = {
   sources: [],
 };
 
+const SEGMENTATION_WORKSPACE_STORAGE_PREFIX = 'cultural_segmentation_workspace:';
+
+const createSegmentationWorkspaceSnapshot = (overrides: Record<string, unknown> = {}) => ({
+  matrix: mockMatrix,
+  matrixMeta: {
+    audience: 'Gen Z sneaker culture',
+    brand: '',
+    generations: [],
+    topicFocus: '',
+    sourcesType: [],
+    hasUploadedDocuments: false,
+  },
+  selectedConfidenceFilters: [],
+  selectedEvidenceFilters: [],
+  selectedTrendStageFilters: [],
+  selectedSourceFilters: [],
+  showHighlyUniqueOnly: false,
+  createdAt: '2026-05-29T00:00:00.000Z',
+  ...overrides,
+});
+
 describe('CulturalArchaeologist', () => {
   beforeEach(() => {
     window.history.pushState({}, '', '/#cultural-archaeologist');
+    window.localStorage.clear();
     vi.clearAllMocks();
     suggestBrands.mockResolvedValue(['Nike', 'Adidas']);
     generateCulturalMatrix.mockResolvedValue(mockMatrix);
     askMatrixQuestion.mockResolvedValue({ answer: 'ok', relevantInsights: [] });
     generateDeepDive.mockResolvedValue({});
     generateDeepDivesBatch.mockResolvedValue([]);
+    generateAudienceSegmentation.mockResolvedValue({
+      regressionSummary: 'Regression signals show distinct motivation clusters.',
+      confidenceNotes: 'Directional segmentation based on cultural signal strength.',
+      segments: [
+        {
+          name: 'Status Signal Chasers',
+          archetype: 'Aspirational trend adopters',
+          profile: 'Visibility-forward shoppers who seek social proof and novelty.',
+          prevalencePct: 28,
+          keySignals: ['Tracks drop culture', 'Shares purchases socially'],
+          messagingApproach: 'Lead with scarcity and social currency.',
+        },
+        {
+          name: 'Performance Pragmatists',
+          archetype: 'Utility-maximizing planners',
+          profile: 'Value measurable comfort, durability, and price-performance.',
+          prevalencePct: 24,
+          keySignals: ['Compares specs and reviews', 'Waits for strategic buys'],
+          messagingApproach: 'Anchor on proof, longevity, and value.',
+        },
+        {
+          name: 'Identity Curators',
+          archetype: 'Self-expression seekers',
+          profile: 'Use brand choices to communicate niche identity and belonging.',
+          prevalencePct: 20,
+          keySignals: ['Follows micro-communities', 'Picks symbolic brand codes'],
+          messagingApproach: 'Highlight identity language and community affinity.',
+        },
+        {
+          name: 'Ethical Evaluators',
+          archetype: 'Values-led decision makers',
+          profile: 'Prioritize sustainability and brand transparency.',
+          prevalencePct: 16,
+          keySignals: ['Researches sourcing practices', 'Penalizes performative claims'],
+          messagingApproach: 'Show traceable commitments and accountability.',
+        },
+      ],
+    });
   });
 
   it('shows rerun button only when at least one result filter is selected', async () => {
@@ -133,6 +196,158 @@ describe('CulturalArchaeologist', () => {
 
     expect(await screen.findByTestId('rerun-analysis-button')).toBeInTheDocument();
     expect(supabaseFrom).toHaveBeenCalledWith('Cultural_Archaeologist');
+  });
+
+  it('opens segmentation in a new browser tab and persists workspace context', async () => {
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const segmentationButton = await screen.findByTestId('audience-segmentation-button');
+    fireEvent.click(segmentationButton);
+
+    expect(await screen.findByTestId('segmentation-password-popout')).toBeInTheDocument();
+    expect(openSpy).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByTestId('segmentation-password-popout-input'), {
+      target: { value: 'wrong-password' },
+    });
+    fireEvent.click(screen.getByTestId('segmentation-password-popout-submit-button'));
+
+    expect(await screen.findByText('Incorrect password. Please try again.')).toBeInTheDocument();
+    expect(openSpy).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByTestId('segmentation-password-popout-input'), {
+      target: { value: 'segmentation2026' },
+    });
+    fireEvent.click(screen.getByTestId('segmentation-password-popout-submit-button'));
+
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    const [rawUrl, rawTarget] = openSpy.mock.calls[0];
+    expect(rawTarget).toBe('_blank');
+    const openedUrl = new URL(String(rawUrl), window.location.origin);
+    expect(openedUrl.hash).toBe('#cultural-archaeologist');
+    const workspaceId = openedUrl.searchParams.get('segmentation_workspace');
+    expect(workspaceId).toBeTruthy();
+    const persistedWorkspaceRaw = window.localStorage.getItem(
+      `${SEGMENTATION_WORKSPACE_STORAGE_PREFIX}${workspaceId}`
+    );
+    expect(persistedWorkspaceRaw).toBeTruthy();
+    const persistedWorkspace = JSON.parse(persistedWorkspaceRaw || '{}');
+    expect(persistedWorkspace.matrixMeta?.audience).toBe('Gen Z sneaker culture');
+    expect(persistedWorkspace.isSegmentationAuthorized).toBe(true);
+    expect(persistedWorkspace.selectedConfidenceFilters).toEqual([]);
+    expect(screen.queryByTestId('segmentation-tab-panel')).not.toBeInTheDocument();
+    expect(generateAudienceSegmentation).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.queryByTestId('segmentation-password-popout')).not.toBeInTheDocument();
+    });
+    openSpy.mockRestore();
+  });
+
+  it('renders KNOWN/INFERRED/SPECULATIVE markers as evidence chips in workspace segmentation tab', async () => {
+    generateAudienceSegmentation.mockResolvedValueOnce({
+      regressionSummary: '[KNOWN] Regression signals show distinct motivation clusters.',
+      confidenceNotes: '[SPECULATIVE] Directional segmentation based on cultural signal strength.',
+      segments: [
+        {
+          name: 'Status Signal Chasers',
+          archetype: '[INFERRED] Aspirational trend adopters',
+          profile: '[KNOWN] Visibility-forward shoppers who seek social proof and novelty.',
+          prevalencePct: 28,
+          keySignals: ['[KNOWN] Tracks drop culture', '[INFERRED] Shares purchases socially'],
+          messagingApproach: '[SPECULATIVE] Lead with scarcity and social currency.',
+        },
+        {
+          name: 'Performance Pragmatists',
+          archetype: 'Utility-maximizing planners',
+          profile: 'Value measurable comfort, durability, and price-performance.',
+          prevalencePct: 24,
+          keySignals: ['Compares specs and reviews', 'Waits for strategic buys'],
+          messagingApproach: 'Anchor on proof, longevity, and value.',
+        },
+        {
+          name: 'Identity Curators',
+          archetype: 'Self-expression seekers',
+          profile: 'Use brand choices to communicate niche identity and belonging.',
+          prevalencePct: 20,
+          keySignals: ['Follows micro-communities', 'Picks symbolic brand codes'],
+          messagingApproach: 'Highlight identity language and community affinity.',
+        },
+        {
+          name: 'Ethical Evaluators',
+          archetype: 'Values-led decision makers',
+          profile: 'Prioritize sustainability and brand transparency.',
+          prevalencePct: 16,
+          keySignals: ['Researches sourcing practices', 'Penalizes performative claims'],
+          messagingApproach: 'Show traceable commitments and accountability.',
+        },
+      ],
+    });
+
+    const workspaceId = 'workspace-evidence-chips';
+    window.localStorage.setItem(
+      `${SEGMENTATION_WORKSPACE_STORAGE_PREFIX}${workspaceId}`,
+      JSON.stringify(createSegmentationWorkspaceSnapshot({ isSegmentationAuthorized: true }))
+    );
+    window.history.pushState({}, '', `/?segmentation_workspace=${workspaceId}#cultural-archaeologist`);
+
+    render(<CulturalArchaeologist />);
+    expect(await screen.findByTestId('segmentation-tab-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('segmentation-password-panel')).not.toBeInTheDocument();
+    expect(await screen.findByText('Regression signals show distinct motivation clusters.')).toBeInTheDocument();
+    expect((await screen.findAllByTestId('segmentation-evidence-chip-known')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByTestId('segmentation-evidence-chip-inferred')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByTestId('segmentation-evidence-chip-speculative')).length).toBeGreaterThan(0);
+  });
+
+  it('reruns segmentation with current selected filters in workspace segmentation tab', async () => {
+    const workspaceId = 'workspace-filter-rerun';
+    window.localStorage.setItem(
+      `${SEGMENTATION_WORKSPACE_STORAGE_PREFIX}${workspaceId}`,
+      JSON.stringify(
+        createSegmentationWorkspaceSnapshot({
+          isSegmentationAuthorized: true,
+          matrix: {
+            ...mockMatrix,
+            moments: [
+              {
+                text: '[KNOWN] High confidence signal',
+                isHighlyUnique: false,
+                sourceType: 'Mainstream',
+                confidenceLevel: 'high' as const,
+                trendLifecycle: 'peaking' as const,
+              },
+              {
+                text: '[KNOWN] Low confidence signal',
+                isHighlyUnique: false,
+                sourceType: 'Mainstream',
+                confidenceLevel: 'low' as const,
+                trendLifecycle: 'emerging' as const,
+              },
+            ],
+          },
+        })
+      )
+    );
+    window.history.pushState({}, '', `/?segmentation_workspace=${workspaceId}#cultural-archaeologist`);
+
+    render(<CulturalArchaeologist />);
+    expect(await screen.findByTestId('segmentation-tab-panel')).toBeInTheDocument();
+    await screen.findByTestId('segmentation-result-state');
+
+    fireEvent.click(screen.getByRole('button', { name: /^high$/i }));
+    fireEvent.click(await screen.findByTestId('rerun-segmentation-button'));
+
+    await waitFor(() => {
+      expect(generateAudienceSegmentation).toHaveBeenCalledTimes(2);
+    });
+    const latestMatrixArg = generateAudienceSegmentation.mock.calls[1]?.[0];
+    expect(latestMatrixArg?.moments).toHaveLength(1);
+    expect(latestMatrixArg?.moments?.[0]?.text).toContain('High confidence signal');
   });
 
   it('filters results to only highly unique observations when the highly unique filter is selected', async () => {
@@ -535,7 +750,7 @@ describe('CulturalArchaeologist', () => {
     expect(screen.getByText('Women and non-binary skew')).toBeInTheDocument();
   });
 
-  it('does not render evidence type chips in deep-dive strategic implications', async () => {
+  it('renders evidence type chips in deep-dive strategic implications', async () => {
     generateCulturalMatrix.mockResolvedValueOnce({
       ...mockMatrix,
       moments: [
@@ -554,6 +769,8 @@ describe('CulturalArchaeologist', () => {
       expandedContext: '[KNOWN] Expanded context detail',
       strategicImplications: [
         '[KNOWN] Product and brand messaging should separate augmentation from substitution clearly.',
+        '[INFERRED] Creative tooling preferences suggest appetite for guided automation experiences.',
+        '[SPECULATIVE] Regulatory shifts could force a faster move toward transparent model disclosures.',
       ],
       realWorldExamples: ['[INFERRED] Example detail'],
       sources: [{ title: 'Reuters', url: 'https://www.reuters.com/example' }],
@@ -572,7 +789,10 @@ describe('CulturalArchaeologist', () => {
     const strategicSection = strategicHeading.closest('section');
     expect(strategicSection).not.toBeNull();
     expect(screen.getByText('Product and brand messaging should separate augmentation from substitution clearly.')).toBeInTheDocument();
-    expect(within(strategicSection as HTMLElement).queryByText(/^known$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\[KNOWN\]|\[INFERRED\]|\[SPECULATIVE\]/i)).not.toBeInTheDocument();
+    expect(within(strategicSection as HTMLElement).getAllByText(/^known$/i).length).toBeGreaterThan(0);
+    expect(within(strategicSection as HTMLElement).getAllByText(/^inferred$/i).length).toBeGreaterThan(0);
+    expect(within(strategicSection as HTMLElement).getAllByText(/^speculative$/i).length).toBeGreaterThan(0);
   });
 
   it('attaches ask-answer evidence chips to the specific sentence they belong to', async () => {

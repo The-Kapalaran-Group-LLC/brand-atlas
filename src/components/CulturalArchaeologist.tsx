@@ -8,8 +8,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { Search, Loader2, Sparkles, FileText, Presentation, ExternalLink, Info, Tag, Users, Filter, ChevronDown, Check, Clock, Trash2, Target, Upload, X, RefreshCw, Calendar, Activity, Palette, ArrowLeft, Menu } from 'lucide-react';
 import { CompassRoseIcon } from './icons/CompassRoseIcon';
-import { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport, CulturalRerunFilters } from '../services/azure-openai';
-import { generateCulturalMatrix, suggestBrands, askMatrixQuestion, generateDeepDive, generateDeepDivesBatch } from '../services/azure-openai';
+import { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport, CulturalRerunFilters, AudienceSegmentationReport } from '../services/azure-openai';
+import { generateCulturalMatrix, suggestBrands, askMatrixQuestion, generateDeepDive, generateDeepDivesBatch, generateAudienceSegmentation } from '../services/azure-openai';
 import { SplashGrid } from './SplashGrid';
 import { BrandDeepDivePage } from './DesignExcavator';
 import { TrendLifecycleBadge } from './TrendLifecycleBadge';
@@ -69,17 +69,19 @@ interface SavedMatrix {
   matrix: CulturalMatrix;
 }
 
+type MatrixMetaState = {
+  audience: string;
+  brand: string;
+  generations: string[];
+  topicFocus?: string;
+  sourcesType?: string[];
+  hasUploadedDocuments?: boolean;
+};
+
 type CulturalRecentResult = RecentResultRecord & {
   savedMatrix?: SavedMatrix;
   matrix?: CulturalMatrix;
-  matrixMeta?: {
-    audience: string;
-    brand: string;
-    generations: string[];
-    topicFocus?: string;
-    sourcesType?: string[];
-    hasUploadedDocuments?: boolean;
-  };
+  matrixMeta?: MatrixMetaState;
 };
 
 interface MatrixContext {
@@ -108,6 +110,18 @@ type ConfidenceLevelFilter = 'low' | 'medium' | 'high';
 type EvidenceLabelFilter = 'known' | 'inferred' | 'speculative';
 type EvidenceTagLabel = EvidenceLabelFilter | 'analogy';
 type TrendStageFilter = 'emerging' | 'peaking' | 'declining';
+type ResultsTab = 'insights' | 'segmentation';
+type SegmentationWorkspaceSnapshot = {
+  matrix: CulturalMatrix;
+  matrixMeta: MatrixMetaState;
+  isSegmentationAuthorized?: boolean;
+  selectedConfidenceFilters: ConfidenceLevelFilter[];
+  selectedEvidenceFilters: EvidenceLabelFilter[];
+  selectedTrendStageFilters: TrendStageFilter[];
+  selectedSourceFilters: string[];
+  showHighlyUniqueOnly: boolean;
+  createdAt: string;
+};
 
 const MATRIX_INSIGHT_KEYS: MatrixInsightKey[] = [
   'moments',
@@ -127,6 +141,10 @@ const CULTURAL_ARCHAEOLOGIST_TABLE_CANDIDATES = [CULTURAL_ARCHAEOLOGIST_TABLE, '
 const TREND_STAGE_FILTERS: TrendStageFilter[] = ['peaking', 'emerging', 'declining'];
 const CULTURAL_ARCHAEOLOGIST_SHOW_THINKING_TEXT = 'Applied retrieval-grounded synthesis: collected language, behavior, and community artifacts, clustered recurring motifs and tensions, and generated a structured cultural map with source-grounded claims.';
 const RESULTS_COMPLETE_SOUND_ID: CompletionSoundId = 'classic-chime';
+const SEGMENTATION_PASSWORD = 'segmentation2026';
+const SEGMENTATION_PASSWORD_SUPPORT_COPY = 'Contact Your Administrator for More Information.';
+const SEGMENTATION_WORKSPACE_QUERY_PARAM = 'segmentation_workspace';
+const SEGMENTATION_WORKSPACE_STORAGE_PREFIX = 'cultural_segmentation_workspace:';
 
 const getExportErrorDetail = (error: unknown): string | null => {
   if (error instanceof Error && error.message.trim().length > 0) {
@@ -481,6 +499,60 @@ const persistSavedMatrices = (matrices: SavedMatrix[]): boolean => {
   }
 };
 
+const buildSegmentationWorkspaceStorageKey = (workspaceId: string): string => {
+  return `${SEGMENTATION_WORKSPACE_STORAGE_PREFIX}${workspaceId}`;
+};
+
+const persistSegmentationWorkspaceSnapshot = (
+  workspaceId: string,
+  snapshot: SegmentationWorkspaceSnapshot
+): boolean => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    window.localStorage.setItem(buildSegmentationWorkspaceStorageKey(workspaceId), JSON.stringify(snapshot));
+    return true;
+  } catch (error) {
+    console.warn('Failed to persist segmentation workspace snapshot:', error);
+    return false;
+  }
+};
+
+const readSegmentationWorkspaceSnapshot = (workspaceId: string): SegmentationWorkspaceSnapshot | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const rawSnapshot = window.localStorage.getItem(buildSegmentationWorkspaceStorageKey(workspaceId));
+    if (!rawSnapshot) {
+      return null;
+    }
+    const parsed = JSON.parse(rawSnapshot);
+    if (!parsed || typeof parsed !== 'object' || !parsed.matrix || !parsed.matrixMeta) {
+      return null;
+    }
+    return parsed as SegmentationWorkspaceSnapshot;
+  } catch (error) {
+    console.warn('Failed to read segmentation workspace snapshot:', error);
+    return null;
+  }
+};
+
+const removeSegmentationWorkspaceSnapshot = (workspaceId: string): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(buildSegmentationWorkspaceStorageKey(workspaceId));
+  } catch (error) {
+    console.warn('Failed to remove segmentation workspace snapshot:', error);
+  }
+};
+
 export default function CulturalArchaeologist() {
   const SPLASH_DURATION_MS = 3000;
   const resolveExperienceFromLocation = (): 'research' | 'brand' | null => {
@@ -557,6 +629,14 @@ export default function CulturalArchaeologist() {
   const [deepDiveCategory, setDeepDiveCategory] = useState<string | null>(null);
   const [deepDiveResult, setDeepDiveResult] = useState<DeepDiveReport | null>(null);
   const [isDeepDiveLoading, setIsDeepDiveLoading] = useState(false);
+  const [activeResultsTab, setActiveResultsTab] = useState<ResultsTab>('insights');
+  const [isSegmentationAuthorized, setIsSegmentationAuthorized] = useState(false);
+  const [isSegmentationLoading, setIsSegmentationLoading] = useState(false);
+  const [segmentationResult, setSegmentationResult] = useState<AudienceSegmentationReport | null>(null);
+  const [segmentationError, setSegmentationError] = useState<string | null>(null);
+  const [segmentationPasswordInput, setSegmentationPasswordInput] = useState('');
+  const [segmentationPasswordError, setSegmentationPasswordError] = useState<string | null>(null);
+  const [isSegmentationPasswordPopoutOpen, setIsSegmentationPasswordPopoutOpen] = useState(false);
   const [isVocabularyOpen, setIsVocabularyOpen] = useState(false);
   
   const [savedMatrices, setSavedMatrices] = useState<SavedMatrix[]>([]);
@@ -575,7 +655,7 @@ export default function CulturalArchaeologist() {
   const [isExporting, setIsExporting] = useState(false);
   const [showGoogleAuthModal, setShowGoogleAuthModal] = useState(false);
   const [matrix, setMatrix] = useState<CulturalMatrix | null>(null);
-  const [matrixMeta, setMatrixMeta] = useState<{audience: string, brand: string, generations: string[], topicFocus?: string, sourcesType?: string[], hasUploadedDocuments?: boolean} | null>(null);
+  const [matrixMeta, setMatrixMeta] = useState<MatrixMetaState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
@@ -666,6 +746,8 @@ export default function CulturalArchaeologist() {
     (showHighlyUniqueOnly ? 1 : 0);
   const hasActiveResultFilters = activeFilterCount > 0;
   const displayMatrix = filteredMatrix || matrix;
+  const isInsightsTabActive = activeResultsTab === 'insights';
+  const isSegmentationTabActive = activeResultsTab === 'segmentation';
   const hasVisibleInsights =
     !!displayMatrix && MATRIX_INSIGHT_KEYS.some((key) => (displayMatrix[key] || []).length > 0);
   const structuredMatrixAnswer = useMemo(() => structureAskAnswer(matrixAnswer), [matrixAnswer]);
@@ -723,6 +805,11 @@ export default function CulturalArchaeologist() {
   }, []);
 
   const loadSavedMatrix = (sm: SavedMatrix, shouldScroll = false) => {
+    console.log('[CulturalArchaeologist] Loading saved matrix and resetting segmentation tab state.', {
+      id: sm.id,
+      shouldScroll,
+    });
+    resetSegmentationWorkspace('insights');
     const parsedBrands = parseBrandsInput(sm.brand || '');
     if (parsedBrands.length > 1) {
       setSelectedBrands(parsedBrands);
@@ -849,6 +936,71 @@ export default function CulturalArchaeologist() {
     }
 
     clearCulturalPrefill();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const query = new URLSearchParams(window.location.search);
+    const workspaceId = (query.get(SEGMENTATION_WORKSPACE_QUERY_PARAM) || '').trim();
+    if (!workspaceId) {
+      return;
+    }
+
+    console.log('[CulturalArchaeologist] Hydrating segmentation workspace from URL.', { workspaceId });
+    const snapshot = readSegmentationWorkspaceSnapshot(workspaceId);
+
+    query.delete(SEGMENTATION_WORKSPACE_QUERY_PARAM);
+    const nextSearch = query.toString();
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
+    window.history.replaceState({}, '', nextUrl);
+
+    if (!snapshot) {
+      console.log('[CulturalArchaeologist] Segmentation workspace snapshot missing or invalid.', { workspaceId });
+      setToast('Could not load segmentation workspace. Please reopen it from your results.');
+      return;
+    }
+
+    const parsedBrands = parseBrandsInput(snapshot.matrixMeta.brand || '');
+    if (parsedBrands.length > 1) {
+      setSelectedBrands(parsedBrands);
+      setBrandInput('');
+    } else {
+      setSelectedBrands([]);
+      setBrandInput(snapshot.matrixMeta.brand || '');
+    }
+
+    setAudience(snapshot.matrixMeta.audience || '');
+    setSelectedGenerations(snapshot.matrixMeta.generations || []);
+    setTopicFocus(snapshot.matrixMeta.topicFocus || '');
+    setSourcesType(snapshot.matrixMeta.sourcesType || []);
+    setMatrix(snapshot.matrix);
+    setMatrixMeta(snapshot.matrixMeta);
+    setSelectedConfidenceFilters(snapshot.selectedConfidenceFilters || []);
+    setSelectedEvidenceFilters(snapshot.selectedEvidenceFilters || []);
+    setSelectedTrendStageFilters(snapshot.selectedTrendStageFilters || []);
+    setSelectedSourceFilters(snapshot.selectedSourceFilters || []);
+    setShowHighlyUniqueOnly(Boolean(snapshot.showHighlyUniqueOnly));
+    setMatrixQuestion('');
+    setMatrixAnswer('');
+    setHighlightedInsights([]);
+    setActiveResultsTab('segmentation');
+    const hydratedSegmentationAccess = Boolean(snapshot.isSegmentationAuthorized);
+    setIsSegmentationAuthorized(hydratedSegmentationAccess);
+    setIsSegmentationLoading(false);
+    setSegmentationResult(null);
+    setSegmentationError(null);
+    setSegmentationPasswordInput('');
+    setSegmentationPasswordError(null);
+    setIsSegmentationPasswordPopoutOpen(false);
+    removeSegmentationWorkspaceSnapshot(workspaceId);
+    console.log('[CulturalArchaeologist] Segmentation workspace hydrated and activated.', {
+      workspaceId,
+      audience: snapshot.matrixMeta.audience,
+      hydratedSegmentationAccess,
+    });
   }, []);
 
   // Auto-hide splash screen after 3 seconds, with press-and-hold pause.
@@ -1170,6 +1322,18 @@ export default function CulturalArchaeologist() {
     };
   }, [brandInput, visibleSavedMatrices, hasQuotaError, suggestionsRetryNonce]);
 
+  const resetSegmentationWorkspace = (nextTab: ResultsTab = 'insights') => {
+    console.log('[CulturalArchaeologist] Resetting segmentation workspace state.', { nextTab });
+    setActiveResultsTab(nextTab);
+    setIsSegmentationAuthorized(false);
+    setIsSegmentationLoading(false);
+    setSegmentationResult(null);
+    setSegmentationError(null);
+    setSegmentationPasswordInput('');
+    setSegmentationPasswordError(null);
+    setIsSegmentationPasswordPopoutOpen(false);
+  };
+
   const handleReset = () => {
     setSelectedBrands([]);
     setBrandInput('');
@@ -1190,6 +1354,7 @@ export default function CulturalArchaeologist() {
     setSuggestionsRetryNonce(0);
     setFileReadErrors([]);
     setExportError(null);
+    resetSegmentationWorkspace('insights');
   };
 
   const shouldKeepDefaultLinkBehavior = (event: React.MouseEvent<HTMLAnchorElement>): boolean => {
@@ -1238,6 +1403,7 @@ export default function CulturalArchaeologist() {
     setMatrixQuestion('');
     setMatrixAnswer('');
     setHighlightedInsights([]);
+    resetSegmentationWorkspace('insights');
     const hasUploadedDocuments = filesValue.length > 0;
     try {
       console.log('[CulturalArchaeologist] Starting matrix generation request.', {
@@ -1544,6 +1710,362 @@ export default function CulturalArchaeologist() {
     } finally {
       setIsDeepDiveLoading(false);
     }
+  };
+
+  const launchSegmentationWorkspaceTab = (segmentationAccessGranted = false) => {
+    if (!matrix || !matrixMeta) {
+      console.log('[CulturalArchaeologist] Segmentation workspace tab launch skipped because matrix context is missing.');
+      return;
+    }
+    if (typeof window === 'undefined') {
+      console.log('[CulturalArchaeologist] Segmentation workspace tab launch skipped because window is unavailable.');
+      return;
+    }
+    const workspaceId = `seg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const snapshot: SegmentationWorkspaceSnapshot = {
+      matrix,
+      matrixMeta,
+      isSegmentationAuthorized: segmentationAccessGranted,
+      selectedConfidenceFilters: [...selectedConfidenceFilters],
+      selectedEvidenceFilters: [...selectedEvidenceFilters],
+      selectedTrendStageFilters: [...selectedTrendStageFilters],
+      selectedSourceFilters: [...selectedSourceFilters],
+      showHighlyUniqueOnly,
+      createdAt: new Date().toISOString(),
+    };
+    const didPersistSnapshot = persistSegmentationWorkspaceSnapshot(workspaceId, snapshot);
+    if (!didPersistSnapshot) {
+      setToast('Could not open segmentation workspace in a new tab. Please try again.');
+      console.log('[CulturalArchaeologist] Segmentation workspace snapshot persistence failed.', { workspaceId });
+      return;
+    }
+
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set(SEGMENTATION_WORKSPACE_QUERY_PARAM, workspaceId);
+    nextUrl.hash = '#cultural-archaeologist';
+    console.log('[CulturalArchaeologist] Opening segmentation workspace in a new browser tab.', {
+      workspaceId,
+      targetUrl: nextUrl.toString(),
+    });
+    const openedTab = window.open(nextUrl.toString(), '_blank');
+    if (!openedTab) {
+      setToast('Popup blocked. Allow popups to open segmentation in a new tab.');
+      console.log('[CulturalArchaeologist] Browser blocked opening segmentation workspace tab.', { workspaceId });
+    }
+  };
+
+  const openSegmentationTab = () => {
+    if (!matrix || !matrixMeta) {
+      console.log('[CulturalArchaeologist] Segmentation password popout skipped because matrix context is missing.');
+      return;
+    }
+    if (activeResultsTab === 'segmentation') {
+      console.log('[CulturalArchaeologist] Segmentation tab is already active in this browser tab.');
+      return;
+    }
+
+    console.log('[CulturalArchaeologist] Opening segmentation password popout.');
+    setSegmentationPasswordInput('');
+    setSegmentationPasswordError(null);
+    setIsSegmentationPasswordPopoutOpen(true);
+  };
+
+  const handleSegmentationPopoutSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const candidatePassword = segmentationPasswordInput.trim();
+    const isValidPassword = candidatePassword === SEGMENTATION_PASSWORD;
+
+    console.log('[CulturalArchaeologist] Segmentation popout password submitted.', {
+      passwordLength: candidatePassword.length,
+      isValidPassword,
+    });
+
+    if (!isValidPassword) {
+      setSegmentationPasswordError('Incorrect password. Please try again.');
+      return;
+    }
+
+    setIsSegmentationPasswordPopoutOpen(false);
+    setSegmentationPasswordInput('');
+    setSegmentationPasswordError(null);
+    launchSegmentationWorkspaceTab(true);
+  };
+
+  const runSegmentationAnalysis = async (matrixForSegmentation: CulturalMatrix) => {
+    if (!matrixMeta) {
+      console.log('[CulturalArchaeologist] Segmentation generation skipped because matrix metadata is missing.');
+      return;
+    }
+
+    console.log('[CulturalArchaeologist] Running segmentation analysis from tab.', {
+      audience: matrixMeta.audience,
+      brand: matrixMeta.brand,
+      generations: matrixMeta.generations,
+      confidenceFilters: selectedConfidenceFilters,
+      evidenceFilters: selectedEvidenceFilters,
+      trendStageFilters: selectedTrendStageFilters,
+      sourceFilters: selectedSourceFilters,
+      showHighlyUniqueOnly,
+    });
+    setIsSegmentationLoading(true);
+    setSegmentationResult(null);
+    setSegmentationError(null);
+
+    try {
+      const result = await runUserAction({
+        actionName: 'generate-audience-segmentation',
+        action: () =>
+          generateAudienceSegmentation(matrixForSegmentation, {
+            audience: matrixMeta.audience,
+            brand: matrixMeta.brand,
+            topicFocus: matrixMeta.topicFocus,
+            generations: matrixMeta.generations,
+            sourcesType: matrixMeta.sourcesType,
+          }),
+      });
+      setSegmentationResult(result);
+      console.log('[CulturalArchaeologist] Audience segmentation generated from tab.', {
+        segments: result.segments.length,
+      });
+    } catch (err) {
+      const normalized = normalizeAppError(err);
+      console.error('[CulturalArchaeologist] Failed to generate audience segmentation.', { err, normalized });
+      setSegmentationError(
+        normalized.kind === 'quota'
+          ? 'Quota limit reached. Please check billing and try again.'
+          : 'Could not generate segmentation right now. Please retry in a moment.'
+      );
+    } finally {
+      setIsSegmentationLoading(false);
+    }
+  };
+
+  const handleSegmentationPasswordSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const candidatePassword = segmentationPasswordInput.trim();
+    const isValidPassword = candidatePassword === SEGMENTATION_PASSWORD;
+
+    console.log('[CulturalArchaeologist] Segmentation password submitted.', {
+      passwordLength: candidatePassword.length,
+      isValidPassword,
+    });
+
+    if (!isValidPassword) {
+      setSegmentationPasswordError('Incorrect password. Please try again.');
+      return;
+    }
+
+    if (!matrix) {
+      console.log('[CulturalArchaeologist] Segmentation generation skipped after password because matrix is missing.');
+      return;
+    }
+
+    setIsSegmentationAuthorized(true);
+    setSegmentationPasswordInput('');
+    setSegmentationPasswordError(null);
+    void runSegmentationAnalysis(displayMatrix || matrix);
+  };
+
+  const handleRerunSegmentation = async () => {
+    if (!matrix || !isSegmentationAuthorized || isSegmentationLoading) return;
+    console.log('[CulturalArchaeologist] Triggering segmentation rerun with active filters.', {
+      confidenceFilters: selectedConfidenceFilters,
+      evidenceFilters: selectedEvidenceFilters,
+      trendStageFilters: selectedTrendStageFilters,
+      sourceFilters: selectedSourceFilters,
+      showHighlyUniqueOnly,
+    });
+    await runSegmentationAnalysis(displayMatrix || matrix);
+  };
+
+  useEffect(() => {
+    if (!isSegmentationTabActive || !isSegmentationAuthorized || !matrix || !matrixMeta) {
+      return;
+    }
+    if (isSegmentationLoading || segmentationResult || segmentationError) {
+      return;
+    }
+
+    console.log('[CulturalArchaeologist] Auto-running segmentation analysis for authorized segmentation tab.');
+    void runSegmentationAnalysis(displayMatrix || matrix);
+  }, [
+    displayMatrix,
+    isSegmentationAuthorized,
+    isSegmentationLoading,
+    isSegmentationTabActive,
+    matrix,
+    matrixMeta,
+    segmentationError,
+    segmentationResult,
+  ]);
+
+  const renderSegmentationEvidenceText = (value: string, keyPrefix: string) => {
+    const parsed = extractEvidenceTags(value || '');
+    return (
+      <span>
+        {parsed.cleanText}
+        {parsed.labels.map((label) => (
+          <span
+            key={`${keyPrefix}-${label}`}
+            data-testid={`segmentation-evidence-chip-${label}`}
+            className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}
+          >
+            {label}
+          </span>
+        ))}
+      </span>
+    );
+  };
+
+  const renderSegmentationTabContent = () => {
+    if (!matrix) {
+      return null;
+    }
+
+    return (
+      <div data-testid="segmentation-tab-panel" className="mb-8 rounded-3xl border border-zinc-200 bg-white p-5 sm:p-6">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+            <Users className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-zinc-900">Audience Segmentation Workspace</h3>
+            <p className="text-sm text-zinc-500">Regression-style segmentation into 4-6 audience archetypes based on the filtered dataset.</p>
+          </div>
+        </div>
+
+        {!isSegmentationAuthorized ? (
+          <div data-testid="segmentation-password-panel" className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 sm:p-5">
+            <form onSubmit={handleSegmentationPasswordSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="segmentation-password-input" className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                  Password
+                </label>
+                <input
+                  id="segmentation-password-input"
+                  data-testid="segmentation-password-input"
+                  type="password"
+                  value={segmentationPasswordInput}
+                  onChange={(event) => {
+                    console.log('[CulturalArchaeologist] Segmentation password input changed.', {
+                      passwordLength: event.target.value.length,
+                    });
+                    setSegmentationPasswordInput(event.target.value);
+                    if (segmentationPasswordError) {
+                      setSegmentationPasswordError(null);
+                    }
+                  }}
+                  className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-300"
+                  placeholder="Enter segmentation password"
+                  autoFocus
+                />
+              </div>
+
+              {segmentationPasswordError && (
+                <p data-testid="segmentation-password-error" className="text-sm text-rose-600">
+                  {segmentationPasswordError}
+                </p>
+              )}
+
+              <p className="text-xs text-zinc-500">{SEGMENTATION_PASSWORD_SUPPORT_COPY}</p>
+
+              <div className="flex items-center justify-end">
+                <button
+                  type="submit"
+                  data-testid="segmentation-password-submit-button"
+                  className="inline-flex items-center rounded-lg border border-indigo-600 bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 hover:border-indigo-700"
+                >
+                  Continue
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : isSegmentationLoading ? (
+          <div className="flex flex-col items-center justify-center py-12" data-testid="segmentation-loading-state">
+            <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-4" />
+            <p className="text-zinc-500 animate-pulse">Running regression analysis across all audience signals...</p>
+          </div>
+        ) : segmentationError ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4" data-testid="segmentation-error-state">
+            <h4 className="text-sm font-semibold text-rose-800 mb-1">Segmentation unavailable</h4>
+            <p className="text-sm text-rose-700">{segmentationError}</p>
+            <button
+              type="button"
+              data-testid="retry-segmentation-button"
+              onClick={() => {
+                void runSegmentationAnalysis(displayMatrix || matrix);
+              }}
+              className="mt-3 inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry
+            </button>
+          </div>
+        ) : segmentationResult ? (
+          <div className="space-y-4" data-testid="segmentation-result-state">
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <h4 className="text-sm font-semibold text-zinc-900 mb-2">Regression Summary</h4>
+              <p className="text-sm text-zinc-700">
+                {renderSegmentationEvidenceText(segmentationResult.regressionSummary, 'segmentation-regression-summary')}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <h4 className="text-sm font-semibold text-amber-900 mb-2">Confidence Notes</h4>
+              <p className="text-sm text-amber-800">
+                {renderSegmentationEvidenceText(segmentationResult.confidenceNotes, 'segmentation-confidence-notes')}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {segmentationResult.segments.map((segment, index) => (
+                <div
+                  key={`${segment.name}-${index}`}
+                  className="rounded-2xl border border-zinc-200 bg-white p-4"
+                  data-testid={`segmentation-segment-card-${index + 1}`}
+                >
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Segment {index + 1}</p>
+                      <h4 className="text-base font-semibold text-zinc-900">{segment.name}</h4>
+                    </div>
+                    <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                      {segment.prevalencePct}%
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-500 mb-2">
+                    {renderSegmentationEvidenceText(segment.archetype, `segmentation-segment-${index}-archetype`)}
+                  </p>
+                  <p className="text-sm text-zinc-700 mb-3">
+                    {renderSegmentationEvidenceText(segment.profile, `segmentation-segment-${index}-profile`)}
+                  </p>
+                  <div className="mb-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">Key Signals</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      {segment.keySignals.map((signal, signalIndex) => (
+                        <li key={`${segment.name}-signal-${signalIndex}`} className="text-sm text-zinc-700">
+                          {renderSegmentationEvidenceText(signal, `segmentation-segment-${index}-signal-${signalIndex}`)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">Messaging Approach</p>
+                    <p className="text-sm text-zinc-700">
+                      {renderSegmentationEvidenceText(segment.messagingApproach, `segmentation-segment-${index}-messaging`)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+            Enter the password above to run segmentation on this audience.
+          </div>
+        )}
+      </div>
+    );
   };
 
   const deleteSavedMatrix = async (id: string) => {
@@ -2194,6 +2716,113 @@ export default function CulturalArchaeologist() {
           )}
         </AnimatePresence>
 
+        {/* Segmentation Password Popout */}
+        <AnimatePresence>
+          {isSegmentationPasswordPopoutOpen && (
+            <motion.div
+              data-testid="segmentation-password-popout"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/50 p-4 sm:p-6 flex items-center justify-center"
+              onClick={(event) => {
+                if (event.target !== event.currentTarget) return;
+                console.log('[CulturalArchaeologist] Closing segmentation password popout from backdrop click.');
+                setIsSegmentationPasswordPopoutOpen(false);
+                setSegmentationPasswordInput('');
+                setSegmentationPasswordError(null);
+              }}
+            >
+              <motion.div
+                data-testid="segmentation-password-popout-dialog"
+                initial={{ scale: 0.96, opacity: 0, y: 16 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.96, opacity: 0, y: 16 }}
+                className="w-full max-w-md rounded-3xl border border-zinc-200 bg-white p-5 sm:p-6 shadow-2xl relative"
+              >
+                <button
+                  type="button"
+                  data-testid="segmentation-password-popout-close-button"
+                  onClick={() => {
+                    console.log('[CulturalArchaeologist] Closing segmentation password popout from close button.');
+                    setIsSegmentationPasswordPopoutOpen(false);
+                    setSegmentationPasswordInput('');
+                    setSegmentationPasswordError(null);
+                  }}
+                  className="absolute top-4 right-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-500/40"
+                  aria-label="Close segmentation password popout"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+
+                <div className="mb-4 pr-8">
+                  <h3 className="text-lg font-semibold text-zinc-900">Segmentation Access</h3>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    Enter the password to open segmentation in a new tab.
+                  </p>
+                </div>
+
+                <form onSubmit={handleSegmentationPopoutSubmit} className="space-y-4">
+                  <div>
+                    <label htmlFor="segmentation-password-popout-input" className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                      Password
+                    </label>
+                    <input
+                      id="segmentation-password-popout-input"
+                      data-testid="segmentation-password-popout-input"
+                      type="password"
+                      value={segmentationPasswordInput}
+                      onChange={(event) => {
+                        console.log('[CulturalArchaeologist] Segmentation popout password input changed.', {
+                          passwordLength: event.target.value.length,
+                        });
+                        setSegmentationPasswordInput(event.target.value);
+                        if (segmentationPasswordError) {
+                          setSegmentationPasswordError(null);
+                        }
+                      }}
+                      className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-300"
+                      placeholder="Enter segmentation password"
+                      autoFocus
+                    />
+                  </div>
+
+                  {segmentationPasswordError && (
+                    <p data-testid="segmentation-password-popout-error" className="text-sm text-rose-600">
+                      {segmentationPasswordError}
+                    </p>
+                  )}
+
+                  <p className="text-xs text-zinc-500">{SEGMENTATION_PASSWORD_SUPPORT_COPY}</p>
+
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      data-testid="segmentation-password-popout-cancel-button"
+                      onClick={() => {
+                        console.log('[CulturalArchaeologist] Closing segmentation password popout from cancel button.');
+                        setIsSegmentationPasswordPopoutOpen(false);
+                        setSegmentationPasswordInput('');
+                        setSegmentationPasswordError(null);
+                      }}
+                      className="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      data-testid="segmentation-password-popout-submit-button"
+                      className="inline-flex items-center rounded-lg border border-indigo-600 bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 hover:border-indigo-700"
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Google Slides export and modal removed for Supabase-only version */}
 
         {/* Deep Dive Modal */}
@@ -2358,7 +2987,18 @@ export default function CulturalArchaeologist() {
                                   const parsedImplication = extractEvidenceTags(imp);
                                   return (
                                   <li key={i} className="text-zinc-700 text-sm">
-                                    <span>{parsedImplication.cleanText}</span>
+                                    <span>
+                                      {parsedImplication.cleanText}
+                                      {parsedImplication.labels.map((label) => (
+                                        <span
+                                          key={`strategic-mobile-${i}-${label}`}
+                                          data-testid={`deep-dive-strategic-chip-mobile-${i}-${label}`}
+                                          className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}
+                                        >
+                                          {label}
+                                        </span>
+                                      ))}
+                                    </span>
                                   </li>
                                   );
                                 })}
@@ -2444,7 +3084,18 @@ export default function CulturalArchaeologist() {
                               const parsedImplication = extractEvidenceTags(imp);
                               return (
                                 <li key={i} className="text-zinc-700 text-sm">
-                                  <span>{parsedImplication.cleanText}</span>
+                                  <span>
+                                    {parsedImplication.cleanText}
+                                    {parsedImplication.labels.map((label) => (
+                                      <span
+                                        key={`strategic-desktop-${i}-${label}`}
+                                        data-testid={`deep-dive-strategic-chip-desktop-${i}-${label}`}
+                                        className={`inline-block ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded align-middle ${evidenceLabelChipClass(label)}`}
+                                      >
+                                        {label}
+                                      </span>
+                                    ))}
+                                  </span>
                                 </li>
                               );
                             })}
@@ -3048,6 +3699,7 @@ export default function CulturalArchaeologist() {
                   return;
                 }
                 if (item.matrix && item.matrixMeta) {
+                  resetSegmentationWorkspace('insights');
                   setMatrix(item.matrix);
                   setMatrixMeta(item.matrixMeta);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -3112,6 +3764,7 @@ export default function CulturalArchaeologist() {
                     setSelectedGenerations(sm.generations || []);
                     setTopicFocus(sm.topicFocus || '');
                     setSourcesType(sm.sourcesType || []);
+                    resetSegmentationWorkspace('insights');
                     setMatrix(sm.matrix);
                     setMatrixMeta({ audience: sm.audience, brand: sm.brand, generations: sm.generations || [], topicFocus: sm.topicFocus, sourcesType: sm.sourcesType || [] });
                     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -3356,9 +4009,43 @@ export default function CulturalArchaeologist() {
                     <span>Sourced from uploaded document</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2 text-sm text-zinc-600">
-                  <Target className="w-4 h-4 text-zinc-400" />
-                  <span>Insight deep dives</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    data-testid="insight-deep-dives-button"
+                    aria-pressed={activeResultsTab === 'insights'}
+                    onClick={() => {
+                      console.log('[CulturalArchaeologist] Switching to insights tab.');
+                      setActiveResultsTab('insights');
+                    }}
+                    className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm transition-colors ${
+                      activeResultsTab === 'insights'
+                        ? 'text-zinc-900'
+                        : 'text-zinc-600 hover:text-zinc-800'
+                    }`}
+                  >
+                    <Target className={`w-4 h-4 ${activeResultsTab === 'insights' ? 'text-zinc-700' : 'text-zinc-400'}`} />
+                    <span>Insight deep dives</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="audience-segmentation-button"
+                    aria-pressed={activeResultsTab === 'segmentation'}
+                    onClick={openSegmentationTab}
+                    disabled={!matrix}
+                    className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                      activeResultsTab === 'segmentation'
+                        ? 'text-indigo-700'
+                        : 'text-zinc-600 hover:text-indigo-700'
+                    }`}
+                  >
+                    {isSegmentationLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-indigo-700" />
+                    ) : (
+                      <Users className={`w-4 h-4 ${activeResultsTab === 'segmentation' ? 'text-indigo-700' : 'text-zinc-500'}`} />
+                    )}
+                    <span>Segmentation</span>
+                  </button>
                 </div>
               </div>
 
@@ -3530,61 +4217,73 @@ export default function CulturalArchaeologist() {
                 {hasActiveResultFilters && (
                   <button
                     type="button"
-                    onClick={handleRerunAnalysis}
-                    disabled={isLoading}
-                    data-testid="rerun-analysis-button"
+                    onClick={() => {
+                      if (isSegmentationTabActive) {
+                        void handleRerunSegmentation();
+                        return;
+                      }
+                      void handleRerunAnalysis();
+                    }}
+                    disabled={isInsightsTabActive ? isLoading : isSegmentationLoading || !isSegmentationAuthorized}
+                    data-testid={isSegmentationTabActive ? 'rerun-segmentation-button' : 'rerun-analysis-button'}
                     className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-700 hover:border-zinc-400 hover:text-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
-                    Rerun Analysis
+                    <RefreshCw className={`w-3 h-3 ${(isInsightsTabActive ? isLoading : isSegmentationLoading) ? 'animate-spin' : ''}`} />
+                    {isSegmentationTabActive ? 'Rerun Segmentation' : 'Rerun Analysis'}
                   </button>
                 )}
               </div>
 
-              {!hasVisibleInsights && (
-                <div className="mb-8 p-5 rounded-2xl border border-zinc-200 bg-white text-sm text-zinc-600 no-print">
-                  No insights match the selected filters. Adjust or clear filters to repopulate results.
-                </div>
-              )}
+              {isInsightsTabActive ? (
+                <>
+                  {!hasVisibleInsights && (
+                    <div className="mb-8 p-5 rounded-2xl border border-zinc-200 bg-white text-sm text-zinc-600 no-print">
+                      No insights match the selected filters. Adjust or clear filters to repopulate results.
+                    </div>
+                  )}
 
-              <div
-                data-testid="matrix-cards-layout"
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-              >
-                <MatrixCard title="Moments" sectionKey="moments" sectionAnchorId="cultural-result-section-moments" subtext="External forces shaping their behavior" items={displayMatrix?.moments || []} delay={0.1} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.moments || []).length === 0 || (displayMatrix?.moments || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('moments', 'Moments'); }} />
-                <MatrixCard title="Beliefs" sectionKey="beliefs" sectionAnchorId="cultural-result-section-beliefs" subtext="Values they’re operating from" items={displayMatrix?.beliefs || []} delay={0.2} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.beliefs || []).length === 0 || (displayMatrix?.beliefs || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('beliefs', 'Beliefs'); }} />
-                <MatrixCard title="Behaviors" sectionKey="behaviors" sectionAnchorId="cultural-result-section-behaviors" subtext="How they act/interact" items={displayMatrix?.behaviors || []} delay={0.3} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.behaviors || []).length === 0 || (displayMatrix?.behaviors || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('behaviors', 'Behaviors'); }} />
-                <MatrixCard title="Contradictions" sectionKey="contradictions" sectionAnchorId="cultural-result-section-contradictions" subtext="Emerging tensions or shift in values or behavior" items={displayMatrix?.contradictions || []} delay={0.4} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.contradictions || []).length === 0 || (displayMatrix?.contradictions || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('contradictions', 'Contradictions'); }} />
-                <MatrixCard title="Tone" sectionKey="tone" sectionAnchorId="cultural-result-section-tone" subtext="What & how they feel" items={displayMatrix?.tone || []} delay={0.5} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.tone || []).length === 0 || (displayMatrix?.tone || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('tone', 'Tone'); }} />
-                <MatrixCard title="Language" sectionKey="language" sectionAnchorId="cultural-result-section-language" subtext="How they communicate" items={displayMatrix?.language || []} delay={0.6} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} onOpenVocabularyExtractor={() => setIsVocabularyOpen(true)} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.language || []).length === 0 || (displayMatrix?.language || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('language', 'Language'); }} />
-                <MatrixCard title="Community" sectionKey="community" sectionAnchorId="cultural-result-section-community" subtext="Who people look to for identity & belonging" items={displayMatrix?.community || []} delay={0.7} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.community || []).length === 0 || (displayMatrix?.community || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('community', 'Community'); }} />
-                <MatrixCard title="Influencers" sectionKey="influencers" sectionAnchorId="cultural-result-section-influencers" subtext="People who are shaping their beliefs & behavior" items={displayMatrix?.influencers || []} delay={0.8} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.influencers || []).length === 0 || (displayMatrix?.influencers || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('influencers', 'Influencers'); }} />
-              </div>
+                  <div
+                    data-testid="matrix-cards-layout"
+                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                  >
+                    <MatrixCard title="Moments" sectionKey="moments" sectionAnchorId="cultural-result-section-moments" subtext="External forces shaping their behavior" items={displayMatrix?.moments || []} delay={0.1} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.moments || []).length === 0 || (displayMatrix?.moments || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('moments', 'Moments'); }} />
+                    <MatrixCard title="Beliefs" sectionKey="beliefs" sectionAnchorId="cultural-result-section-beliefs" subtext="Values they’re operating from" items={displayMatrix?.beliefs || []} delay={0.2} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.beliefs || []).length === 0 || (displayMatrix?.beliefs || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('beliefs', 'Beliefs'); }} />
+                    <MatrixCard title="Behaviors" sectionKey="behaviors" sectionAnchorId="cultural-result-section-behaviors" subtext="How they act/interact" items={displayMatrix?.behaviors || []} delay={0.3} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.behaviors || []).length === 0 || (displayMatrix?.behaviors || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('behaviors', 'Behaviors'); }} />
+                    <MatrixCard title="Contradictions" sectionKey="contradictions" sectionAnchorId="cultural-result-section-contradictions" subtext="Emerging tensions or shift in values or behavior" items={displayMatrix?.contradictions || []} delay={0.4} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.contradictions || []).length === 0 || (displayMatrix?.contradictions || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('contradictions', 'Contradictions'); }} />
+                    <MatrixCard title="Tone" sectionKey="tone" sectionAnchorId="cultural-result-section-tone" subtext="What & how they feel" items={displayMatrix?.tone || []} delay={0.5} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.tone || []).length === 0 || (displayMatrix?.tone || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('tone', 'Tone'); }} />
+                    <MatrixCard title="Language" sectionKey="language" sectionAnchorId="cultural-result-section-language" subtext="How they communicate" items={displayMatrix?.language || []} delay={0.6} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} onOpenVocabularyExtractor={() => setIsVocabularyOpen(true)} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.language || []).length === 0 || (displayMatrix?.language || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('language', 'Language'); }} />
+                    <MatrixCard title="Community" sectionKey="community" sectionAnchorId="cultural-result-section-community" subtext="Who people look to for identity & belonging" items={displayMatrix?.community || []} delay={0.7} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.community || []).length === 0 || (displayMatrix?.community || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('community', 'Community'); }} />
+                    <MatrixCard title="Influencers" sectionKey="influencers" sectionAnchorId="cultural-result-section-influencers" subtext="People who are shaping their beliefs & behavior" items={displayMatrix?.influencers || []} delay={0.8} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.influencers || []).length === 0 || (displayMatrix?.influencers || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('influencers', 'Influencers'); }} />
+                  </div>
 
-              {/* Sources Section */}
-              {matrix.sources && matrix.sources.length > 0 && (
-                <motion.div
-                  id="cultural-results-sources"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.8 }}
-                  className="mt-12 p-8 bg-zinc-50 rounded-3xl border border-zinc-200 print-break-inside-avoid"
-                >
-                  <h3 className="text-lg font-semibold text-zinc-900 mb-4 flex items-center gap-2">
-                    <Info className="w-5 h-5 text-zinc-400" />
-                    Sources & Research
-                  </h3>
-                  <ul className="space-y-3">
-                    {matrix.sources.map((source, idx) => (
-                      <SourceLinkRow
-                        key={`${source.url}-${idx}`}
-                        index={idx}
-                        title={source.title}
-                        url={source.url}
-                      />
-                    ))}
-                  </ul>
-                </motion.div>
+                  {/* Sources Section */}
+                  {matrix.sources && matrix.sources.length > 0 && (
+                    <motion.div
+                      id="cultural-results-sources"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.8 }}
+                      className="mt-12 p-8 bg-zinc-50 rounded-3xl border border-zinc-200 print-break-inside-avoid"
+                    >
+                      <h3 className="text-lg font-semibold text-zinc-900 mb-4 flex items-center gap-2">
+                        <Info className="w-5 h-5 text-zinc-400" />
+                        Sources & Research
+                      </h3>
+                      <ul className="space-y-3">
+                        {matrix.sources.map((source, idx) => (
+                          <SourceLinkRow
+                            key={`${source.url}-${idx}`}
+                            index={idx}
+                            title={source.title}
+                            url={source.url}
+                          />
+                        ))}
+                      </ul>
+                    </motion.div>
+                  )}
+                </>
+              ) : (
+                renderSegmentationTabContent()
               )}
               </motion.div>
             </SectionErrorBoundary>
@@ -3604,6 +4303,7 @@ export default function CulturalArchaeologist() {
                   return;
                 }
                 if (item.matrix && item.matrixMeta) {
+                  resetSegmentationWorkspace('insights');
                   setMatrix(item.matrix);
                   setMatrixMeta(item.matrixMeta);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -3627,6 +4327,7 @@ export default function CulturalArchaeologist() {
               </div>
               <button 
                 onClick={() => {
+                  resetSegmentationWorkspace('insights');
                   setMatrix(null);
                   setMatrixMeta(null);
                   window.scrollTo({ top: 0, behavior: 'smooth' });

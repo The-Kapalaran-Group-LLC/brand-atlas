@@ -153,6 +153,21 @@ export interface CulturalRerunFilters {
   sourceTypes?: string[];
 }
 
+export interface AudienceSegmentArchetype {
+  name: string;
+  archetype: string;
+  profile: string;
+  prevalencePct: number;
+  keySignals: string[];
+  messagingApproach: string;
+}
+
+export interface AudienceSegmentationReport {
+  regressionSummary: string;
+  confidenceNotes: string;
+  segments: AudienceSegmentArchetype[];
+}
+
 export interface BrandResearchAudience {
   audience: string;
   priority: string;
@@ -2600,6 +2615,21 @@ const MatrixAnswerSchema = z.object({
   relevantInsights: z.array(z.string())
 });
 
+const AudienceSegmentArchetypeSchema = z.object({
+  name: z.string(),
+  archetype: z.string(),
+  profile: z.string(),
+  prevalencePct: z.number().min(1).max(100),
+  keySignals: z.array(z.string()).min(2).max(5),
+  messagingApproach: z.string(),
+});
+
+const AudienceSegmentationReportSchema = z.object({
+  regressionSummary: z.string(),
+  confidenceNotes: z.string(),
+  segments: z.array(AudienceSegmentArchetypeSchema).min(4).max(6),
+});
+
 const BrandDeepDiveAnswerSchema = z.object({
   answer: z.string(),
 });
@@ -2685,6 +2715,73 @@ export async function askMatrixQuestion(
   };
 
   updateSessionBrief('matrix-qa', normalized);
+  return normalized;
+}
+
+export async function generateAudienceSegmentation(
+  matrix: CulturalMatrix,
+  context?: { audience?: string; brand?: string; topicFocus?: string; generations?: string[]; sourcesType?: string[] }
+): Promise<AudienceSegmentationReport> {
+  const audienceLabel = (context?.audience || 'Current audience').trim();
+  const contextParts = [
+    context?.audience ? `Audience: ${context.audience}` : '',
+    context?.brand ? `Brand context: ${context.brand}` : '',
+    context?.topicFocus ? `Topic focus: ${context.topicFocus}` : '',
+    context?.generations?.length ? `Generations: ${context.generations.join(', ')}` : '',
+    context?.sourcesType?.length ? `Sources: ${context.sourcesType.join(', ')}` : '',
+  ].filter(Boolean);
+  const contextBlock = contextParts.length > 0 ? contextParts.join('\n') : 'No additional context provided.';
+  const evidenceDigest = await gatherEvidenceForTopic(`Audience segmentation analysis for ${audienceLabel}`, 'cultural');
+
+  console.log('[azure-openai] Generating audience segmentation report.', {
+    audience: audienceLabel,
+    hasBrand: Boolean(context?.brand),
+    generationsCount: context?.generations?.length || 0,
+  });
+
+  const parsed = await runStructuredCall({
+    schema: AudienceSegmentationReportSchema,
+    schemaName: 'audience_segmentation_report',
+    mode: 'cultural',
+    outputType: 'analysis',
+    messages: [
+      {
+        role: 'system',
+        content: composeSystemPrompt(
+          'You are an expert audience scientist. Run a regression-style segmentation analysis over the provided cultural analysis data. Create exactly 4 to 6 clearly distinct audience segments/archetypes.',
+          'cultural'
+        ),
+      },
+      {
+        role: 'user',
+        content: `Context:\n${contextBlock}\n\nCultural Analysis Data:\n${JSON.stringify(matrix)}\n\nWeb Evidence Digest:\n${evidenceDigest}\n\nReturn JSON fields:\n- regressionSummary: concise explanation of the strongest predictive drivers.\n- confidenceNotes: limitations, caveats, and confidence statement.\n- segments: 4-6 entries where each entry includes:\n  - name\n  - archetype\n  - profile\n  - prevalencePct (integer from 1-100)\n  - keySignals (2-5 concrete signals)\n  - messagingApproach\n\nRequirements:\n- Segments must be mutually distinct and grounded in the provided data.\n- Treat this as directional regression-style clustering, not deterministic individual prediction.\n- prevalencePct values should sum to approximately 100.`,
+      },
+    ],
+    qualityGate: (result) =>
+      Array.isArray(result.segments) &&
+      result.segments.length >= 4 &&
+      result.segments.length <= 6 &&
+      !isThinStructuredPayload(result),
+    maxRetries: 3,
+  });
+
+  const normalizedSegments = parsed.segments.map((segment) => ({
+    ...segment,
+    name: segment.name.trim(),
+    archetype: segment.archetype.trim(),
+    profile: segment.profile.trim(),
+    messagingApproach: segment.messagingApproach.trim(),
+    keySignals: segment.keySignals.map((signal) => signal.trim()).filter((signal) => signal.length > 0),
+    prevalencePct: Math.max(1, Math.min(100, Math.round(segment.prevalencePct))),
+  }));
+
+  const normalized: AudienceSegmentationReport = {
+    regressionSummary: parsed.regressionSummary.trim(),
+    confidenceNotes: parsed.confidenceNotes.trim(),
+    segments: normalizedSegments,
+  };
+
+  updateSessionBrief('cultural', { audienceSegmentation: normalized });
   return normalized;
 }
 
