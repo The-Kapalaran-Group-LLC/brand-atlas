@@ -616,6 +616,7 @@ export default function CulturalArchaeologist() {
   const [sourcesType, setSourcesType] = useState<string[]>([]);
   const [isSourcesDropdownOpen, setIsSourcesDropdownOpen] = useState(false);
   const sourcesDropdownRef = useRef<HTMLDivElement>(null);
+  const segmentationTabPanelRef = useRef<HTMLDivElement>(null);
   
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -637,6 +638,7 @@ export default function CulturalArchaeologist() {
   const [segmentationPasswordInput, setSegmentationPasswordInput] = useState('');
   const [segmentationPasswordError, setSegmentationPasswordError] = useState<string | null>(null);
   const [isSegmentationPasswordPopoutOpen, setIsSegmentationPasswordPopoutOpen] = useState(false);
+  const [shouldAutoScrollToSegmentationWorkspace, setShouldAutoScrollToSegmentationWorkspace] = useState(false);
   const [isVocabularyOpen, setIsVocabularyOpen] = useState(false);
   
   const [savedMatrices, setSavedMatrices] = useState<SavedMatrix[]>([]);
@@ -995,6 +997,7 @@ export default function CulturalArchaeologist() {
     setSegmentationPasswordInput('');
     setSegmentationPasswordError(null);
     setIsSegmentationPasswordPopoutOpen(false);
+    setShouldAutoScrollToSegmentationWorkspace(true);
     removeSegmentationWorkspaceSnapshot(workspaceId);
     console.log('[CulturalArchaeologist] Segmentation workspace hydrated and activated.', {
       workspaceId,
@@ -1332,6 +1335,7 @@ export default function CulturalArchaeologist() {
     setSegmentationPasswordInput('');
     setSegmentationPasswordError(null);
     setIsSegmentationPasswordPopoutOpen(false);
+    setShouldAutoScrollToSegmentationWorkspace(false);
   };
 
   const handleReset = () => {
@@ -1899,6 +1903,45 @@ export default function CulturalArchaeologist() {
     segmentationResult,
   ]);
 
+  useEffect(() => {
+    if (!shouldAutoScrollToSegmentationWorkspace || !isSegmentationTabActive || typeof window === 'undefined') {
+      return;
+    }
+
+    let attemptsRemaining = 8;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const attemptScroll = () => {
+      const target = segmentationTabPanelRef.current;
+      if (!target) {
+        attemptsRemaining -= 1;
+        if (attemptsRemaining <= 0) {
+          console.log('[CulturalArchaeologist] Segmentation workspace target not found for auto-scroll.');
+          setShouldAutoScrollToSegmentationWorkspace(false);
+          return;
+        }
+        timeoutId = setTimeout(attemptScroll, 40);
+        return;
+      }
+
+      console.log('[CulturalArchaeologist] Auto-scrolling to segmentation workspace section.');
+      try {
+        target.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      } catch (error) {
+        console.warn('Failed to auto-scroll segmentation workspace into view:', error);
+      }
+      setShouldAutoScrollToSegmentationWorkspace(false);
+    };
+
+    attemptScroll();
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [isSegmentationTabActive, shouldAutoScrollToSegmentationWorkspace]);
+
   const renderSegmentationEvidenceText = (value: string, keyPrefix: string) => {
     const parsed = extractEvidenceTags(value || '');
     return (
@@ -1923,7 +1966,11 @@ export default function CulturalArchaeologist() {
     }
 
     return (
-      <div data-testid="segmentation-tab-panel" className="mb-8 rounded-3xl border border-zinc-200 bg-white p-5 sm:p-6">
+      <div
+        ref={segmentationTabPanelRef}
+        data-testid="segmentation-tab-panel"
+        className="mb-8 rounded-3xl border border-zinc-200 bg-white p-5 sm:p-6"
+      >
         <div className="flex items-center gap-3 mb-5">
           <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
             <Users className="w-5 h-5" />

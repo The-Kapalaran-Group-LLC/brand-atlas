@@ -350,6 +350,37 @@ describe('CulturalArchaeologist', () => {
     expect(latestMatrixArg?.moments?.[0]?.text).toContain('High confidence signal');
   });
 
+  it('auto-scrolls to the segmentation workspace when a workspace tab opens', async () => {
+    const workspaceId = 'workspace-autoscroll';
+    window.localStorage.setItem(
+      `${SEGMENTATION_WORKSPACE_STORAGE_PREFIX}${workspaceId}`,
+      JSON.stringify(createSegmentationWorkspaceSnapshot({ isSegmentationAuthorized: true }))
+    );
+    window.history.pushState({}, '', `/?segmentation_workspace=${workspaceId}#cultural-archaeologist`);
+
+    const originalScrollIntoView = window.HTMLElement.prototype.scrollIntoView;
+    const scrollIntoViewSpy = vi.fn();
+    Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      writable: true,
+      value: scrollIntoViewSpy,
+    });
+
+    try {
+      render(<CulturalArchaeologist />);
+      expect(await screen.findByTestId('segmentation-tab-panel')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(scrollIntoViewSpy).toHaveBeenCalled();
+      });
+    } finally {
+      Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', {
+        configurable: true,
+        writable: true,
+        value: originalScrollIntoView,
+      });
+    }
+  });
+
   it('filters results to only highly unique observations when the highly unique filter is selected', async () => {
     generateCulturalMatrix.mockResolvedValueOnce({
       ...mockMatrix,
