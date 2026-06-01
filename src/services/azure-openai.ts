@@ -157,7 +157,7 @@ export interface AudienceSegmentArchetype {
   name: string;
   archetype: string;
   profile: string;
-  demographicsSnippet?: string;
+  demographicsSnippet: string;
   prevalencePct: number;
   keySignals: string[];
   messagingApproach: string;
@@ -688,6 +688,21 @@ function getApiBaseUrl(): string {
 
   // In non-browser runtimes, keep localhost fallback for local server-side workflows.
   return 'http://localhost:3001';
+}
+
+function buildApiUrl(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const baseUrl = getApiBaseUrl();
+
+  if (baseUrl) {
+    return new URL(normalizedPath, baseUrl).toString();
+  }
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return new URL(normalizedPath, window.location.origin).toString();
+  }
+
+  return new URL(normalizedPath, 'http://localhost:3001').toString();
 }
 
 const sessionResearchBrief = new Map<SessionMode, string>();
@@ -1372,8 +1387,7 @@ async function gatherEvidenceForTopic(topic: string, mode: SessionMode, intent: 
   const searchErrors: string[] = [];
   const searchPromises = queries.map(async (query) => {
     try {
-      const baseUrl = getApiBaseUrl();
-      const searchUrl = new URL(`${baseUrl}/api/search`);
+      const searchUrl = new URL(buildApiUrl('/api/search'));
       searchUrl.searchParams.set('q', query);
       searchUrl.searchParams.set('provider', 'google');
       if (intent === 'behaviors') {
@@ -2620,7 +2634,7 @@ const AudienceSegmentArchetypeSchema = z.object({
   name: z.string(),
   archetype: z.string(),
   profile: z.string(),
-  demographicsSnippet: z.string().optional(),
+  demographicsSnippet: z.string(),
   prevalencePct: z.number().min(1).max(100),
   keySignals: z.array(z.string()).min(2).max(5),
   messagingApproach: z.string(),
@@ -2772,7 +2786,7 @@ export async function generateAudienceSegmentation(
     name: segment.name.trim(),
     archetype: segment.archetype.trim(),
     profile: segment.profile.trim(),
-    demographicsSnippet: (segment.demographicsSnippet || '').trim(),
+    demographicsSnippet: segment.demographicsSnippet.trim(),
     messagingApproach: segment.messagingApproach.trim(),
     keySignals: segment.keySignals.map((signal) => signal.trim()).filter((signal) => signal.length > 0),
     prevalencePct: Math.max(1, Math.min(100, Math.round(segment.prevalencePct))),

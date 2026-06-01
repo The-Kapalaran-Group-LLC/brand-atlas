@@ -1834,10 +1834,14 @@ export default function CulturalArchaeologist() {
     } catch (err) {
       const normalized = normalizeAppError(err);
       console.error('[CulturalArchaeologist] Failed to generate audience segmentation.', { err, normalized });
+      const fallbackMessage = 'Could not generate segmentation right now. Please retry in a moment.';
+      const normalizedMessage = (normalized.message || '').trim();
       setSegmentationError(
         normalized.kind === 'quota'
           ? 'Quota limit reached. Please check billing and try again.'
-          : 'Could not generate segmentation right now. Please retry in a moment.'
+          : normalizedMessage && normalizedMessage.toLowerCase() !== 'something went wrong. please try again.'
+            ? normalizedMessage
+            : fallbackMessage
       );
     } finally {
       setIsSegmentationLoading(false);
