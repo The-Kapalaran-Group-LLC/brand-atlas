@@ -2079,8 +2079,10 @@ export default function CulturalArchaeologist() {
               type="button"
               data-testid="segmentation-revert-original-button"
               onClick={handleRevertToOriginalSegments}
-              className="mt-1 shrink-0 text-xs font-semibold text-indigo-600 underline decoration-indigo-300 underline-offset-2 hover:text-indigo-700"
+              aria-label="Original Segments"
+              className="mt-1 inline-flex shrink-0 items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50/70 px-2.5 py-1.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-50 hover:text-indigo-900"
             >
+              <RefreshCw className="h-3.5 w-3.5" />
               Original Segments
             </button>
           )}
@@ -2163,7 +2165,7 @@ export default function CulturalArchaeologist() {
             </div>
 
             <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-              <h4 className="text-sm font-semibold text-zinc-900 mb-2">Confidence Notes</h4>
+              <h4 className="text-sm font-semibold text-amber-800 mb-2">Confidence Notes</h4>
               <p className="text-sm text-amber-800">
                 {renderSegmentationEvidenceText(segmentationResult.confidenceNotes, 'segmentation-confidence-notes')}
               </p>
