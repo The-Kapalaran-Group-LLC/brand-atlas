@@ -1996,7 +1996,7 @@ export default function CulturalArchaeologist() {
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-xl font-bold text-zinc-900">Audience Segmentation Workspace</h3>
+            <h3 className="text-xl font-bold text-zinc-900">Audience Segmentation</h3>
             <p className="text-sm text-zinc-500">Regression-style segmentation into 4-6 audience archetypes based on the filtered dataset.</p>
           </div>
         </div>
@@ -2077,9 +2077,9 @@ export default function CulturalArchaeologist() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <h4 className="text-sm font-semibold text-amber-900 mb-2">Confidence Notes</h4>
-              <p className="text-sm text-amber-800">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+              <h4 className="text-sm font-semibold text-zinc-900 mb-2">Confidence Notes</h4>
+              <p className="text-sm text-zinc-700">
                 {renderSegmentationEvidenceText(segmentationResult.confidenceNotes, 'segmentation-confidence-notes')}
               </p>
             </div>
@@ -2435,27 +2435,110 @@ export default function CulturalArchaeologist() {
     };
   };
 
+  const buildSegmentationExportDocument = (): BrandAtlasExportDocument | null => {
+    if (!matrixMeta || !segmentationResult) return null;
+    const cleanDemographics = sanitizeDemographics(matrix?.demographics || {});
+    const cleanEvidenceText = (value: string): string => extractEvidenceTags(value || '').cleanText || value || '';
+
+    const sectionCards = segmentationResult.segments.map((segment, index) => {
+      const demographicsSnippet = (segment.demographicsSnippet || '').trim();
+      return {
+        title: `Segment ${index + 1}: ${segment.name} (${segment.prevalencePct}%)`,
+        lines: [
+          `Archetype: ${cleanEvidenceText(segment.archetype)}`,
+          `Profile: ${cleanEvidenceText(segment.profile)}`,
+          `Demographics: ${cleanEvidenceText(demographicsSnippet || `Age: ${cleanDemographics.age} | Race/Ethnicity: ${cleanDemographics.race} | Gender: ${cleanDemographics.gender}`)}`,
+          `Key Signals: ${(segment.keySignals || []).map((signal) => cleanEvidenceText(signal)).filter(Boolean).join('; ')}`,
+          `Messaging Approach: ${cleanEvidenceText(segment.messagingApproach)}`,
+        ].filter(Boolean),
+      };
+    });
+
+    const sections: BrandAtlasExportDocument['sections'] = [
+      {
+        title: 'Segmentation Summary',
+        cards: [
+          {
+            title: 'Regression Summary',
+            lines: [cleanEvidenceText(segmentationResult.regressionSummary)],
+          },
+          {
+            title: 'Confidence Notes',
+            lines: [cleanEvidenceText(segmentationResult.confidenceNotes)],
+          },
+        ],
+      },
+      {
+        title: 'Audience Segments',
+        cards: sectionCards,
+      },
+    ];
+
+    if ((matrix?.sources || []).length > 0) {
+      sections.push({
+        title: 'Sources',
+        cards: (matrix.sources || []).slice(0, 24).map((source) => ({
+          title: source.title,
+          lines: [source.url],
+        })),
+      });
+    }
+
+    return {
+      reportTitle: 'Audience Segmentation Workspace',
+      reportSubtitle: 'Regression-Style Audience Archetypes',
+      audience: matrixMeta.audience || 'N/A',
+      contextLines: [
+        matrixMeta.brand ? `Context: ${matrixMeta.brand}` : '',
+        matrixMeta.topicFocus ? `Topic: ${matrixMeta.topicFocus}` : '',
+        matrixMeta.sourcesType?.length ? `Sources: ${matrixMeta.sourcesType.join(', ')}` : '',
+      ].filter(Boolean),
+      sections,
+    };
+  };
+
   const exportToPPTX = async () => {
     if (!matrixMeta) return;
-    const fileBase = buildExportFileBase(matrixMeta.audience, 'Cultural_Archaeologist');
-    const exportDocument = buildCulturalExportDocument();
-    if (!exportDocument) return;
+    const isSegmentationExport = isSegmentationTabActive;
+    const fileBase = buildExportFileBase(
+      matrixMeta.audience,
+      isSegmentationExport ? 'Audience_Segmentation' : 'Cultural_Archaeologist'
+    );
+    const exportDocument = isSegmentationExport ? buildSegmentationExportDocument() : buildCulturalExportDocument();
+    if (!exportDocument) {
+      const message = isSegmentationExport
+        ? 'No segmentation results available to export yet. Run segmentation first.'
+        : 'No cultural analysis results available to export yet.';
+      setExportError({ type: 'pptx', message });
+      setToast(message);
+      return;
+    }
+    console.log('[CulturalArchaeologist] Starting PPTX export.', {
+      isSegmentationExport,
+      audience: matrixMeta.audience,
+      sections: exportDocument.sections.length,
+    });
     setExportError(null);
     setIsExporting(true);
     setToast('Generating PPTX...');
     try {
       await runUserAction({
-        actionName: 'export-cultural-pptx-themed',
+        actionName: isSegmentationExport ? 'export-segmentation-pptx-themed' : 'export-cultural-pptx-themed',
         action: async () => {
-          await exportBrandAtlasDocumentToPptx(exportDocument, `${fileBase}_Cultural_Archaeologist.pptx`);
+          await exportBrandAtlasDocumentToPptx(
+            exportDocument,
+            isSegmentationExport
+              ? `${fileBase}_Audience_Segmentation.pptx`
+              : `${fileBase}_Cultural_Archaeologist.pptx`
+          );
           return true;
         },
       });
-      setToast('PPTX exported successfully!');
+      setToast(isSegmentationExport ? 'Segmentation PPTX exported successfully!' : 'PPTX exported successfully!');
     } catch (err) {
       const normalized = normalizeAppError(err);
       const detail = getExportErrorDetail(err);
-      logger.error('Failed to export cultural PPTX', { err, normalized });
+      logger.error('Failed to export PPTX', { err, normalized, isSegmentationExport });
       setExportError({ type: 'pptx', message: detail ? `Failed to export PPTX: ${detail}` : (normalized.message || 'Failed to export PPTX.') });
       setToast('Failed to export PPTX.');
     } finally {
@@ -2464,20 +2547,41 @@ export default function CulturalArchaeologist() {
   };
 
   const exportToPDF = async () => {
-    if (!matrix || !matrixMeta) return;
-    const fileBase = buildExportFileBase(matrixMeta.audience, 'Cultural_Archaeologist');
-    const exportDocument = buildCulturalExportDocument();
-    if (!exportDocument) return;
+    if (!matrixMeta) return;
+    const isSegmentationExport = isSegmentationTabActive;
+    const fileBase = buildExportFileBase(
+      matrixMeta.audience,
+      isSegmentationExport ? 'Audience_Segmentation' : 'Cultural_Archaeologist'
+    );
+    const exportDocument = isSegmentationExport ? buildSegmentationExportDocument() : buildCulturalExportDocument();
+    if (!exportDocument) {
+      const message = isSegmentationExport
+        ? 'No segmentation results available to export yet. Run segmentation first.'
+        : 'No cultural analysis results available to export yet.';
+      setExportError({ type: 'pdf', message });
+      setToast(message);
+      return;
+    }
+    console.log('[CulturalArchaeologist] Starting PDF export.', {
+      isSegmentationExport,
+      audience: matrixMeta.audience,
+      sections: exportDocument.sections.length,
+    });
     setExportError(null);
     setIsExporting(true);
     setToast('Generating PDF...');
     try {
-      await exportBrandAtlasDocumentToPdf(exportDocument, `${fileBase}_Cultural_Archaeologist.pdf`);
-      setToast('PDF exported successfully!');
+      await exportBrandAtlasDocumentToPdf(
+        exportDocument,
+        isSegmentationExport
+          ? `${fileBase}_Audience_Segmentation.pdf`
+          : `${fileBase}_Cultural_Archaeologist.pdf`
+      );
+      setToast(isSegmentationExport ? 'Segmentation PDF exported successfully!' : 'PDF exported successfully!');
     } catch (err) {
       const normalized = normalizeAppError(err);
       const detail = getExportErrorDetail(err);
-      logger.error('Failed to export cultural PDF', { err, normalized });
+      logger.error('Failed to export PDF', { err, normalized, isSegmentationExport });
       setExportError({
         type: 'pdf',
         message: detail ? `Failed to generate PDF: ${detail}` : (normalized.message || 'Failed to generate PDF.'),
