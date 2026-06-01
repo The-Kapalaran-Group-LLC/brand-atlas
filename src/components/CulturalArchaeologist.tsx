@@ -2079,7 +2079,7 @@ export default function CulturalArchaeologist() {
 
             <div className="rounded-2xl border border-zinc-200 bg-white p-4">
               <h4 className="text-sm font-semibold text-zinc-900 mb-2">Confidence Notes</h4>
-              <p className="text-sm text-zinc-700">
+              <p className="text-sm text-amber-800">
                 {renderSegmentationEvidenceText(segmentationResult.confidenceNotes, 'segmentation-confidence-notes')}
               </p>
             </div>
