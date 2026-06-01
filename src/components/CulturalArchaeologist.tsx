@@ -1960,6 +1960,22 @@ export default function CulturalArchaeologist() {
     );
   };
 
+  const buildSegmentationDemographicsFallback = (): string => {
+    const age = formatDemographicDisplayValue(matrix?.demographics?.age);
+    const race = formatDemographicDisplayValue(matrix?.demographics?.race);
+    const gender = formatDemographicDisplayValue(matrix?.demographics?.gender);
+    const parts = [
+      age !== DEMOGRAPHIC_FALLBACK_TEXT ? `Age: ${age}` : '',
+      race !== DEMOGRAPHIC_FALLBACK_TEXT ? `Race/Ethnicity: ${race}` : '',
+      gender !== DEMOGRAPHIC_FALLBACK_TEXT ? `Gender: ${gender}` : '',
+    ].filter(Boolean);
+
+    if (parts.length === 0) {
+      return 'Demographic composition unavailable for this segment.';
+    }
+    return parts.join(' | ');
+  };
+
   const renderSegmentationTabContent = () => {
     if (!matrix) {
       return null;
@@ -2065,45 +2081,62 @@ export default function CulturalArchaeologist() {
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {segmentationResult.segments.map((segment, index) => (
-                <div
-                  key={`${segment.name}-${index}`}
-                  className="rounded-2xl border border-zinc-200 bg-white p-4"
-                  data-testid={`segmentation-segment-card-${index + 1}`}
-                >
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Segment {index + 1}</p>
-                      <h4 className="text-base font-semibold text-zinc-900">{segment.name}</h4>
+              {segmentationResult.segments.map((segment, index) => {
+                const demographicsSnippet = (segment.demographicsSnippet || '').trim() || buildSegmentationDemographicsFallback();
+                if (!(segment.demographicsSnippet || '').trim()) {
+                  console.log('[CulturalArchaeologist] Using segmentation demographics fallback for segment.', {
+                    segmentIndex: index,
+                    segmentName: segment.name,
+                    demographicsSnippet,
+                  });
+                }
+
+                return (
+                  <div
+                    key={`${segment.name}-${index}`}
+                    className="rounded-2xl border border-zinc-200 bg-white p-4"
+                    data-testid={`segmentation-segment-card-${index + 1}`}
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Segment {index + 1}</p>
+                        <h4 className="text-base font-semibold text-zinc-900">{segment.name}</h4>
+                      </div>
+                      <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                        {segment.prevalencePct}%
+                      </span>
                     </div>
-                    <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
-                      {segment.prevalencePct}%
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-500 mb-2">
-                    {renderSegmentationEvidenceText(segment.archetype, `segmentation-segment-${index}-archetype`)}
-                  </p>
-                  <p className="text-sm text-zinc-700 mb-3">
-                    {renderSegmentationEvidenceText(segment.profile, `segmentation-segment-${index}-profile`)}
-                  </p>
-                  <div className="mb-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">Key Signals</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                      {segment.keySignals.map((signal, signalIndex) => (
-                        <li key={`${segment.name}-signal-${signalIndex}`} className="text-sm text-zinc-700">
-                          {renderSegmentationEvidenceText(signal, `segmentation-segment-${index}-signal-${signalIndex}`)}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">Messaging Approach</p>
-                    <p className="text-sm text-zinc-700">
-                      {renderSegmentationEvidenceText(segment.messagingApproach, `segmentation-segment-${index}-messaging`)}
+                    <p className="text-xs text-zinc-500 mb-2">
+                      {renderSegmentationEvidenceText(segment.archetype, `segmentation-segment-${index}-archetype`)}
                     </p>
+                    <p className="text-sm text-zinc-700 mb-3">
+                      {renderSegmentationEvidenceText(segment.profile, `segmentation-segment-${index}-profile`)}
+                    </p>
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">Demographics</p>
+                      <p className="text-sm text-zinc-700" data-testid={`segmentation-segment-demographics-${index + 1}`}>
+                        {renderSegmentationEvidenceText(demographicsSnippet, `segmentation-segment-${index}-demographics`)}
+                      </p>
+                    </div>
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">Key Signals</p>
+                      <ul className="list-disc pl-5 space-y-1">
+                        {segment.keySignals.map((signal, signalIndex) => (
+                          <li key={`${segment.name}-signal-${signalIndex}`} className="text-sm text-zinc-700">
+                            {renderSegmentationEvidenceText(signal, `segmentation-segment-${index}-signal-${signalIndex}`)}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">Messaging Approach</p>
+                      <p className="text-sm text-zinc-700">
+                        {renderSegmentationEvidenceText(segment.messagingApproach, `segmentation-segment-${index}-messaging`)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ) : (

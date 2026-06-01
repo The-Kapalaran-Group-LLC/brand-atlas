@@ -157,6 +157,7 @@ export interface AudienceSegmentArchetype {
   name: string;
   archetype: string;
   profile: string;
+  demographicsSnippet?: string;
   prevalencePct: number;
   keySignals: string[];
   messagingApproach: string;
@@ -2619,6 +2620,7 @@ const AudienceSegmentArchetypeSchema = z.object({
   name: z.string(),
   archetype: z.string(),
   profile: z.string(),
+  demographicsSnippet: z.string().optional(),
   prevalencePct: z.number().min(1).max(100),
   keySignals: z.array(z.string()).min(2).max(5),
   messagingApproach: z.string(),
@@ -2754,7 +2756,7 @@ export async function generateAudienceSegmentation(
       },
       {
         role: 'user',
-        content: `Context:\n${contextBlock}\n\nCultural Analysis Data:\n${JSON.stringify(matrix)}\n\nWeb Evidence Digest:\n${evidenceDigest}\n\nReturn JSON fields:\n- regressionSummary: concise explanation of the strongest predictive drivers.\n- confidenceNotes: limitations, caveats, and confidence statement.\n- segments: 4-6 entries where each entry includes:\n  - name\n  - archetype\n  - profile\n  - prevalencePct (integer from 1-100)\n  - keySignals (2-5 concrete signals)\n  - messagingApproach\n\nRequirements:\n- Segments must be mutually distinct and grounded in the provided data.\n- Treat this as directional regression-style clustering, not deterministic individual prediction.\n- prevalencePct values should sum to approximately 100.`,
+        content: `Context:\n${contextBlock}\n\nCultural Analysis Data:\n${JSON.stringify(matrix)}\n\nWeb Evidence Digest:\n${evidenceDigest}\n\nReturn JSON fields:\n- regressionSummary: concise explanation of the strongest predictive drivers.\n- confidenceNotes: limitations, caveats, and confidence statement.\n- segments: 4-6 entries where each entry includes:\n  - name\n  - archetype\n  - profile\n  - demographicsSnippet (one concise line describing likely age/gender/race composition for that segment; if inferred, use directional language)\n  - prevalencePct (integer from 1-100)\n  - keySignals (2-5 concrete signals)\n  - messagingApproach\n\nRequirements:\n- Segments must be mutually distinct and grounded in the provided data.\n- Treat this as directional regression-style clustering, not deterministic individual prediction.\n- prevalencePct values should sum to approximately 100.`,
       },
     ],
     qualityGate: (result) =>
@@ -2770,6 +2772,7 @@ export async function generateAudienceSegmentation(
     name: segment.name.trim(),
     archetype: segment.archetype.trim(),
     profile: segment.profile.trim(),
+    demographicsSnippet: (segment.demographicsSnippet || '').trim(),
     messagingApproach: segment.messagingApproach.trim(),
     keySignals: segment.keySignals.map((signal) => signal.trim()).filter((signal) => signal.length > 0),
     prevalencePct: Math.max(1, Math.min(100, Math.round(segment.prevalencePct))),

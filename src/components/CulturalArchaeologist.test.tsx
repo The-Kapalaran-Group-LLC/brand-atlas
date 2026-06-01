@@ -147,6 +147,7 @@ describe('CulturalArchaeologist', () => {
           name: 'Status Signal Chasers',
           archetype: 'Aspirational trend adopters',
           profile: 'Visibility-forward shoppers who seek social proof and novelty.',
+          demographicsSnippet: 'Skews 18-29 with multicultural urban concentration and slight women over-index.',
           prevalencePct: 28,
           keySignals: ['Tracks drop culture', 'Shares purchases socially'],
           messagingApproach: 'Lead with scarcity and social currency.',
@@ -155,6 +156,7 @@ describe('CulturalArchaeologist', () => {
           name: 'Performance Pragmatists',
           archetype: 'Utility-maximizing planners',
           profile: 'Value measurable comfort, durability, and price-performance.',
+          demographicsSnippet: 'Broad 25-44 mix with balanced gender split and suburban household representation.',
           prevalencePct: 24,
           keySignals: ['Compares specs and reviews', 'Waits for strategic buys'],
           messagingApproach: 'Anchor on proof, longevity, and value.',
@@ -163,6 +165,7 @@ describe('CulturalArchaeologist', () => {
           name: 'Identity Curators',
           archetype: 'Self-expression seekers',
           profile: 'Use brand choices to communicate niche identity and belonging.',
+          demographicsSnippet: 'Younger 18-34 audience with strong creator-economy and women/non-binary participation.',
           prevalencePct: 20,
           keySignals: ['Follows micro-communities', 'Picks symbolic brand codes'],
           messagingApproach: 'Highlight identity language and community affinity.',
@@ -171,6 +174,7 @@ describe('CulturalArchaeologist', () => {
           name: 'Ethical Evaluators',
           archetype: 'Values-led decision makers',
           profile: 'Prioritize sustainability and brand transparency.',
+          demographicsSnippet: 'Ages 24-40 with educated metro clusters and mixed-gender values-led households.',
           prevalencePct: 16,
           keySignals: ['Researches sourcing practices', 'Penalizes performative claims'],
           messagingApproach: 'Show traceable commitments and accountability.',
@@ -257,6 +261,7 @@ describe('CulturalArchaeologist', () => {
           name: 'Status Signal Chasers',
           archetype: '[INFERRED] Aspirational trend adopters',
           profile: '[KNOWN] Visibility-forward shoppers who seek social proof and novelty.',
+          demographicsSnippet: '[KNOWN] 18-29, women-leaning, multicultural urban cores.',
           prevalencePct: 28,
           keySignals: ['[KNOWN] Tracks drop culture', '[INFERRED] Shares purchases socially'],
           messagingApproach: '[SPECULATIVE] Lead with scarcity and social currency.',
@@ -265,6 +270,7 @@ describe('CulturalArchaeologist', () => {
           name: 'Performance Pragmatists',
           archetype: 'Utility-maximizing planners',
           profile: 'Value measurable comfort, durability, and price-performance.',
+          demographicsSnippet: '25-44 balanced gender mix in suburban and hybrid-worker households.',
           prevalencePct: 24,
           keySignals: ['Compares specs and reviews', 'Waits for strategic buys'],
           messagingApproach: 'Anchor on proof, longevity, and value.',
@@ -273,6 +279,7 @@ describe('CulturalArchaeologist', () => {
           name: 'Identity Curators',
           archetype: 'Self-expression seekers',
           profile: 'Use brand choices to communicate niche identity and belonging.',
+          demographicsSnippet: '18-34, creator-led communities, women/non-binary over-index.',
           prevalencePct: 20,
           keySignals: ['Follows micro-communities', 'Picks symbolic brand codes'],
           messagingApproach: 'Highlight identity language and community affinity.',
@@ -281,6 +288,7 @@ describe('CulturalArchaeologist', () => {
           name: 'Ethical Evaluators',
           archetype: 'Values-led decision makers',
           profile: 'Prioritize sustainability and brand transparency.',
+          demographicsSnippet: '24-40, college-educated metros, mixed-gender values-led purchasers.',
           prevalencePct: 16,
           keySignals: ['Researches sourcing practices', 'Penalizes performative claims'],
           messagingApproach: 'Show traceable commitments and accountability.',
@@ -299,6 +307,8 @@ describe('CulturalArchaeologist', () => {
     expect(await screen.findByTestId('segmentation-tab-panel')).toBeInTheDocument();
     expect(screen.queryByTestId('segmentation-password-panel')).not.toBeInTheDocument();
     expect(await screen.findByText('Regression signals show distinct motivation clusters.')).toBeInTheDocument();
+    expect((await screen.findAllByText('Demographics')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('18-29, women-leaning, multicultural urban cores.')).toBeInTheDocument();
     expect((await screen.findAllByTestId('segmentation-evidence-chip-known')).length).toBeGreaterThan(0);
     expect((await screen.findAllByTestId('segmentation-evidence-chip-inferred')).length).toBeGreaterThan(0);
     expect((await screen.findAllByTestId('segmentation-evidence-chip-speculative')).length).toBeGreaterThan(0);
