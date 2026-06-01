@@ -1665,6 +1665,24 @@ export default function CulturalArchaeologist() {
 
   const handleAskQuestion = async () => {
     if (!matrix || !matrixQuestion.trim()) return;
+
+    if (isSegmentationTabActive && isSegmentationAuthorized) {
+      const refinementPrompt = matrixQuestion.trim();
+      setIsAskingQuestion(true);
+      setMatrixAnswer('');
+      setHighlightedInsights([]);
+      try {
+        await runSegmentationAnalysis(displayMatrix || matrix, { refinementPrompt });
+        console.log('[CulturalArchaeologist] Segmentation refined via Ask prompt.', {
+          refinementPrompt,
+        });
+        setToast('Segmentation updated from Ask prompt.');
+      } finally {
+        setIsAskingQuestion(false);
+      }
+      return;
+    }
+
     setIsAskingQuestion(true);
     try {
       const result = await runUserAction({
@@ -1795,16 +1813,27 @@ export default function CulturalArchaeologist() {
     launchSegmentationWorkspaceTab(true);
   };
 
-  const runSegmentationAnalysis = async (matrixForSegmentation: CulturalMatrix) => {
+  const runSegmentationAnalysis = async (
+    matrixForSegmentation: CulturalMatrix,
+    options?: { refinementPrompt?: string }
+  ) => {
     if (!matrixMeta) {
       console.log('[CulturalArchaeologist] Segmentation generation skipped because matrix metadata is missing.');
       return;
     }
 
+    const refinementPrompt = (options?.refinementPrompt || '').trim();
+    const segmentationTopicFocus = [
+      (matrixMeta.topicFocus || '').trim(),
+      refinementPrompt ? `Segmentation refinement request: ${refinementPrompt}` : '',
+    ].filter(Boolean).join(' | ');
+
     console.log('[CulturalArchaeologist] Running segmentation analysis from tab.', {
       audience: matrixMeta.audience,
       brand: matrixMeta.brand,
       generations: matrixMeta.generations,
+      topicFocus: segmentationTopicFocus,
+      refinementPrompt,
       confidenceFilters: selectedConfidenceFilters,
       evidenceFilters: selectedEvidenceFilters,
       trendStageFilters: selectedTrendStageFilters,
@@ -1822,7 +1851,7 @@ export default function CulturalArchaeologist() {
           generateAudienceSegmentation(matrixForSegmentation, {
             audience: matrixMeta.audience,
             brand: matrixMeta.brand,
-            topicFocus: matrixMeta.topicFocus,
+            topicFocus: segmentationTopicFocus,
             generations: matrixMeta.generations,
             sourcesType: matrixMeta.sourcesType,
           }),

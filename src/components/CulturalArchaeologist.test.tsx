@@ -360,6 +360,32 @@ describe('CulturalArchaeologist', () => {
     expect(latestMatrixArg?.moments?.[0]?.text).toContain('High confidence signal');
   });
 
+  it('uses Ask the Archaeologist prompt to refine segmentation when segmentation tab is active', async () => {
+    const workspaceId = 'workspace-ask-refine-segmentation';
+    window.localStorage.setItem(
+      `${SEGMENTATION_WORKSPACE_STORAGE_PREFIX}${workspaceId}`,
+      JSON.stringify(createSegmentationWorkspaceSnapshot({ isSegmentationAuthorized: true }))
+    );
+    window.history.pushState({}, '', `/?segmentation_workspace=${workspaceId}#cultural-archaeologist`);
+
+    render(<CulturalArchaeologist />);
+    expect(await screen.findByTestId('segmentation-tab-panel')).toBeInTheDocument();
+    await screen.findByTestId('segmentation-result-state');
+
+    const askInput = await screen.findByPlaceholderText(/Ask a question about this audience/i);
+    fireEvent.change(askInput, { target: { value: 'Refine segments to separate budget-driven shoppers from convenience-driven shoppers.' } });
+    fireEvent.click(screen.getByRole('button', { name: /^ask$/i }));
+
+    await waitFor(() => {
+      expect(generateAudienceSegmentation).toHaveBeenCalledTimes(2);
+    });
+    expect(askMatrixQuestion).not.toHaveBeenCalled();
+
+    const latestSegmentationContextArg = generateAudienceSegmentation.mock.calls[1]?.[1];
+    expect(latestSegmentationContextArg?.topicFocus).toContain('Segmentation refinement request');
+    expect(latestSegmentationContextArg?.topicFocus).toContain('budget-driven shoppers');
+  });
+
   it('auto-scrolls to the segmentation workspace when a workspace tab opens', async () => {
     const workspaceId = 'workspace-autoscroll';
     window.localStorage.setItem(
