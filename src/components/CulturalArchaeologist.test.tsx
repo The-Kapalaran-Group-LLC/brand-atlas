@@ -225,7 +225,7 @@ describe('CulturalArchaeologist', () => {
     expect(openSpy).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByTestId('segmentation-password-popout-input'), {
-      target: { value: 'segmentation2026' },
+      target: { value: 'segment2026' },
     });
     fireEvent.click(screen.getByTestId('segmentation-password-popout-submit-button'));
 
@@ -384,6 +384,72 @@ describe('CulturalArchaeologist', () => {
     const latestSegmentationContextArg = generateAudienceSegmentation.mock.calls[1]?.[1];
     expect(latestSegmentationContextArg?.topicFocus).toContain('Segmentation refinement request');
     expect(latestSegmentationContextArg?.topicFocus).toContain('budget-driven shoppers');
+  });
+
+  it('shows an Original Segments anchor after Ask refinement and restores the original segmentation when clicked', async () => {
+    const workspaceId = 'workspace-segmentation-revert-original';
+    generateAudienceSegmentation
+      .mockResolvedValueOnce({
+        regressionSummary: 'Original segmentation summary.',
+        confidenceNotes: 'Original segmentation confidence notes.',
+        segments: [
+          {
+            name: 'Original Segment Alpha',
+            archetype: 'Original archetype',
+            profile: 'Original profile narrative.',
+            demographicsSnippet: 'Original demographic snapshot.',
+            prevalencePct: 52,
+            keySignals: ['Original signal 1', 'Original signal 2'],
+            messagingApproach: 'Original messaging approach.',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        regressionSummary: 'Refined segmentation summary.',
+        confidenceNotes: 'Refined segmentation confidence notes.',
+        segments: [
+          {
+            name: 'Refined Segment Omega',
+            archetype: 'Refined archetype',
+            profile: 'Refined profile narrative.',
+            demographicsSnippet: 'Refined demographic snapshot.',
+            prevalencePct: 48,
+            keySignals: ['Refined signal 1', 'Refined signal 2'],
+            messagingApproach: 'Refined messaging approach.',
+          },
+        ],
+      });
+
+    window.localStorage.setItem(
+      `${SEGMENTATION_WORKSPACE_STORAGE_PREFIX}${workspaceId}`,
+      JSON.stringify(createSegmentationWorkspaceSnapshot({ isSegmentationAuthorized: true }))
+    );
+    window.history.pushState({}, '', `/?segmentation_workspace=${workspaceId}#cultural-archaeologist`);
+
+    render(<CulturalArchaeologist />);
+    expect(await screen.findByTestId('segmentation-tab-panel')).toBeInTheDocument();
+    await screen.findByTestId('segmentation-result-state');
+    expect(screen.getByText('Original Segment Alpha')).toBeInTheDocument();
+    expect(screen.queryByTestId('segmentation-revert-original-button')).not.toBeInTheDocument();
+
+    const askInput = await screen.findByPlaceholderText(/Ask a question about this audience/i);
+    fireEvent.change(askInput, { target: { value: 'Refine for two sharper behavioral cohorts.' } });
+    fireEvent.click(screen.getByRole('button', { name: /^ask$/i }));
+
+    await waitFor(() => {
+      expect(generateAudienceSegmentation).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByText('Refined Segment Omega')).toBeInTheDocument();
+    const originalSegmentsButton = await screen.findByTestId('segmentation-revert-original-button');
+    expect(originalSegmentsButton).toHaveTextContent(/Original Segments/i);
+
+    fireEvent.click(originalSegmentsButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Original Segment Alpha')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Refined Segment Omega')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('segmentation-revert-original-button')).not.toBeInTheDocument();
   });
 
   it('auto-scrolls to the segmentation workspace when a workspace tab opens', async () => {

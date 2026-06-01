@@ -141,7 +141,7 @@ const CULTURAL_ARCHAEOLOGIST_TABLE_CANDIDATES = [CULTURAL_ARCHAEOLOGIST_TABLE, '
 const TREND_STAGE_FILTERS: TrendStageFilter[] = ['peaking', 'emerging', 'declining'];
 const CULTURAL_ARCHAEOLOGIST_SHOW_THINKING_TEXT = 'Applied retrieval-grounded synthesis: collected language, behavior, and community artifacts, clustered recurring motifs and tensions, and generated a structured cultural map with source-grounded claims.';
 const RESULTS_COMPLETE_SOUND_ID: CompletionSoundId = 'classic-chime';
-const SEGMENTATION_PASSWORD = 'segmentation2026';
+const SEGMENTATION_PASSWORD = 'segment2026';
 const SEGMENTATION_PASSWORD_SUPPORT_COPY = 'Contact Your Administrator for More Information.';
 const SEGMENTATION_WORKSPACE_QUERY_PARAM = 'segmentation_workspace';
 const SEGMENTATION_WORKSPACE_STORAGE_PREFIX = 'cultural_segmentation_workspace:';
@@ -634,6 +634,8 @@ export default function CulturalArchaeologist() {
   const [isSegmentationAuthorized, setIsSegmentationAuthorized] = useState(false);
   const [isSegmentationLoading, setIsSegmentationLoading] = useState(false);
   const [segmentationResult, setSegmentationResult] = useState<AudienceSegmentationReport | null>(null);
+  const [originalSegmentationResult, setOriginalSegmentationResult] = useState<AudienceSegmentationReport | null>(null);
+  const [hasPromptRefinedSegmentation, setHasPromptRefinedSegmentation] = useState(false);
   const [segmentationError, setSegmentationError] = useState<string | null>(null);
   const [segmentationPasswordInput, setSegmentationPasswordInput] = useState('');
   const [segmentationPasswordError, setSegmentationPasswordError] = useState<string | null>(null);
@@ -993,6 +995,8 @@ export default function CulturalArchaeologist() {
     setIsSegmentationAuthorized(hydratedSegmentationAccess);
     setIsSegmentationLoading(false);
     setSegmentationResult(null);
+    setOriginalSegmentationResult(null);
+    setHasPromptRefinedSegmentation(false);
     setSegmentationError(null);
     setSegmentationPasswordInput('');
     setSegmentationPasswordError(null);
@@ -1331,6 +1335,8 @@ export default function CulturalArchaeologist() {
     setIsSegmentationAuthorized(false);
     setIsSegmentationLoading(false);
     setSegmentationResult(null);
+    setOriginalSegmentationResult(null);
+    setHasPromptRefinedSegmentation(false);
     setSegmentationError(null);
     setSegmentationPasswordInput('');
     setSegmentationPasswordError(null);
@@ -1676,7 +1682,7 @@ export default function CulturalArchaeologist() {
         console.log('[CulturalArchaeologist] Segmentation refined via Ask prompt.', {
           refinementPrompt,
         });
-        setToast('Segmentation updated from Ask prompt.');
+        setToast('Segmentation updated from prompt.');
       } finally {
         setIsAskingQuestion(false);
       }
@@ -1823,6 +1829,10 @@ export default function CulturalArchaeologist() {
     }
 
     const refinementPrompt = (options?.refinementPrompt || '').trim();
+    const hasRefinementPrompt = refinementPrompt.length > 0;
+    const originalSegmentationCandidate = hasRefinementPrompt
+      ? (originalSegmentationResult || segmentationResult)
+      : null;
     const segmentationTopicFocus = [
       (matrixMeta.topicFocus || '').trim(),
       refinementPrompt ? `Segmentation refinement request: ${refinementPrompt}` : '',
@@ -1840,6 +1850,15 @@ export default function CulturalArchaeologist() {
       sourceFilters: selectedSourceFilters,
       showHighlyUniqueOnly,
     });
+    if (!hasRefinementPrompt) {
+      console.log('[CulturalArchaeologist] Clearing refined segmentation state before non-refinement run.');
+      setOriginalSegmentationResult(null);
+      setHasPromptRefinedSegmentation(false);
+    } else {
+      console.log('[CulturalArchaeologist] Segmentation refinement run detected.', {
+        hasOriginalSegmentationCandidate: Boolean(originalSegmentationCandidate),
+      });
+    }
     setIsSegmentationLoading(true);
     setSegmentationResult(null);
     setSegmentationError(null);
@@ -1857,6 +1876,18 @@ export default function CulturalArchaeologist() {
           }),
       });
       setSegmentationResult(result);
+      if (hasRefinementPrompt && originalSegmentationCandidate) {
+        setOriginalSegmentationResult(originalSegmentationCandidate);
+        setHasPromptRefinedSegmentation(true);
+        console.log('[CulturalArchaeologist] Stored original segmentation result for revert action.');
+      } else if (hasRefinementPrompt) {
+        setOriginalSegmentationResult(null);
+        setHasPromptRefinedSegmentation(false);
+        console.log('[CulturalArchaeologist] No original segmentation result available for revert action after refinement.');
+      } else {
+        setOriginalSegmentationResult(null);
+        setHasPromptRefinedSegmentation(false);
+      }
       console.log('[CulturalArchaeologist] Audience segmentation generated from tab.', {
         segments: result.segments.length,
       });
@@ -1875,6 +1906,19 @@ export default function CulturalArchaeologist() {
     } finally {
       setIsSegmentationLoading(false);
     }
+  };
+
+  const handleRevertToOriginalSegments = () => {
+    if (!originalSegmentationResult) {
+      console.log('[CulturalArchaeologist] Original segmentation revert requested, but no baseline result exists.');
+      return;
+    }
+    console.log('[CulturalArchaeologist] Reverting to original segmentation result from before prompt refinement.');
+    setSegmentationResult(originalSegmentationResult);
+    setOriginalSegmentationResult(null);
+    setHasPromptRefinedSegmentation(false);
+    setSegmentationError(null);
+    setToast('Reverted to original segments.');
   };
 
   const handleSegmentationPasswordSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -2020,14 +2064,26 @@ export default function CulturalArchaeologist() {
         data-testid="segmentation-tab-panel"
         className="mb-8 rounded-3xl border border-zinc-200 bg-white p-5 sm:p-6"
       >
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
-            <Users className="w-5 h-5" />
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-zinc-900">Audience Segmentation</h3>
+              <p className="text-sm text-zinc-500">Regression-style segmentation into 4-6 audience archetypes based on the filtered dataset.</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-xl font-bold text-zinc-900">Audience Segmentation</h3>
-            <p className="text-sm text-zinc-500">Regression-style segmentation into 4-6 audience archetypes based on the filtered dataset.</p>
-          </div>
+          {segmentationResult && hasPromptRefinedSegmentation && (
+            <button
+              type="button"
+              data-testid="segmentation-revert-original-button"
+              onClick={handleRevertToOriginalSegments}
+              className="mt-1 shrink-0 text-xs font-semibold text-indigo-600 underline decoration-indigo-300 underline-offset-2 hover:text-indigo-700"
+            >
+              Original Segments
+            </button>
+          )}
         </div>
 
         {!isSegmentationAuthorized ? (
@@ -2503,10 +2559,12 @@ export default function CulturalArchaeologist() {
       },
     ];
 
-    if ((matrix?.sources || []).length > 0) {
+    const matrixSources = matrix?.sources ?? [];
+
+    if (matrixSources.length > 0) {
       sections.push({
         title: 'Sources',
-        cards: (matrix.sources || []).slice(0, 24).map((source) => ({
+        cards: matrixSources.slice(0, 24).map((source) => ({
           title: source.title,
           lines: [source.url],
         })),
