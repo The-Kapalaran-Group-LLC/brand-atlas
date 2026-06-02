@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronDown, Database, ExternalLink, Info, Loader2, RefreshCw, Search, Shield, WandSparkles } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Database, ExternalLink, FileText, Info, Loader2, Presentation, RefreshCw, Search, Shield, WandSparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { BrandDeepDiveReport, BrandResearchMatrix, CulturalMatrix, DeepDiveReport, MatrixItem, Source } from '../services/azure-openai';
 import { supabase } from '../services/supabase-client';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
 import { SourceLinkRow } from './SourceLinkRow';
 import { toSafeExternalHref } from '../services/external-links';
+import { normalizeAppError } from '../services/api-errors';
+import { buildExportFileBase } from '../services/export-filenames';
+import { exportElementRefToPdf, exportElementRefToPptx, withVisualExportErrorHandling } from '../services/visual-export';
 
 type AdminMode = 'cultural' | 'brand' | 'design';
 
@@ -76,6 +79,25 @@ const CULTURAL_SECTIONS: Array<{ key: CulturalSectionKey; label: string }> = [
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
+const parseJsonValue = (value: unknown): unknown => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (!trimmed || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) {
+    return value;
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+};
+
+const toRecordValue = (value: unknown): Record<string, unknown> | null => {
+  const parsed = parseJsonValue(value);
+  return isRecord(parsed) ? parsed : null;
+};
+
 const toStringValue = (value: unknown): string => {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
@@ -83,8 +105,9 @@ const toStringValue = (value: unknown): string => {
 };
 
 const toStringList = (value: unknown): string[] => {
-  if (!Array.isArray(value)) return [];
-  return value
+  const parsed = parseJsonValue(value);
+  if (!Array.isArray(parsed)) return [];
+  return parsed
     .map((item) => {
       if (typeof item === 'string') return item.trim();
       if (typeof item === 'number' || typeof item === 'boolean') return String(item);
@@ -97,12 +120,14 @@ const toStringList = (value: unknown): string[] => {
 };
 
 const toSourceList = (value: unknown): Source[] => {
-  if (!Array.isArray(value)) return [];
-  return value
+  const parsed = parseJsonValue(value);
+  if (!Array.isArray(parsed)) return [];
+  return parsed
     .map((item) => {
-      if (!isRecord(item)) return null;
-      const title = toStringValue(item.title || item.headline).trim();
-      const url = toStringValue(item.url).trim();
+      const sourceRecord = toRecordValue(item);
+      if (!sourceRecord) return null;
+      const title = toStringValue(sourceRecord.title || sourceRecord.headline).trim();
+      const url = toStringValue(sourceRecord.url).trim();
       if (!title && !url) return null;
       return {
         title: title || 'Source',
@@ -113,14 +138,15 @@ const toSourceList = (value: unknown): Source[] => {
 };
 
 const normalizeDeepDiveReport = (value: unknown): DeepDiveReport | undefined => {
-  if (!isRecord(value)) return undefined;
+  const deepDiveRecord = toRecordValue(value);
+  if (!deepDiveRecord) return undefined;
 
-  const originationDate = toStringValue(value.originationDate || value.origination_date).trim();
-  const relevance = toStringValue(value.relevance).trim();
-  const expandedContext = toStringValue(value.expandedContext || value.expanded_context).trim();
-  const strategicImplications = toStringList(value.strategicImplications || value.strategic_implications);
-  const realWorldExamples = toStringList(value.realWorldExamples || value.real_world_examples);
-  const sources = toSourceList(value.sources);
+  const originationDate = toStringValue(deepDiveRecord.originationDate || deepDiveRecord.origination_date).trim();
+  const relevance = toStringValue(deepDiveRecord.relevance).trim();
+  const expandedContext = toStringValue(deepDiveRecord.expandedContext || deepDiveRecord.expanded_context).trim();
+  const strategicImplications = toStringList(deepDiveRecord.strategicImplications || deepDiveRecord.strategic_implications);
+  const realWorldExamples = toStringList(deepDiveRecord.realWorldExamples || deepDiveRecord.real_world_examples);
+  const sources = toSourceList(deepDiveRecord.sources);
 
   if (!originationDate && !relevance && !expandedContext && strategicImplications.length === 0 && realWorldExamples.length === 0 && sources.length === 0) {
     return undefined;
@@ -153,16 +179,18 @@ const toTrendLifecycle = (value: unknown): MatrixItem['trendLifecycle'] | undefi
 };
 
 const normalizeMatrixItems = (value: unknown): MatrixItem[] => {
-  if (!Array.isArray(value)) return [];
+  const parsed = parseJsonValue(value);
+  if (!Array.isArray(parsed)) return [];
 
-  return value
+  return parsed
     .map((item) => {
-      if (!isRecord(item)) return null;
+      const itemRecord = toRecordValue(item);
+      if (!itemRecord) return null;
 
-      const deepDive = normalizeDeepDiveReport(item.deepDive || item.deep_dive);
-      const text = toStringValue(item.text).trim();
-      const sourceType = toStringValue(item.sourceType || item.source_type).trim();
-      const backgroundWriteup = toStringValue(item.backgroundWriteup || item.background_writeup).trim();
+      const deepDive = normalizeDeepDiveReport(itemRecord.deepDive || itemRecord.deep_dive);
+      const text = toStringValue(itemRecord.text).trim();
+      const sourceType = toStringValue(itemRecord.sourceType || itemRecord.source_type).trim();
+      const backgroundWriteup = toStringValue(itemRecord.backgroundWriteup || itemRecord.background_writeup).trim();
 
       if (!text && !deepDive && !backgroundWriteup) {
         return null;
@@ -170,13 +198,13 @@ const normalizeMatrixItems = (value: unknown): MatrixItem[] => {
 
       return {
         text: text || 'N/A',
-        isHighlyUnique: Boolean(item.isHighlyUnique || item.is_highly_unique),
-        isFromDocument: typeof item.isFromDocument === 'boolean'
-          ? item.isFromDocument
-          : (typeof item.is_from_document === 'boolean' ? item.is_from_document : undefined),
+        isHighlyUnique: Boolean(itemRecord.isHighlyUnique || itemRecord.is_highly_unique),
+        isFromDocument: typeof itemRecord.isFromDocument === 'boolean'
+          ? itemRecord.isFromDocument
+          : (typeof itemRecord.is_from_document === 'boolean' ? itemRecord.is_from_document : undefined),
         sourceType: sourceType || undefined,
-        confidenceLevel: toConfidenceLevel(item.confidenceLevel || item.confidence_level),
-        trendLifecycle: toTrendLifecycle(item.trendLifecycle || item.trend_lifecycle),
+        confidenceLevel: toConfidenceLevel(itemRecord.confidenceLevel || itemRecord.confidence_level),
+        trendLifecycle: toTrendLifecycle(itemRecord.trendLifecycle || itemRecord.trend_lifecycle),
         deepDive,
         backgroundWriteup: backgroundWriteup || undefined,
       } as MatrixItem;
@@ -272,14 +300,33 @@ const renderEvidenceInlineText = (value?: string | null, keyPrefix = 'inline'): 
   );
 };
 
+const hasCulturalPayloadSignals = (value: Record<string, unknown>): boolean => {
+  const hasSections = CULTURAL_SECTIONS.some((section) => Array.isArray(parseJsonValue(value[section.key])));
+  if (hasSections) return true;
+  if (Boolean(toStringValue(value.sociological_analysis || value.sociologicalAnalysis).trim())) return true;
+  if (toRecordValue(value.demographics)) return true;
+  if (Array.isArray(parseJsonValue(value.sources))) return true;
+  return false;
+};
+
 const normalizeCulturalMatrix = (row: Record<string, unknown>): CulturalMatrix | null => {
-  const matrixCandidate = (isRecord(row.matrix) ? row.matrix : null)
-    || (isRecord(row.results) ? row.results : null)
-    || row;
+  const matrixCandidate = (() => {
+    const matrixRecord = toRecordValue(row.matrix);
+    const matrixNestedResults = matrixRecord ? toRecordValue(matrixRecord.results) : null;
+    if (matrixNestedResults && hasCulturalPayloadSignals(matrixNestedResults)) return matrixNestedResults;
+    if (matrixRecord && hasCulturalPayloadSignals(matrixRecord)) return matrixRecord;
+
+    const resultsRecord = toRecordValue(row.results);
+    const resultsNestedMatrix = resultsRecord ? toRecordValue(resultsRecord.matrix) : null;
+    if (resultsNestedMatrix && hasCulturalPayloadSignals(resultsNestedMatrix)) return resultsNestedMatrix;
+    if (resultsRecord && hasCulturalPayloadSignals(resultsRecord)) return resultsRecord;
+
+    return hasCulturalPayloadSignals(row) ? row : null;
+  })();
 
   if (!isRecord(matrixCandidate)) return null;
 
-  const demographicsSource = isRecord(matrixCandidate.demographics) ? matrixCandidate.demographics : {};
+  const demographicsSource = toRecordValue(matrixCandidate.demographics) || {};
   const matrix: CulturalMatrix = {
     demographics: {
       age: toStringValue(demographicsSource.age) || null,
@@ -552,63 +599,79 @@ const renderCulturalMatrixItems = (items: MatrixItem[], keyPrefix: string) => {
             </div>
 
             {(item.deepDive || item.backgroundWriteup) && (
-              <div
-                className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3"
-                data-testid={`admin-cultural-deep-dive-${keyPrefix}-${index}`}
+              <details
+                className="group mt-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3"
+                data-testid={`admin-cultural-deep-dive-collapsible-${keyPrefix}-${index}`}
+                onToggle={(event) => {
+                  const nextOpen = event.currentTarget.open;
+                  console.log('[AdminPage] Toggling cultural insight deep dive.', {
+                    keyPrefix,
+                    index,
+                    nextOpen,
+                  });
+                }}
               >
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-700">Insight Deep Dive</p>
+                <summary
+                  data-testid={`admin-cultural-deep-dive-toggle-${keyPrefix}-${index}`}
+                  className="flex cursor-pointer list-none items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-wider text-indigo-700 [&::-webkit-details-marker]:hidden"
+                >
+                  <span>Insight Deep Dive</span>
+                  <ChevronDown className="h-3.5 w-3.5 text-indigo-500 transition-transform duration-200 ease-out group-open:rotate-180" />
+                </summary>
 
-                {item.deepDive?.originationDate && (
-                  <p className="mt-1 text-xs text-zinc-600">
-                    <span className="font-medium">Originated:</span> {item.deepDive.originationDate}
-                  </p>
-                )}
-
-                {item.deepDive?.relevance && (
-                  <p className="mt-2 text-sm text-zinc-700 leading-relaxed">
-                    <span className="font-medium">Relevance:</span> {renderEvidenceInlineText(item.deepDive.relevance, `${keyPrefix}-deep-relevance-${index}`)}
-                  </p>
-                )}
-
-                {item.deepDive?.expandedContext && (
-                  <div className="mt-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Expanded Context</p>
-                    <p className="mt-1 text-sm text-zinc-700 leading-relaxed">
-                      {renderEvidenceInlineText(item.deepDive.expandedContext, `${keyPrefix}-deep-context-${index}`)}
+                <div className="mt-3">
+                  {item.deepDive?.originationDate && (
+                    <p className="mt-1 text-xs text-zinc-600">
+                      <span className="font-medium">Originated:</span> {item.deepDive.originationDate}
                     </p>
-                  </div>
-                )}
+                  )}
 
-                {item.backgroundWriteup && (
-                  <div className="mt-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Background Writeup</p>
-                    <p className="mt-1 text-sm text-zinc-700 leading-relaxed">
-                      {renderEvidenceInlineText(item.backgroundWriteup, `${keyPrefix}-deep-background-${index}`)}
+                  {item.deepDive?.relevance && (
+                    <p className="mt-2 text-sm text-zinc-700 leading-relaxed">
+                      <span className="font-medium">Relevance:</span> {renderEvidenceInlineText(item.deepDive.relevance, `${keyPrefix}-deep-relevance-${index}`)}
                     </p>
-                  </div>
-                )}
+                  )}
 
-                {(item.deepDive?.realWorldExamples || []).length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Real World Examples</p>
-                    <div className="mt-1">{renderSimpleList(item.deepDive?.realWorldExamples || [], 'No examples listed.', `${keyPrefix}-deep-examples-${index}`)}</div>
-                  </div>
-                )}
+                  {item.deepDive?.expandedContext && (
+                    <div className="mt-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Expanded Context</p>
+                      <p className="mt-1 text-sm text-zinc-700 leading-relaxed">
+                        {renderEvidenceInlineText(item.deepDive.expandedContext, `${keyPrefix}-deep-context-${index}`)}
+                      </p>
+                    </div>
+                  )}
 
-                {(item.deepDive?.strategicImplications || []).length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Strategic Implications</p>
-                    <div className="mt-1">{renderSimpleList(item.deepDive?.strategicImplications || [], 'No implications listed.', `${keyPrefix}-deep-implications-${index}`)}</div>
-                  </div>
-                )}
+                  {item.backgroundWriteup && (
+                    <div className="mt-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Background Writeup</p>
+                      <p className="mt-1 text-sm text-zinc-700 leading-relaxed">
+                        {renderEvidenceInlineText(item.backgroundWriteup, `${keyPrefix}-deep-background-${index}`)}
+                      </p>
+                    </div>
+                  )}
 
-                {(item.deepDive?.sources || []).length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Sources</p>
-                    <div className="mt-1">{renderSources(item.deepDive?.sources || [])}</div>
-                  </div>
-                )}
-              </div>
+                  {(item.deepDive?.realWorldExamples || []).length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Real World Examples</p>
+                      <div className="mt-1">{renderSimpleList(item.deepDive?.realWorldExamples || [], 'No examples listed.', `${keyPrefix}-deep-examples-${index}`)}</div>
+                    </div>
+                  )}
+
+                  {(item.deepDive?.strategicImplications || []).length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Strategic Implications</p>
+                      <div className="mt-1">{renderSimpleList(item.deepDive?.strategicImplications || [], 'No implications listed.', `${keyPrefix}-deep-implications-${index}`)}</div>
+                    </div>
+                  )}
+
+                  {(item.deepDive?.sources || []).length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Sources</p>
+                      <div className="mt-1">{renderSources(item.deepDive?.sources || [])}</div>
+                    </div>
+                  )}
+                </div>
+              </details>
             )}
           </li>
         );
@@ -650,7 +713,8 @@ const renderSourcesSection = (sources: Source[], sectionId: string) => {
 };
 
 export default function AdminPage({ onBack }: { onBack?: () => void }) {
-  const [mode, setMode] = useState<AdminMode>('brand');
+  const exportCaptureRef = useRef<HTMLDivElement>(null);
+  const [mode, setMode] = useState<AdminMode>('cultural');
   const [activeTableName, setActiveTableName] = useState<string>('');
   const [projects, setProjects] = useState<AdminProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
@@ -660,6 +724,9 @@ export default function AdminPage({ onBack }: { onBack?: () => void }) {
   const [isJsonPanelOpen, setIsJsonPanelOpen] = useState(false);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isLoadingRow, setIsLoadingRow] = useState(false);
+  const [isExportingPptx, setIsExportingPptx] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [exportError, setExportError] = useState<{ type: 'pptx' | 'pdf'; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const projectsLoadRequestRef = useRef(0);
 
@@ -880,6 +947,90 @@ export default function AdminPage({ onBack }: { onBack?: () => void }) {
     }
   };
 
+  const getExportFileBase = (): string => {
+    const fallbackBase = `Admin_${modeConfig.label.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`;
+    if (!preview?.data) {
+      return fallbackBase;
+    }
+
+    if (preview.type === 'cultural') {
+      const audience = toStringValue(selectedRow?.audience || selectedRow?.demographic || selectedRow?.custom_name);
+      return buildExportFileBase(audience, fallbackBase);
+    }
+
+    if (preview.type === 'brand') {
+      const leadBrand = preview.data.results[0]?.brandName || toStringValue(selectedRow?.brand || selectedRow?.custom_name);
+      return buildExportFileBase(leadBrand, fallbackBase);
+    }
+
+    const leadBrand = preview.data.brandProfiles[0]?.brandName || toStringValue(selectedRow?.brand || selectedRow?.custom_name);
+    return buildExportFileBase(leadBrand, fallbackBase);
+  };
+
+  const exportToPptx = async () => {
+    if (!preview?.data) {
+      console.log('[AdminPage] Blocked PPTX export because no parsed preview is available.');
+      setExportError({ type: 'pptx', message: 'No parsed results are available to export yet. Load a valid row first.' });
+      return;
+    }
+
+    setExportError(null);
+    setIsExportingPptx(true);
+    const fileName = `${getExportFileBase()}.pptx`;
+    console.log('[AdminPage] Starting admin PPTX export.', { mode, fileName });
+
+    try {
+      await withVisualExportErrorHandling('admin page pptx export', async () => {
+        await exportElementRefToPptx({
+          ref: exportCaptureRef,
+          fileName,
+        });
+      });
+      console.log('[AdminPage] Admin PPTX export completed.', { mode, fileName });
+    } catch (err) {
+      const normalized = normalizeAppError(err);
+      console.log('[AdminPage] Admin PPTX export failed.', {
+        mode,
+        message: normalized.message,
+      });
+      setExportError({ type: 'pptx', message: normalized.message || 'Failed to export PPTX. Please retry.' });
+    } finally {
+      setIsExportingPptx(false);
+    }
+  };
+
+  const exportToPdf = async () => {
+    if (!preview?.data) {
+      console.log('[AdminPage] Blocked PDF export because no parsed preview is available.');
+      setExportError({ type: 'pdf', message: 'No parsed results are available to export yet. Load a valid row first.' });
+      return;
+    }
+
+    setExportError(null);
+    setIsExportingPdf(true);
+    const fileName = `${getExportFileBase()}.pdf`;
+    console.log('[AdminPage] Starting admin PDF export.', { mode, fileName });
+
+    try {
+      await withVisualExportErrorHandling('admin page pdf export', async () => {
+        await exportElementRefToPdf({
+          ref: exportCaptureRef,
+          fileName,
+        });
+      });
+      console.log('[AdminPage] Admin PDF export completed.', { mode, fileName });
+    } catch (err) {
+      const normalized = normalizeAppError(err);
+      console.log('[AdminPage] Admin PDF export failed.', {
+        mode,
+        message: normalized.message,
+      });
+      setExportError({ type: 'pdf', message: normalized.message || 'Failed to export PDF. Please retry.' });
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   return (
     <div data-testid="admin-console" className="w-full">
       <section className="rounded-3xl border border-zinc-200 bg-white p-5 md:p-6 shadow-sm">
@@ -1067,6 +1218,62 @@ export default function AdminPage({ onBack }: { onBack?: () => void }) {
 
       <SectionErrorBoundary title="Admin Report Preview">
         <section data-testid="admin-report-preview" className="mt-6 rounded-3xl border border-zinc-200 bg-white p-5 md:p-6 shadow-sm">
+          {selectedRow && preview?.data && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-zinc-50/70 px-3 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Download Full Reconstructed Results</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  data-testid="admin-export-pptx-button"
+                  onClick={() => {
+                    void exportToPptx();
+                  }}
+                  disabled={isExportingPptx || isExportingPdf}
+                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                >
+                  {isExportingPptx ? <Loader2 className="h-4 w-4 animate-spin" /> : <Presentation className="h-4 w-4" />}
+                  {isExportingPptx ? 'Exporting PPTX...' : 'Export PPTX'}
+                </button>
+                <button
+                  type="button"
+                  data-testid="admin-export-pdf-button"
+                  onClick={() => {
+                    void exportToPdf();
+                  }}
+                  disabled={isExportingPptx || isExportingPdf}
+                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                >
+                  {isExportingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                  {isExportingPdf ? 'Exporting PDF...' : 'Export PDF'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {exportError && (
+            <div data-testid="admin-export-error" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <p>{exportError.message}</p>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  data-testid="admin-export-retry-button"
+                  onClick={() => {
+                    if (exportError.type === 'pptx') {
+                      void exportToPptx();
+                      return;
+                    }
+                    void exportToPdf();
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-200"
+                >
+                  Retry Export
+                </button>
+                <p className="text-xs text-amber-700">Recovery option: confirm the preview is loaded and try exporting again.</p>
+              </div>
+            </div>
+          )}
+
+          <div ref={exportCaptureRef} data-testid="admin-export-capture-root" data-export-capture-root="1">
           {!selectedRow && (
             <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center">
               <Database className="mx-auto h-6 w-6 text-zinc-400" />
@@ -1410,6 +1617,7 @@ export default function AdminPage({ onBack }: { onBack?: () => void }) {
               <p className="mt-1">Recovery options: switch report type, try a different row ID, or paste a full row JSON that includes the report payload fields.</p>
             </div>
           )}
+          </div>
         </section>
       </SectionErrorBoundary>
     </div>

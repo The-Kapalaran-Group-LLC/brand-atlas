@@ -6,6 +6,12 @@ const { supabaseFrom } = vi.hoisted(() => ({
   supabaseFrom: vi.fn(),
 }));
 
+const { exportElementRefToPptx, exportElementRefToPdf, withVisualExportErrorHandling } = vi.hoisted(() => ({
+  exportElementRefToPptx: vi.fn(async () => {}),
+  exportElementRefToPdf: vi.fn(async () => {}),
+  withVisualExportErrorHandling: vi.fn(async (_taskName: string, fn: () => Promise<void>) => fn()),
+}));
+
 const makeBuilder = (tableName: string) => {
   const state: { eqId: string | null } = { eqId: null };
   const builder: any = {
@@ -91,9 +97,22 @@ vi.mock('../services/supabase-client', () => ({
   },
 }));
 
+vi.mock('../services/visual-export', () => ({
+  exportElementRefToPptx,
+  exportElementRefToPdf,
+  withVisualExportErrorHandling,
+}));
+
 describe('AdminPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('defaults report type to Cultural Archaeologist', async () => {
+    render(<AdminPage />);
+
+    const modeSelect = await screen.findByTestId('admin-mode-select');
+    expect(modeSelect).toHaveValue('cultural');
   });
 
   it('keeps the pasted JSON option collapsed by default and expands on toggle', async () => {
@@ -192,6 +211,66 @@ describe('AdminPage', () => {
     expect((await screen.findAllByTestId('admin-evidence-chip-speculative')).length).toBeGreaterThan(0);
   });
 
+  it('shows PDF and PPTX export buttons when a valid preview is loaded', async () => {
+    render(<AdminPage />);
+
+    fireEvent.change(screen.getByTestId('admin-mode-select'), { target: { value: 'design' } });
+    fireEvent.click(screen.getByTestId('admin-json-toggle-button'));
+    fireEvent.change(screen.getByTestId('admin-json-row-input'), {
+      target: {
+        value: JSON.stringify({
+          id: 'dx-export-1',
+          report: {
+            analysisObjective: 'Visual compare',
+            ecosystemMethod: 'test',
+            brandProfiles: [
+              {
+                brandName: 'Apple',
+                website: 'https://apple.com',
+                sampleVisuals: [],
+                logo: {
+                  mainLogo: 'Wordmark + symbol',
+                  logoVariations: [],
+                  wordmarkLogotype: 'Apple wordmark',
+                  symbolsIcons: ['Apple icon'],
+                },
+                colorPalette: {
+                  primaryColors: [{ name: 'Black', hex: '#000000' }],
+                  secondaryAccentColors: [],
+                  neutrals: [{ name: 'White', hex: '#FFFFFF' }],
+                },
+                typography: {
+                  fontFamilies: ['SF Pro'],
+                  hierarchy: { h1: 'Bold', h2: 'Semibold', body: 'Regular' },
+                  usageRules: [],
+                },
+                supportingVisualElements: {
+                  imageryStyle: ['Product-first'],
+                  icons: [],
+                  patternsTextures: [],
+                  shapes: [],
+                  dataVisualization: [],
+                },
+                consistencyAssessment: 'Consistent',
+                distinctivenessAssessment: 'High',
+                sources: [],
+              },
+            ],
+            crossBrandReadout: ['Minimalism wins'],
+            strategicRecommendations: ['Keep product-led visual system'],
+            sources: [],
+          },
+        }),
+      },
+    });
+
+    fireEvent.click(screen.getByTestId('admin-render-json-button'));
+
+    expect(await screen.findByTestId('admin-report-preview')).toBeInTheDocument();
+    expect(await screen.findByTestId('admin-export-pptx-button')).toBeInTheDocument();
+    expect(await screen.findByTestId('admin-export-pdf-button')).toBeInTheDocument();
+  });
+
   it('renders cultural observation deep dives when they exist in the row payload', async () => {
     render(<AdminPage />);
 
@@ -240,10 +319,72 @@ describe('AdminPage', () => {
 
     fireEvent.click(screen.getByTestId('admin-render-json-button'));
 
+    const deepDiveDetails = await screen.findByTestId('admin-cultural-deep-dive-collapsible-cultural-moments-0');
+    expect(deepDiveDetails).not.toHaveAttribute('open');
     expect(await screen.findByText('Insight Deep Dive')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('admin-cultural-deep-dive-toggle-cultural-moments-0'));
+
+    expect(deepDiveDetails).toHaveAttribute('open');
     expect(await screen.findByText('Expanded Context')).toBeInTheDocument();
     expect(await screen.findByText('Strategic Implications')).toBeInTheDocument();
     expect(await screen.findByText('Reddit trend thread')).toBeInTheDocument();
     expect((await screen.findAllByTestId('admin-evidence-chip-speculative')).length).toBeGreaterThan(0);
+  });
+
+  it('renders nested legacy cultural payloads from results.matrix', async () => {
+    render(<AdminPage />);
+
+    fireEvent.change(screen.getByTestId('admin-mode-select'), { target: { value: 'cultural' } });
+    fireEvent.click(screen.getByTestId('admin-json-toggle-button'));
+    fireEvent.change(screen.getByTestId('admin-json-row-input'), {
+      target: {
+        value: JSON.stringify({
+          id: 'ca-legacy-1',
+          results: {
+            matrix: {
+              demographics: {
+                age: '25-40',
+                race: 'Mixed',
+                gender: 'Women',
+              },
+              sociological_analysis: 'Legacy nested payload shape.',
+              moments: [
+                {
+                  text: 'Legacy row insight.',
+                  deep_dive: {
+                    origination_date: '2025-12-01',
+                    relevance: 'Still relevant.',
+                    expanded_context: 'Saved under snake_case deep dive keys.',
+                    strategic_implications: ['Use legacy-safe parser logic.'],
+                    real_world_examples: ['Old row still renders.'],
+                    sources: [{ title: 'Archive Source', url: 'https://example.com/archive' }],
+                  },
+                },
+              ],
+              beliefs: [],
+              tone: [],
+              language: [],
+              behaviors: [],
+              contradictions: [],
+              community: [],
+              influencers: [],
+              sources: [],
+            },
+          },
+        }),
+      },
+    });
+
+    fireEvent.click(screen.getByTestId('admin-render-json-button'));
+
+    expect(await screen.findByTestId('admin-preview-cultural')).toBeInTheDocument();
+    const deepDiveDetails = await screen.findByTestId('admin-cultural-deep-dive-collapsible-cultural-moments-0');
+    expect(deepDiveDetails).not.toHaveAttribute('open');
+
+    fireEvent.click(screen.getByTestId('admin-cultural-deep-dive-toggle-cultural-moments-0'));
+
+    expect(await screen.findByText('Expanded Context')).toBeInTheDocument();
+    expect(await screen.findByText('Archive Source')).toBeInTheDocument();
   });
 });
