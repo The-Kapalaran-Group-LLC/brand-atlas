@@ -8,7 +8,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { resolveRootView } from './services/navigation-routes';
 import './index.css';
 
-function RootRouter() {
+export function RootRouter() {
   const [locationState, setLocationState] = useState(() => ({
     pathname: window.location.pathname,
     hash: window.location.hash,
@@ -44,16 +44,11 @@ function RootRouter() {
 
   const showBrandNavigator = rootView === 'brand-navigator';
 
-  return (
-    <>
-      <div style={{ display: showBrandNavigator ? 'block' : 'none' }}>
-        <BrandNavigator />
-      </div>
-      <div style={{ display: showBrandNavigator ? 'none' : 'block' }}>
-        <App />
-      </div>
-    </>
-  );
+  if (showBrandNavigator) {
+    return <BrandNavigator />;
+  }
+
+  return <App />;
 }
 
 createRoot(document.getElementById('root')!).render(

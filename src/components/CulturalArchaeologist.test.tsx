@@ -11,6 +11,9 @@ const {
   generateAudienceSegmentation,
   supabaseFrom,
   supabaseInsert,
+  supabaseUpdate,
+  supabaseMaybeSingle,
+  supabaseEq,
   supabaseLimit,
 } = vi.hoisted(() => ({
   generateCulturalMatrix: vi.fn(),
@@ -20,7 +23,10 @@ const {
   generateDeepDivesBatch: vi.fn(),
   generateAudienceSegmentation: vi.fn(),
   supabaseFrom: vi.fn(),
-  supabaseInsert: vi.fn(async () => ({ data: null, error: null })),
+  supabaseInsert: vi.fn(),
+  supabaseUpdate: vi.fn(),
+  supabaseMaybeSingle: vi.fn(async () => ({ data: { id: 'saved-row-id' }, error: null })),
+  supabaseEq: vi.fn(async () => ({ data: null, error: null })),
   supabaseLimit: vi.fn(async () => ({ data: [], error: null })),
 }));
 
@@ -48,9 +54,11 @@ vi.mock('../services/supabase-client', () => ({
       builder.select = vi.fn(() => builder);
       builder.order = vi.fn(() => builder);
       builder.limit = supabaseLimit;
-      builder.insert = supabaseInsert;
+      builder.insert = supabaseInsert.mockImplementation(() => builder);
+      builder.update = supabaseUpdate.mockImplementation(() => builder);
+      builder.maybeSingle = supabaseMaybeSingle;
       builder.delete = vi.fn(() => builder);
-      builder.eq = vi.fn(async () => ({ data: null, error: null }));
+      builder.eq = supabaseEq;
       return builder;
     }),
   },
@@ -180,6 +188,28 @@ describe('CulturalArchaeologist', () => {
           messagingApproach: 'Show traceable commitments and accountability.',
         },
       ],
+    });
+  });
+
+  it('gates admin route behind password popout and unlocks admin console with correct password', async () => {
+    window.history.pushState({}, '', '/?home=1#admin');
+    render(<CulturalArchaeologist />);
+
+    expect(await screen.findByTestId('admin-password-popout')).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId('admin-password-popout-input'), {
+      target: { value: 'wrong-password' },
+    });
+    fireEvent.click(screen.getByTestId('admin-password-popout-submit-button'));
+    expect(await screen.findByTestId('admin-password-popout-error')).toHaveTextContent('Incorrect password');
+
+    fireEvent.change(screen.getByTestId('admin-password-popout-input'), {
+      target: { value: 'brandatlas2026' },
+    });
+    fireEvent.click(screen.getByTestId('admin-password-popout-submit-button'));
+
+    expect(await screen.findByTestId('admin-console')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByTestId('admin-password-popout')).not.toBeInTheDocument();
     });
   });
 
@@ -543,6 +573,35 @@ describe('CulturalArchaeologist', () => {
     await waitFor(() => {
       expect(generateCulturalMatrix).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it('persists deep dives back into Supabase results JSONB after background generation completes', async () => {
+    generateDeepDivesBatch.mockResolvedValueOnce([
+      {
+        originationDate: '2026-06-02',
+        relevance: 'High',
+        expandedContext: 'Deep dive context from batch generation.',
+        strategicImplications: ['Implication one'],
+        realWorldExamples: ['Example one'],
+        sources: [{ title: 'Example Source', url: 'https://example.com' }],
+      },
+    ]);
+
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    await waitFor(() => {
+      expect(supabaseUpdate).toHaveBeenCalled();
+    });
+
+    const latestUpdatePayload = supabaseUpdate.mock.calls.at(-1)?.[0] as { results?: any } | undefined;
+    expect(latestUpdatePayload?.results?.moments?.[0]?.deepDive?.expandedContext).toBe(
+      'Deep dive context from batch generation.'
+    );
+    expect(supabaseEq).toHaveBeenCalledWith('id', 'saved-row-id');
   });
 
   it('renders mobile results navigation for all cultural result sections', async () => {

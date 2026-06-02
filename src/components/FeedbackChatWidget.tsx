@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 
 
 import { AnimatePresence, motion } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { Loader2, MessageSquareText, Send, X } from 'lucide-react';
+import { Loader2, Menu, MessageSquareText, Send, Shield, X } from 'lucide-react';
 import { submitFeedbackToSupabase } from '../api/submitFeedbackToSupabase';
 
 const MAX_MESSAGE_LENGTH = 2000;
@@ -14,11 +14,23 @@ type SubmitState = {
   message: string;
 };
 
-export function FeedbackChatWidget() {
+type FeedbackChatWidgetProps = {
+  showAdminShortcut?: boolean;
+  adminHref?: string;
+  onAdminNavigate?: () => void;
+};
+
+export function FeedbackChatWidget({
+  showAdminShortcut = false,
+  adminHref = '/#admin',
+  onAdminNavigate,
+}: FeedbackChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitState, setSubmitState] = useState<SubmitState>({ type: 'idle', message: '' });
+  const adminMenuRef = useRef<HTMLDivElement>(null);
 
   const remainingChars = useMemo(() => MAX_MESSAGE_LENGTH - message.length, [message.length]);
 
@@ -54,6 +66,31 @@ export function FeedbackChatWidget() {
       setIsSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (!isAdminMenuOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!adminMenuRef.current) return;
+      if (adminMenuRef.current.contains(event.target as Node)) return;
+      console.log('[FeedbackChatWidget] Closing admin shortcut menu from outside click.');
+      setIsAdminMenuOpen(false);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      console.log('[FeedbackChatWidget] Closing admin shortcut menu from escape key.');
+      setIsAdminMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isAdminMenuOpen]);
 
   const widget = (
     <div
@@ -129,15 +166,71 @@ export function FeedbackChatWidget() {
         )}
       </AnimatePresence>
 
-      <button
-        type="button"
-        aria-expanded={isOpen}
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="ml-auto inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm font-medium text-zinc-900 shadow-[0_10px_30px_-16px_rgba(0,0,0,0.45)] transition-all hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-[0_14px_34px_-16px_rgba(0,0,0,0.45)]"
+      <div
+        data-testid="feedback-widget-actions"
+        className={`ml-auto flex items-center justify-end gap-2 ${isOpen ? 'w-[min(92vw,24rem)]' : ''}`}
       >
-        <MessageSquareText className="h-4 w-4 text-indigo-600" />
-        Share Feedback
-      </button>
+        <button
+          type="button"
+          data-testid="feedback-widget-toggle"
+          aria-expanded={isOpen}
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm font-medium text-zinc-900 shadow-[0_10px_30px_-16px_rgba(0,0,0,0.45)] transition-all hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-[0_14px_34px_-16px_rgba(0,0,0,0.45)]"
+        >
+          <MessageSquareText className="h-4 w-4 text-indigo-600" />
+          Share Feedback
+        </button>
+
+        {showAdminShortcut && (
+          <div ref={adminMenuRef} className="relative">
+            <button
+              type="button"
+              data-testid="feedback-admin-menu-trigger"
+              aria-label="Open quick actions menu"
+              aria-expanded={isAdminMenuOpen}
+              onClick={() => {
+                const nextOpen = !isAdminMenuOpen;
+                console.log('[FeedbackChatWidget] Toggling admin shortcut menu.', { nextOpen });
+                setIsAdminMenuOpen(nextOpen);
+              }}
+              className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-3 py-2.5 sm:px-4 sm:py-3 text-zinc-900 shadow-[0_10px_30px_-16px_rgba(0,0,0,0.45)] transition-all hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-[0_14px_34px_-16px_rgba(0,0,0,0.45)]"
+            >
+              <Menu className="h-4 w-4 text-indigo-600" />
+            </button>
+
+            <AnimatePresence>
+              {isAdminMenuOpen && (
+                <motion.div
+                  data-testid="feedback-admin-menu-panel"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  className="absolute right-0 bottom-[calc(100%+0.5rem)] min-w-[12rem] rounded-2xl border border-zinc-200 bg-white p-2 shadow-[0_14px_38px_-18px_rgba(0,0,0,0.45)]"
+                >
+                  <a
+                    href={adminHref}
+                    data-testid="feedback-admin-menu-admin-link"
+                    onClick={(event) => {
+                      console.log('[FeedbackChatWidget] Admin Page shortcut selected from hamburger menu.', {
+                        adminHref,
+                      });
+                      if (onAdminNavigate) {
+                        event.preventDefault();
+                        onAdminNavigate();
+                      }
+                      setIsAdminMenuOpen(false);
+                    }}
+                    className="inline-flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    <Shield className="h-4 w-4 text-zinc-500" />
+                    Admin Page
+                  </a>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+      </div>
     </div>
   );
 

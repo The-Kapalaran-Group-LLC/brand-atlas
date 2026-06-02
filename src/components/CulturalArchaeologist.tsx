@@ -6,7 +6,7 @@ import { getUserTelemetry } from '../services/telemetry';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { Search, Loader2, Sparkles, FileText, Presentation, ExternalLink, Info, Tag, Users, Filter, ChevronDown, Check, Clock, Trash2, Target, Upload, X, RefreshCw, Calendar, Activity, Palette, ArrowLeft, Menu } from 'lucide-react';
+import { Search, Loader2, Sparkles, FileText, Presentation, ExternalLink, Info, Tag, Users, Filter, ChevronDown, Check, Clock, Trash2, Target, Upload, X, RefreshCw, Calendar, Activity, Palette, ArrowLeft, Menu, Shield } from 'lucide-react';
 import { CompassRoseIcon } from './icons/CompassRoseIcon';
 import { CulturalMatrix, MatrixItem, UploadedFile, DeepDiveReport, CulturalRerunFilters, AudienceSegmentationReport } from '../services/azure-openai';
 import { generateCulturalMatrix, suggestBrands, askMatrixQuestion, generateDeepDive, generateDeepDivesBatch, generateAudienceSegmentation } from '../services/azure-openai';
@@ -43,6 +43,7 @@ import { MobileTwoLineSubcopy } from './MobileTwoLineSubcopy';
 import { MobileResultsNav } from './MobileResultsNav';
 import { ShowThinkingDropdown } from './ShowThinkingDropdown';
 import { SPLASH_GLOBE_STATIC_PROPS } from './splashGlobeDefaults';
+import AdminPage from './AdminPage';
 import { buildExportFileBase } from '../services/export-filenames';
 import {
   exportBrandAtlasDocumentToPdf,
@@ -89,6 +90,11 @@ interface MatrixContext {
   brand: string;
   generations: string[];
   topicFocus?: string;
+}
+
+interface DeepDivePersistenceContext {
+  tableName: string;
+  rowId: string;
 }
 
 interface OAuthTokenResponse {
@@ -143,6 +149,9 @@ const CULTURAL_ARCHAEOLOGIST_SHOW_THINKING_TEXT = 'Applied retrieval-grounded sy
 const RESULTS_COMPLETE_SOUND_ID: CompletionSoundId = 'classic-chime';
 const SEGMENTATION_PASSWORD = 'segment2026';
 const SEGMENTATION_PASSWORD_SUPPORT_COPY = 'Contact Your Administrator for More Information.';
+const ADMIN_PASSWORD = 'brandatlas2026';
+const ADMIN_AUTH_STORAGE_KEY = 'brand_atlas_admin_authorized';
+const ADMIN_PASSWORD_SUPPORT_COPY = 'Contact Your Administrator for More Information.';
 const SEGMENTATION_WORKSPACE_QUERY_PARAM = 'segmentation_workspace';
 const SEGMENTATION_WORKSPACE_STORAGE_PREFIX = 'cultural_segmentation_workspace:';
 
@@ -211,6 +220,17 @@ const mapInsightSourceToSearchSource = (sourceType?: string): string | null => {
 
 const normalizeMatrixItemText = (value?: string): string => {
   return (value || '').trim().toLowerCase();
+};
+
+const toSupabaseRowId = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return null;
 };
 
 const matchesMatrixItemFilters = (item: MatrixItem, filters?: CulturalRerunFilters): boolean => {
@@ -555,11 +575,15 @@ const removeSegmentationWorkspaceSnapshot = (workspaceId: string): void => {
 
 export default function CulturalArchaeologist() {
   const SPLASH_DURATION_MS = 3000;
-  const resolveExperienceFromLocation = (): 'research' | 'brand' | null => {
+  const resolveExperienceFromLocation = (): 'research' | 'brand' | 'admin' | null => {
     if (typeof window === 'undefined') return null;
 
     const pathname = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
+
+    if (pathname === '/admin' || hash === '#admin') {
+      return 'admin';
+    }
 
     if (
       pathname === '/design-excavator' ||
@@ -594,7 +618,7 @@ export default function CulturalArchaeologist() {
   });
   const [isSplashHeld, setIsSplashHeld] = useState(false);
   const [isSplashManualMode, setIsSplashManualMode] = useState(false);
-  const [activeExperience, setActiveExperience] = useState<'research' | 'brand' | null>(initialExperience);
+  const [activeExperience, setActiveExperience] = useState<'research' | 'brand' | 'admin' | null>(initialExperience);
   const [hasOpenedBrand, setHasOpenedBrand] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isMobileTopBarVisible, setIsMobileTopBarVisible] = useState(true);
@@ -640,6 +664,19 @@ export default function CulturalArchaeologist() {
   const [segmentationPasswordInput, setSegmentationPasswordInput] = useState('');
   const [segmentationPasswordError, setSegmentationPasswordError] = useState<string | null>(null);
   const [isSegmentationPasswordPopoutOpen, setIsSegmentationPasswordPopoutOpen] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [adminPasswordError, setAdminPasswordError] = useState<string | null>(null);
+  const [isAdminPasswordPopoutOpen, setIsAdminPasswordPopoutOpen] = useState(false);
+  const [isAdminAuthorized, setIsAdminAuthorized] = useState<boolean>(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    try {
+      return window.localStorage.getItem(ADMIN_AUTH_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   const [shouldAutoScrollToSegmentationWorkspace, setShouldAutoScrollToSegmentationWorkspace] = useState(false);
   const [isVocabularyOpen, setIsVocabularyOpen] = useState(false);
   
@@ -887,6 +924,23 @@ export default function CulturalArchaeologist() {
       setHasOpenedBrand(true);
     }
   }, [activeExperience]);
+
+  useEffect(() => {
+    if (activeExperience !== 'admin') {
+      setIsAdminPasswordPopoutOpen(false);
+      return;
+    }
+
+    if (isAdminAuthorized) {
+      setIsAdminPasswordPopoutOpen(false);
+      return;
+    }
+
+    console.log('[CulturalArchaeologist] Admin route is locked; opening password popout.');
+    setIsAdminPasswordPopoutOpen(true);
+    setAdminPasswordInput('');
+    setAdminPasswordError(null);
+  }, [activeExperience, isAdminAuthorized]);
 
   useEffect(() => {
     let prefillAudience = '';
@@ -1473,23 +1527,40 @@ export default function CulturalArchaeologist() {
       saveRecentResult(APP_RECENT_RESULTS_MODES.CULTURAL_ARCHAEOLOGIST, generatedRecentItem);
       setRecentResultsRefreshNonce((prev) => prev + 1);
 
+      let persistedSupabaseRowId: string | null = null;
       try {
         const { device, location, ip_address } = await getUserTelemetry();
-        const { error: saveError } = await supabase.from(resolvedCulturalTable).insert([
-          {
-            brand: brandContextValue || null,
-            audience: audienceValue,
-            topicFocus: topicFocusValue || null,
-            generations: generationsValue,
-            sourcesType: sourcesTypeValue,
-            results: nextMatrix,
-            device,
-            location,
-            ip_address,
-          },
-        ]);
+        const { data: insertedRow, error: saveError } = await supabase
+          .from(resolvedCulturalTable)
+          .insert([
+            {
+              brand: brandContextValue || null,
+              audience: audienceValue,
+              topicFocus: topicFocusValue || null,
+              generations: generationsValue,
+              sourcesType: sourcesTypeValue,
+              results: nextMatrix,
+              device,
+              location,
+              ip_address,
+            },
+          ])
+          .select('id')
+          .maybeSingle();
         if (saveError) {
           throw saveError;
+        }
+
+        const insertedRowId = toSupabaseRowId((insertedRow as { id?: unknown } | null | undefined)?.id);
+        persistedSupabaseRowId = insertedRowId;
+        console.log('[CulturalArchaeologist] Saved initial report row to Supabase.', {
+          table: resolvedCulturalTable,
+          insertedRowId,
+        });
+        if (!insertedRowId) {
+          console.log('[CulturalArchaeologist] Supabase insert succeeded without a readable row id. Deep dives will remain local only.', {
+            table: resolvedCulturalTable,
+          });
         }
       } catch (saveErr) {
         logger.warn('Failed to save cultural search to Supabase', saveErr);
@@ -1503,7 +1574,10 @@ export default function CulturalArchaeologist() {
         brand: brandContextValue,
         generations: generationsValue,
         topicFocus: topicFocusValue,
-      });
+      }, persistedSupabaseRowId ? {
+        tableName: resolvedCulturalTable,
+        rowId: persistedSupabaseRowId,
+      } : undefined);
     } catch (err: unknown) {
       const normalized = normalizeAppError(err);
       logger.error('Failed to generate cultural report', { err, normalized });
@@ -1612,8 +1686,17 @@ export default function CulturalArchaeologist() {
     });
   };
 
-  const runBackgroundDeepDives = async (currentMatrix: CulturalMatrix, context: MatrixContext) => {
+  const runBackgroundDeepDives = async (
+    currentMatrix: CulturalMatrix,
+    context: MatrixContext,
+    persistenceContext?: DeepDivePersistenceContext,
+  ) => {
     setIsGeneratingDeepDives(true);
+    console.log('[CulturalArchaeologist] Starting background deep-dive generation.', {
+      hasPersistenceContext: Boolean(persistenceContext?.rowId),
+      persistenceTable: persistenceContext?.tableName || null,
+      persistenceRowId: persistenceContext?.rowId || null,
+    });
     
     const categories = MATRIX_INSIGHT_KEYS;
     
@@ -1660,12 +1743,46 @@ export default function CulturalArchaeologist() {
           }
           return updated;
         });
+
+        if (persistenceContext?.rowId) {
+          try {
+            console.log('[CulturalArchaeologist] Persisting deep-dive updates to Supabase.', {
+              tableName: persistenceContext.tableName,
+              rowId: persistenceContext.rowId,
+              category,
+              completed,
+              totalItems,
+            });
+            const { error: updateError } = await supabase
+              .from(persistenceContext.tableName)
+              .update({ results: updatedMatrix })
+              .eq('id', persistenceContext.rowId);
+
+            if (updateError) {
+              logger.warn('Failed to persist cultural deep-dive results update to Supabase', updateError);
+              setSaveWarning('Deep dives generated, but syncing them to Supabase failed.');
+            } else {
+              console.log('[CulturalArchaeologist] Persisted deep-dive updates to Supabase.', {
+                tableName: persistenceContext.tableName,
+                rowId: persistenceContext.rowId,
+                category,
+              });
+            }
+          } catch (updateErr) {
+            logger.warn('Unexpected error while updating deep-dive results in Supabase', updateErr);
+            setSaveWarning('Deep dives generated, but syncing them to Supabase failed.');
+          }
+        }
       } catch (err) {
         console.error(`Failed to generate deep dives for ${category}:`, err);
         // Continue with other categories even if one fails
       }
     }
     
+    console.log('[CulturalArchaeologist] Background deep-dive generation complete.', {
+      completed,
+      totalItems,
+    });
     setIsGeneratingDeepDives(false);
   };
 
@@ -1817,6 +1934,40 @@ export default function CulturalArchaeologist() {
     setSegmentationPasswordInput('');
     setSegmentationPasswordError(null);
     launchSegmentationWorkspaceTab(true);
+  };
+
+  const closeAdminPasswordPopout = () => {
+    console.log('[CulturalArchaeologist] Closing admin password popout.');
+    setIsAdminPasswordPopoutOpen(false);
+    setAdminPasswordInput('');
+    setAdminPasswordError(null);
+  };
+
+  const handleAdminPasswordSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const candidatePassword = adminPasswordInput.trim();
+    const isValidPassword = candidatePassword === ADMIN_PASSWORD;
+
+    console.log('[CulturalArchaeologist] Admin password submitted.', {
+      passwordLength: candidatePassword.length,
+      isValidPassword,
+    });
+
+    if (!isValidPassword) {
+      setAdminPasswordError('Incorrect password. Please try again.');
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(ADMIN_AUTH_STORAGE_KEY, '1');
+    } catch (storageError) {
+      console.warn('[CulturalArchaeologist] Failed to persist admin auth state to localStorage.', storageError);
+    }
+
+    setIsAdminAuthorized(true);
+    setAdminPasswordInput('');
+    setAdminPasswordError(null);
+    setIsAdminPasswordPopoutOpen(false);
   };
 
   const runSegmentationAnalysis = async (
@@ -2835,6 +2986,48 @@ export default function CulturalArchaeologist() {
           <div className={activeExperience === 'brand' ? '' : 'hidden'}>
             <BrandDeepDivePage onBack={() => navigateToHomeDashboard()} />
           </div>
+        )}
+
+        {activeExperience === 'admin' && (
+          <SectionErrorBoundary title="Admin Console">
+            {isAdminAuthorized ? (
+              <AdminPage onBack={() => navigateToHomeDashboard()} />
+            ) : (
+              <section className="mx-auto max-w-2xl rounded-3xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
+                <p className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-700">
+                  <Shield className="h-3.5 w-3.5" />
+                  Restricted
+                </p>
+                <h2 className="mt-4 text-2xl font-semibold text-zinc-900">Admin Access Required</h2>
+                <p className="mt-2 text-sm text-zinc-600">
+                  Enter the admin password to access Supabase row reconstruction tools.
+                </p>
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    data-testid="admin-open-password-popout-button"
+                    onClick={() => {
+                      console.log('[CulturalArchaeologist] Re-opening admin password popout from locked admin screen.');
+                      setIsAdminPasswordPopoutOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+                  >
+                    <Shield className="h-4 w-4" />
+                    Enter Password
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="admin-back-to-home-button"
+                    onClick={() => navigateToHomeDashboard()}
+                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to Home
+                  </button>
+                </div>
+              </section>
+            )}
+          </SectionErrorBoundary>
         )}
 
         {activeExperience === 'research' && (
@@ -4651,8 +4844,107 @@ export default function CulturalArchaeologist() {
         )}
           </>
         )}
-        {!showSplash && <FeedbackChatWidget />}
+        {!showSplash && (
+          <FeedbackChatWidget
+            showAdminShortcut={activeExperience === null}
+            adminHref="/#admin"
+            onAdminNavigate={() => navigateToHashRoute('admin')}
+          />
+        )}
       </main>
+
+      <AnimatePresence>
+        {isAdminPasswordPopoutOpen && (
+          <motion.div
+            data-testid="admin-password-popout"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[95] bg-black/50 p-4 sm:p-6 flex items-center justify-center"
+            onClick={(event) => {
+              if (event.target !== event.currentTarget) return;
+              closeAdminPasswordPopout();
+            }}
+          >
+            <motion.div
+              data-testid="admin-password-popout-dialog"
+              initial={{ scale: 0.96, opacity: 0, y: 16 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.96, opacity: 0, y: 16 }}
+              className="w-full max-w-md rounded-3xl border border-zinc-200 bg-white p-5 sm:p-6 shadow-2xl relative"
+            >
+              <button
+                type="button"
+                data-testid="admin-password-popout-close-button"
+                onClick={closeAdminPasswordPopout}
+                className="absolute top-4 right-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-500/40"
+                aria-label="Close admin password popout"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="mb-4 pr-8">
+                <h3 className="text-lg font-semibold text-zinc-900">Admin Access</h3>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Enter the password to open the admin console.
+                </p>
+              </div>
+
+              <form onSubmit={handleAdminPasswordSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="admin-password-popout-input" className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    Password
+                  </label>
+                  <input
+                    id="admin-password-popout-input"
+                    data-testid="admin-password-popout-input"
+                    type="password"
+                    value={adminPasswordInput}
+                    onChange={(event) => {
+                      console.log('[CulturalArchaeologist] Admin password input changed.', {
+                        passwordLength: event.target.value.length,
+                      });
+                      setAdminPasswordInput(event.target.value);
+                      if (adminPasswordError) {
+                        setAdminPasswordError(null);
+                      }
+                    }}
+                    className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-300"
+                    placeholder="Enter admin password"
+                    autoFocus
+                  />
+                </div>
+
+                {adminPasswordError && (
+                  <p data-testid="admin-password-popout-error" className="text-sm text-rose-600">
+                    {adminPasswordError}
+                  </p>
+                )}
+
+                <p className="text-xs text-zinc-500">{ADMIN_PASSWORD_SUPPORT_COPY}</p>
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    data-testid="admin-password-popout-cancel-button"
+                    onClick={closeAdminPasswordPopout}
+                    className="inline-flex items-center rounded-xl border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    data-testid="admin-password-popout-submit-button"
+                    className="inline-flex items-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                  >
+                    Unlock Admin
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <footer
         className={`relative z-10 text-center no-print ${
