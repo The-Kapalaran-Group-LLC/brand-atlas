@@ -28,4 +28,28 @@ describe('parseCulturalBackfillCliArgs', () => {
     expect(options.table).toBe('Cultural_Archaeologist');
     expect(options.rowId).toBe('123');
   });
+
+  it('parses space-delimited argument values', () => {
+    const options = parseCulturalBackfillCliArgs([
+      '--table',
+      'Cultural_Archaeologist',
+      '--row-id',
+      '456',
+      '--batch-size',
+      '300',
+      '--deep-dive-batch-chunk-size',
+      '1',
+      '--max-category-passes',
+      '12',
+      '--limit',
+      '50',
+    ]);
+
+    expect(options.table).toBe('Cultural_Archaeologist');
+    expect(options.rowId).toBe('456');
+    expect(options.batchSize).toBe(300);
+    expect(options.deepDiveBatchChunkSize).toBe(1);
+    expect(options.maxCategoryPasses).toBe(12);
+    expect(options.limit).toBe(50);
+  });
 });
