@@ -79,6 +79,17 @@ const makeBuilder = (tableName: string) => {
                 sources: [],
               },
             },
+            {
+              id: 'bn-2',
+              created_at: '2026-06-02T11:00:00.000Z',
+              custom_name: 'Amazon Logistics Expansion',
+              matrix: {
+                analysisObjective: 'Review logistics brand positioning',
+                ecosystemMethod: 'test method',
+                results: [],
+                sources: [],
+              },
+            },
           ],
           error: null,
         };
@@ -140,6 +151,7 @@ describe('AdminPage', () => {
     fireEvent.change(screen.getByTestId('admin-project-select'), { target: { value: 'bn-1' } });
     expect(await screen.findByTestId('admin-report-preview')).toBeInTheDocument();
 
+    fireEvent.click(screen.getByTestId('admin-row-id-toggle-button'));
     fireEvent.change(screen.getByTestId('admin-row-id-input'), { target: { value: 'bn-1' } });
     fireEvent.click(screen.getByTestId('admin-load-by-id-button'));
 
@@ -148,6 +160,38 @@ describe('AdminPage', () => {
     expect((await screen.findAllByTestId('admin-evidence-chip-known')).length).toBeGreaterThan(0);
     expect((await screen.findAllByTestId('admin-evidence-chip-inferred')).length).toBeGreaterThan(0);
     expect(await screen.findByText('Nike newsroom')).toBeInTheDocument();
+  });
+
+  it('keeps load-by-row-id panel collapsed by default and expands on toggle', async () => {
+    render(<AdminPage />);
+
+    const toggle = await screen.findByTestId('admin-row-id-toggle-button');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('admin-row-id-input')).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByTestId('admin-row-id-input')).toBeInTheDocument();
+    expect(await screen.findByTestId('admin-load-by-id-button')).toBeInTheDocument();
+  });
+
+  it('filters project dropdown options from project search input', async () => {
+    render(<AdminPage />);
+
+    const modeSelect = await screen.findByTestId('admin-mode-select');
+    fireEvent.change(modeSelect, { target: { value: 'brand' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('admin-project-select')).toBeInTheDocument();
+    });
+
+    const projectCombobox = screen.getByTestId('admin-project-select');
+    fireEvent.focus(projectCombobox);
+    fireEvent.change(projectCombobox, { target: { value: 'amazon' } });
+
+    expect(await screen.findByTestId('admin-project-option-bn-2')).toBeInTheDocument();
+    expect(screen.queryByTestId('admin-project-option-bn-1')).not.toBeInTheDocument();
   });
 
   it('renders pasted JSON rows directly into report preview', async () => {

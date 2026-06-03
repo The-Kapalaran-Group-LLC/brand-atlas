@@ -714,10 +714,14 @@ const renderSourcesSection = (sources: Source[], sectionId: string) => {
 
 export default function AdminPage({ onBack }: { onBack?: () => void }) {
   const exportCaptureRef = useRef<HTMLDivElement>(null);
+  const projectDropdownRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<AdminMode>('cultural');
   const [activeTableName, setActiveTableName] = useState<string>('');
   const [projects, setProjects] = useState<AdminProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [projectSearchQuery, setProjectSearchQuery] = useState('');
+  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
+  const [isRowIdPanelOpen, setIsRowIdPanelOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null);
   const [rowIdInput, setRowIdInput] = useState('');
   const [jsonRowInput, setJsonRowInput] = useState('');
@@ -756,6 +760,18 @@ export default function AdminPage({ onBack }: { onBack?: () => void }) {
       data: normalizeDesignReport(selectedRow),
     };
   }, [mode, selectedRow]);
+
+  const filteredProjects = useMemo(() => {
+    const normalizedQuery = projectSearchQuery.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return projects;
+    }
+
+    return projects.filter((project) => {
+      const searchableText = `${project.label} ${project.subtitle} ${project.createdAt} ${project.id}`.toLowerCase();
+      return searchableText.includes(normalizedQuery);
+    });
+  }, [projectSearchQuery, projects]);
 
   const loadProjects = useCallback(async () => {
     const requestId = projectsLoadRequestRef.current + 1;
@@ -811,6 +827,7 @@ export default function AdminPage({ onBack }: { onBack?: () => void }) {
 
             setActiveTableName(tableName);
             setProjects(nextProjects);
+            setProjectSearchQuery('');
             setSelectedProjectId('');
             setSelectedRow(null);
             return;
@@ -843,6 +860,23 @@ export default function AdminPage({ onBack }: { onBack?: () => void }) {
     void loadProjects();
   }, [loadProjects]);
 
+  useEffect(() => {
+    const handleDocumentPointerDown = (event: MouseEvent) => {
+      if (!projectDropdownRef.current) {
+        return;
+      }
+
+      if (!projectDropdownRef.current.contains(event.target as Node)) {
+        setIsProjectDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentPointerDown);
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentPointerDown);
+    };
+  }, []);
+
   const handleProjectChange = (projectId: string) => {
     console.log('[AdminPage] Project selected from dropdown.', { mode, projectId });
     setSelectedProjectId(projectId);
@@ -852,9 +886,32 @@ export default function AdminPage({ onBack }: { onBack?: () => void }) {
       return;
     }
 
+    setProjectSearchQuery(`${project.label} • ${project.createdAt}`);
+    setIsProjectDropdownOpen(false);
     setRowIdInput(project.id);
     setSelectedRow(project.row);
     setError(null);
+  };
+
+  const handleProjectSearchInputChange = (value: string) => {
+    console.log('[AdminPage] Updating project search query.', {
+      mode,
+      query: value,
+    });
+    setProjectSearchQuery(value);
+    setIsProjectDropdownOpen(true);
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setSelectedProjectId('');
+      setSelectedRow(null);
+      return;
+    }
+
+    const matchedById = projects.find((project) => project.id === trimmed);
+    if (matchedById) {
+      handleProjectChange(matchedById.id);
+    }
   };
 
   const loadById = async () => {
@@ -1072,6 +1129,8 @@ export default function AdminPage({ onBack }: { onBack?: () => void }) {
                 const nextMode = event.target.value as AdminMode;
                 console.log('[AdminPage] Changing mode.', { from: mode, to: nextMode });
                 setMode(nextMode);
+                setProjectSearchQuery('');
+                setIsProjectDropdownOpen(false);
                 setSelectedProjectId('');
                 setSelectedRow(null);
                 setError(null);
@@ -1104,58 +1163,106 @@ export default function AdminPage({ onBack }: { onBack?: () => void }) {
           </div>
 
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50/60 p-4 lg:col-span-2">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <label htmlFor="admin-project-select" className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                  Project Dropdown
+                  Projects
                 </label>
-                <select
-                  id="admin-project-select"
-                  data-testid="admin-project-select"
-                  className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900"
-                  value={selectedProjectId}
-                  onChange={(event) => handleProjectChange(event.target.value)}
-                >
-                  <option value="">Select a project row</option>
-                  {projects.map((project) => (
-                    <option key={`${project.tableName}-${project.id}`} value={project.id}>
-                      {project.label} • {project.createdAt}
-                    </option>
-                  ))}
-                </select>
+                <div ref={projectDropdownRef} className="mt-1 relative">
+                  <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+                  <input
+                    id="admin-project-select"
+                    data-testid="admin-project-select"
+                    type="text"
+                    role="combobox"
+                    aria-expanded={isProjectDropdownOpen}
+                    aria-controls="admin-project-options-listbox"
+                    value={projectSearchQuery}
+                    onFocus={() => setIsProjectDropdownOpen(true)}
+                    onChange={(event) => handleProjectSearchInputChange(event.target.value)}
+                    placeholder="Search projects and pick from dropdown"
+                    className="w-full rounded-xl border border-zinc-200 bg-white pl-9 pr-3 py-2 text-sm text-zinc-900"
+                  />
+                  {isProjectDropdownOpen && (
+                    <div
+                      id="admin-project-options-listbox"
+                      data-testid="admin-project-options-listbox"
+                      role="listbox"
+                      className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg"
+                    >
+                      {filteredProjects.length > 0 ? (
+                        filteredProjects.map((project) => (
+                          <button
+                            key={`${project.tableName}-${project.id}`}
+                            type="button"
+                            data-testid={`admin-project-option-${project.id}`}
+                            role="option"
+                            onClick={() => handleProjectChange(project.id)}
+                            className="w-full rounded-lg px-2.5 py-2 text-left text-sm text-zinc-800 hover:bg-zinc-50"
+                          >
+                            {project.label} • {project.createdAt}
+                          </button>
+                        ))
+                      ) : (
+                        <p data-testid="admin-project-no-results" className="px-2.5 py-2 text-sm text-zinc-500">
+                          No matching projects found.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <p className="mt-2 text-xs text-zinc-500">
                   {isLoadingProjects
                     ? 'Loading project list...'
-                    : `${projects.length} row(s) loaded from ${activeTableName || 'table candidates'}.`}
+                    : `${filteredProjects.length} of ${projects.length} row(s) shown from ${activeTableName || 'table candidates'}.`}
                 </p>
-              </div>
-
-              <div>
-                <label htmlFor="admin-row-id-input" className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                  Load by Row ID
-                </label>
-                <div className="mt-1 flex items-center gap-2">
-                  <input
-                    id="admin-row-id-input"
-                    data-testid="admin-row-id-input"
-                    type="text"
-                    value={rowIdInput}
-                    onChange={(event) => setRowIdInput(event.target.value)}
-                    placeholder="Paste row id"
-                    className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900"
-                  />
+                <div className="mt-3 rounded-xl border border-zinc-200 bg-white">
                   <button
                     type="button"
-                    data-testid="admin-load-by-id-button"
+                    data-testid="admin-row-id-toggle-button"
+                    aria-expanded={isRowIdPanelOpen}
                     onClick={() => {
-                      void loadById();
+                      const nextOpen = !isRowIdPanelOpen;
+                      console.log('[AdminPage] Toggling row ID loader panel.', {
+                        nextOpen,
+                      });
+                      setIsRowIdPanelOpen(nextOpen);
                     }}
-                    disabled={isLoadingRow}
-                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                    className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
                   >
-                    {isLoadingRow ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                    Load
+                    <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                      Load by Row ID
+                    </span>
+                    <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform ${isRowIdPanelOpen ? 'rotate-180' : ''}`} />
                   </button>
+
+                  {isRowIdPanelOpen && (
+                    <div data-testid="admin-row-id-panel" className="border-t border-zinc-200 px-3 pb-3 pt-2">
+                      <div className="mt-1 flex items-center gap-2">
+                        <input
+                          id="admin-row-id-input"
+                          data-testid="admin-row-id-input"
+                          type="text"
+                          value={rowIdInput}
+                          onChange={(event) => setRowIdInput(event.target.value)}
+                          placeholder="Paste row id"
+                          className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900"
+                        />
+                        <button
+                          type="button"
+                          data-testid="admin-load-by-id-button"
+                          onClick={() => {
+                            void loadById();
+                          }}
+                          disabled={isLoadingRow}
+                          className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                        >
+                          {isLoadingRow ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                          Load
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
