@@ -19,6 +19,11 @@ const { getUserTelemetryMock, supabaseFromMock, supabaseInsertMock, supabaseOrde
   supabaseOrderMock: vi.fn(async () => ({ data: [], error: null })),
 }));
 
+const { exportBrandAtlasDocumentToPptx, exportBrandAtlasDocumentToPdf } = vi.hoisted(() => ({
+  exportBrandAtlasDocumentToPptx: vi.fn(async () => {}),
+  exportBrandAtlasDocumentToPdf: vi.fn(async () => {}),
+}));
+
 vi.mock('../services/azure-openai', () => ({
   generateBrandDeepDive,
   submitBrandDeepDivePrompt,
@@ -49,6 +54,11 @@ vi.mock('../services/supabase-client', () => ({
       return builder;
     }),
   },
+}));
+
+vi.mock('../services/brand-atlas-themed-export', () => ({
+  exportBrandAtlasDocumentToPptx,
+  exportBrandAtlasDocumentToPdf,
 }));
 
 const sampleReport = {
@@ -230,6 +240,49 @@ describe('BrandDeepDivePage', () => {
     expect(
       await screen.findByText('The report was rescanned and updated using your prompt. Review the refreshed results below.')
     ).toBeInTheDocument();
+  });
+
+  it('uses themed document export for PDF output so styling matches public exports', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    const exportPdfButton = await screen.findByRole('button', { name: /pdf/i });
+    fireEvent.click(exportPdfButton);
+
+    await waitFor(() => {
+      expect(exportBrandAtlasDocumentToPdf).toHaveBeenCalledTimes(1);
+    });
+
+    const firstCall = exportBrandAtlasDocumentToPdf.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    if (!firstCall) {
+      throw new Error('Expected themed PDF export call payload.');
+    }
+    const [documentArg, fileNameArg] = firstCall as unknown as [any, string];
+
+    expect(fileNameArg).toMatch(/^Design_Excavator_\d{4}-\d{2}-\d{2}\.pdf$/);
+    expect(documentArg.reportTitle).toBe('Design Excavator');
+    expect(documentArg.sections.length).toBeGreaterThan(0);
+  });
+
+  it('shows detailed themed export errors for PDF failures', async () => {
+    exportBrandAtlasDocumentToPdf.mockRejectedValueOnce(new Error('Themed export renderer failed.'));
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    const exportPdfButton = await screen.findByRole('button', { name: /pdf/i });
+    fireEvent.click(exportPdfButton);
+
+    const errorMessages = await screen.findAllByText(/Themed export renderer failed\./i);
+    expect(errorMessages.length).toBeGreaterThan(0);
   });
 
   it('shows per-section refresh for incomplete results and triggers a fresh design search', async () => {

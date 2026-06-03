@@ -40,6 +40,83 @@ export const splitCardsIntoSlides = <T>(cards: T[], perSlide: number): T[][] => 
 const rgbToHex = (rgb: readonly [number, number, number]): string =>
   rgb.map((n) => n.toString(16).padStart(2, '0')).join('').toUpperCase();
 
+const splitLongWord = (word: string, maxChars: number): string[] => {
+  if (word.length <= maxChars) return [word];
+  const chunks: string[] = [];
+  for (let index = 0; index < word.length; index += maxChars) {
+    chunks.push(word.slice(index, index + maxChars));
+  }
+  return chunks;
+};
+
+const wrapPptTextByCharacterCount = (text: string, maxChars: number): string[] => {
+  const normalized = text.trim();
+  if (!normalized) return [];
+
+  const words = normalized.split(/\s+/).flatMap((word) => splitLongWord(word, maxChars));
+  const lines: string[] = [];
+  let current = '';
+
+  words.forEach((word) => {
+    if (!current) {
+      current = word;
+      return;
+    }
+
+    const candidate = `${current} ${word}`;
+    if (candidate.length <= maxChars) {
+      current = candidate;
+      return;
+    }
+
+    lines.push(current);
+    current = word;
+  });
+
+  if (current) {
+    lines.push(current);
+  }
+
+  return lines;
+};
+
+type PptCardChunk = {
+  title?: string;
+  lines: string[];
+};
+
+const paginatePptCard = (
+  card: BrandAtlasExportCard,
+  maxRenderedLines = 22,
+  maxCharsPerLine = 95
+): PptCardChunk[] => {
+  const renderedBulletLines = (card.lines || []).flatMap((line) => {
+    const wrapped = wrapPptTextByCharacterCount(line, Math.max(10, maxCharsPerLine - 2));
+    if (wrapped.length === 0) return [];
+    return wrapped.map((segment, index) => (index === 0 ? `• ${segment}` : `  ${segment}`));
+  });
+
+  if (renderedBulletLines.length === 0) {
+    return [{ title: card.title, lines: [] }];
+  }
+
+  const chunks: PptCardChunk[] = [];
+  let cursor = 0;
+  while (cursor < renderedBulletLines.length) {
+    const lines = renderedBulletLines.slice(cursor, cursor + maxRenderedLines);
+    const titleSuffix = chunks.length > 0 ? ' (CONT.)' : '';
+    chunks.push({
+      title: card.title ? `${card.title}${titleSuffix}` : undefined,
+      lines,
+    });
+    cursor += maxRenderedLines;
+  }
+
+  return chunks;
+};
+
+export const paginatePptCardForTest = paginatePptCard;
+
 const getPdfLineHeight = (fontSize: number): number => Math.max(4.2, fontSize * 0.42);
 
 const wrapPdfText = (
@@ -244,41 +321,42 @@ export const exportBrandAtlasDocumentToPptx = async (
   });
 
   document.sections.forEach((section) => {
-    const grouped = splitCardsIntoSlides(section.cards, 2);
-    grouped.forEach((group, slideIndex) => {
+    const cardChunks = section.cards.flatMap((card) => paginatePptCard(card));
+    cardChunks.forEach((chunk, slideIndex) => {
       const slide = pres.addSlide();
       slide.background = { color: rgbToHex(THEME.bg) };
       slide.addText(slideIndex === 0 ? section.title.toUpperCase() : `${section.title.toUpperCase()} (CONT.)`, {
         x: 0.6, y: 0.35, w: 12.1, h: 0.5, fontSize: 18, bold: true, color: rgbToHex(THEME.title),
       });
+      const y = 1.05;
+      const cardX = 0.6;
+      const cardW = 12.1;
+      const cardH = 5.95;
+      const cardInnerX = cardX + 0.35;
+      const cardInnerW = cardW - 0.7;
+      slide.addShape(pres.ShapeType.roundRect, {
+        x: cardX, y, w: cardW, h: cardH,
+        fill: { color: rgbToHex(THEME.cardBg) },
+        line: { color: rgbToHex(THEME.border), pt: 1 },
+        radius: 0.08,
+      });
+      slide.addShape(pres.ShapeType.line, {
+        x: cardX, y, w: 0, h: cardH,
+        line: { color: rgbToHex(THEME.accent), pt: 2 },
+      });
 
-      group.forEach((card, index) => {
-        const y = 1.1 + index * 2.85;
-        const cardX = 0.6;
-        const cardW = 12.1;
-        const cardInnerX = cardX + 0.35;
-        const cardInnerW = cardW - 0.7;
-        slide.addShape(pres.ShapeType.roundRect, {
-          x: cardX, y, w: cardW, h: 2.6,
-          fill: { color: rgbToHex(THEME.cardBg) },
-          line: { color: rgbToHex(THEME.border), pt: 1 },
-          radius: 0.08,
+      if (chunk.title) {
+        slide.addText(chunk.title, {
+          x: cardInnerX, y: y + 0.22, w: cardInnerW, h: 0.5,
+          fontSize: 13, bold: true, color: rgbToHex(THEME.title), valign: 'top',
+          margin: 0.02,
         });
-        slide.addShape(pres.ShapeType.line, {
-          x: cardX, y, w: 0, h: 2.6,
-          line: { color: rgbToHex(THEME.accent), pt: 2 },
-        });
+      }
 
-        const cardLines = [
-          ...(card.title ? [card.title] : []),
-          ...card.lines.map((line) => `• ${line}`),
-        ];
-        slide.addText(cardLines.join('\n'), {
-          x: cardInnerX, y: y + 0.2, w: cardInnerW, h: 2.2,
-          fontSize: 12, color: rgbToHex(THEME.body), bold: false, valign: 'top',
-          margin: 0.04,
-          fit: 'shrink',
-        });
+      slide.addText(chunk.lines.join('\n'), {
+        x: cardInnerX, y: chunk.title ? y + 0.75 : y + 0.24, w: cardInnerW, h: chunk.title ? 5.0 : 5.5,
+        fontSize: 11, color: rgbToHex(THEME.body), bold: false, valign: 'top',
+        margin: 0.02,
       });
     });
   });

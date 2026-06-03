@@ -8,7 +8,11 @@ import { SourceLinkRow } from './SourceLinkRow';
 import { toSafeExternalHref } from '../services/external-links';
 import { normalizeAppError } from '../services/api-errors';
 import { buildExportFileBase } from '../services/export-filenames';
-import { exportElementRefToPdf, exportElementRefToPptx, withVisualExportErrorHandling } from '../services/visual-export';
+import {
+  type BrandAtlasExportDocument,
+  exportBrandAtlasDocumentToPdf,
+  exportBrandAtlasDocumentToPptx,
+} from '../services/brand-atlas-themed-export';
 
 type AdminMode = 'cultural' | 'brand' | 'design';
 
@@ -298,6 +302,11 @@ const renderEvidenceInlineText = (value?: string | null, keyPrefix = 'inline'): 
       {renderEvidenceChips(parsed.labels, keyPrefix)}
     </>
   );
+};
+
+const cleanEvidenceText = (value?: string | null): string => {
+  const parsed = extractEvidenceTags(value || '');
+  return (parsed.cleanText || value || '').trim();
 };
 
 const hasCulturalPayloadSignals = (value: Record<string, unknown>): boolean => {
@@ -712,8 +721,17 @@ const renderSourcesSection = (sources: Source[], sectionId: string) => {
   );
 };
 
+const getExportErrorDetail = (error: unknown): string | null => {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim();
+  }
+  if (typeof error === 'string' && error.trim().length > 0) {
+    return error.trim();
+  }
+  return null;
+};
+
 export default function AdminPage({ onBack }: { onBack?: () => void }) {
-  const exportCaptureRef = useRef<HTMLDivElement>(null);
   const projectDropdownRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<AdminMode>('cultural');
   const [activeTableName, setActiveTableName] = useState<string>('');
@@ -1004,6 +1022,258 @@ export default function AdminPage({ onBack }: { onBack?: () => void }) {
     }
   };
 
+  const exportDocument = useMemo<BrandAtlasExportDocument | null>(() => {
+    if (!preview?.data) {
+      return null;
+    }
+
+    const toLines = (values: Array<string | null | undefined>, max?: number): string[] => {
+      const normalized = values
+        .map((value) => cleanEvidenceText(value || ''))
+        .filter(Boolean);
+      return typeof max === 'number' ? normalized.slice(0, max) : normalized;
+    };
+
+    if (preview.type === 'cultural') {
+      const audience = toStringValue(selectedRow?.audience || selectedRow?.demographic || selectedRow?.custom_name).trim() || 'N/A';
+      const sections: BrandAtlasExportDocument['sections'] = CULTURAL_SECTIONS
+        .map((section) => {
+          const items = Array.isArray(preview.data[section.key]) ? preview.data[section.key] : [];
+          const cards = items
+            .map((item, index) => ({
+              title: `Insight ${index + 1}`,
+              lines: toLines([
+                item.text,
+                item.confidenceLevel ? `Confidence: ${item.confidenceLevel.toUpperCase()}` : '',
+                item.sourceType ? `Source Type: ${item.sourceType}` : '',
+                item.trendLifecycle ? `Trend Stage: ${item.trendLifecycle}` : '',
+                item.deepDive?.originationDate ? `Origination Date: ${item.deepDive.originationDate}` : '',
+                item.deepDive?.relevance ? `Relevance: ${item.deepDive.relevance}` : '',
+                item.deepDive?.expandedContext ? `Context: ${item.deepDive.expandedContext}` : '',
+                item.backgroundWriteup ? `Background: ${item.backgroundWriteup}` : '',
+                ...((item.deepDive?.realWorldExamples || []).map((example) => `Real-World Example: ${example}`)),
+                ...((item.deepDive?.strategicImplications || []).map((implication) => `Strategic Implication: ${implication}`)),
+                ...((item.deepDive?.sources || []).map((source) => `Deep-dive Source: ${source.title}: ${source.url}`)),
+              ]),
+            }))
+            .filter((card) => card.lines.length > 0);
+
+          return {
+            title: section.label,
+            cards,
+          };
+        })
+        .filter((section) => section.cards.length > 0);
+
+      if ((preview.data.sources || []).length > 0) {
+        sections.push({
+          title: 'Sources',
+          cards: (preview.data.sources || []).map((source) => ({
+            title: cleanEvidenceText(source.title || 'Source'),
+            lines: toLines([source.url]),
+          })),
+        });
+      }
+
+      return {
+        reportTitle: 'Cultural Archaeologist',
+        reportSubtitle: 'Brand Atlas Cultural Lens Report',
+        audience,
+        contextLines: toLines([
+          toStringValue(selectedRow?.brand || selectedRow?.context).trim() ? `Context: ${toStringValue(selectedRow?.brand || selectedRow?.context).trim()}` : '',
+          toStringValue(selectedRow?.topic_focus || selectedRow?.topicFocus).trim() ? `Topic: ${toStringValue(selectedRow?.topic_focus || selectedRow?.topicFocus).trim()}` : '',
+          preview.data.sociological_analysis ? `Summary: ${preview.data.sociological_analysis}` : '',
+        ]),
+        sections,
+      };
+    }
+
+    if (preview.type === 'brand') {
+      const brandNames = preview.data.results.map((result) => cleanEvidenceText(result.brandName)).filter(Boolean);
+      const sections: BrandAtlasExportDocument['sections'] = preview.data.results.map((result, index) => {
+        const cards: BrandAtlasExportDocument['sections'][number]['cards'] = [
+          { title: 'High-level Summary', lines: toLines([result.highLevelSummary]) },
+          { title: 'Brand Mission', lines: toLines([result.brandMission]) },
+          {
+            title: 'Brand Positioning',
+            lines: toLines([
+              result.brandPositioning.valueProposition ? `Value Proposition: ${result.brandPositioning.valueProposition}` : '',
+              result.brandPositioning.voiceAndTone ? `Voice & Tone: ${result.brandPositioning.voiceAndTone}` : '',
+              ...(result.brandPositioning.taglines || []).map((tagline) => `Tagline: ${tagline}`),
+              ...(result.brandPositioning.keyMessagesAndClaims || []).map((claim) => `Claim: ${claim}`),
+            ]),
+          },
+          { title: 'Offerings', lines: toLines(result.keyOfferingsProductsServices || []) },
+          { title: 'Strategic Moats', lines: toLines(result.strategicMoatsStrengths || []) },
+          { title: 'Potential Threats', lines: toLines(result.potentialThreatsWeaknesses || []) },
+          {
+            title: 'Target Audiences',
+            lines: (result.targetAudiences || [])
+              .map((audience) => cleanEvidenceText(`${audience.audience || 'Audience'} (${audience.priority || 'N/A'}): ${audience.inferredRoleToConsumers || 'N/A'}`))
+              .filter(Boolean),
+          },
+          { title: 'Recent Campaigns', lines: toLines(result.recentCampaigns || []) },
+          { title: 'Key Marketing Channels', lines: toLines(result.keyMarketingChannels || []) },
+          {
+            title: 'Social Media Channels',
+            lines: (result.socialMediaChannels || [])
+              .map((channel) => cleanEvidenceText(`${channel.channel}: ${channel.url}`))
+              .filter(Boolean),
+          },
+          { title: 'Recent News', lines: toLines(normalizeNewsItems(result.recentNews as unknown)) },
+        ].filter((card) => card.lines.length > 0);
+
+        if ((result.sources || []).length > 0) {
+          cards.push({
+            title: 'Sources',
+            lines: (result.sources || [])
+              .map((source) => cleanEvidenceText(`${source.title}: ${source.url}`))
+              .filter(Boolean),
+          });
+        }
+
+        return {
+          title: cleanEvidenceText(result.brandName) || `Brand ${index + 1}`,
+          cards,
+        };
+      }).filter((section) => section.cards.length > 0);
+
+      if ((preview.data.sources || []).length > 0) {
+        sections.push({
+          title: 'Global Sources',
+          cards: (preview.data.sources || []).map((source) => ({
+            title: cleanEvidenceText(source.title || 'Source'),
+            lines: toLines([source.url]),
+          })),
+        });
+      }
+
+      return {
+        reportTitle: 'Brand Navigator',
+        reportSubtitle: 'Brand Atlas Competitive Audit',
+        audience: toStringValue(selectedRow?.audience || selectedRow?.custom_name).trim() || 'N/A',
+        contextLines: toLines([
+          brandNames.length > 0 ? `Brands: ${brandNames.join(' vs ')}` : '',
+          toStringValue(selectedRow?.topic_focus || selectedRow?.topicFocus || preview.data.analysisObjective).trim()
+            ? `Topic: ${toStringValue(selectedRow?.topic_focus || selectedRow?.topicFocus || preview.data.analysisObjective).trim()}`
+            : '',
+        ]),
+        sections,
+      };
+    }
+
+    const designLeadNames = preview.data.brandProfiles
+      .map((profile) => cleanEvidenceText(profile.brandName))
+      .filter(Boolean);
+    const designSections: BrandAtlasExportDocument['sections'] = preview.data.brandProfiles.map((profile, index) => {
+      const cards: BrandAtlasExportDocument['sections'][number]['cards'] = [
+        {
+          title: 'Logos & Visuals',
+          lines: toLines([
+            profile.logo.mainLogo ? `Main Logo: ${profile.logo.mainLogo}` : '',
+            profile.logo.wordmarkLogotype ? `Wordmark: ${profile.logo.wordmarkLogotype}` : '',
+            ...(profile.sampleVisuals || []).map((visual) => `Visual: ${visual.title || visual.url}`),
+          ]),
+        },
+        {
+          title: 'Logo System',
+          lines: toLines([
+            ...(profile.logo.logoVariations || []).map((variation) => `Variation: ${variation}`),
+            ...(profile.logo.symbolsIcons || []).map((symbol) => `Symbol/Icon: ${symbol}`),
+          ]),
+        },
+        {
+          title: 'Color Palette',
+          lines: [
+            ...(profile.colorPalette.primaryColors || []).map((color) => cleanEvidenceText(`Primary: ${color.name || 'Color'} (${color.hex || 'N/A'})`)),
+            ...(profile.colorPalette.secondaryAccentColors || []).map((color) => cleanEvidenceText(`Accent: ${color.name || 'Color'} (${color.hex || 'N/A'})`)),
+            ...(profile.colorPalette.neutrals || []).map((color) => cleanEvidenceText(`Neutral: ${color.name || 'Color'} (${color.hex || 'N/A'})`)),
+          ].filter(Boolean),
+        },
+        {
+          title: 'Typography',
+          lines: toLines([
+            ...(profile.typography.fontFamilies || []).map((family) => `Font Family: ${family}`),
+            profile.typography.hierarchy.h1 ? `H1: ${profile.typography.hierarchy.h1}` : '',
+            profile.typography.hierarchy.h2 ? `H2: ${profile.typography.hierarchy.h2}` : '',
+            profile.typography.hierarchy.body ? `Body: ${profile.typography.hierarchy.body}` : '',
+            ...(profile.typography.usageRules || []).map((rule) => `Rule: ${rule}`),
+          ]),
+        },
+        {
+          title: 'Supporting Visual Elements',
+          lines: toLines([
+            ...(profile.supportingVisualElements.imageryStyle || []).map((value) => `Imagery: ${value}`),
+            ...(profile.supportingVisualElements.icons || []).map((value) => `Icons: ${value}`),
+            ...(profile.supportingVisualElements.patternsTextures || []).map((value) => `Pattern/Texture: ${value}`),
+            ...(profile.supportingVisualElements.shapes || []).map((value) => `Shapes: ${value}`),
+            ...(profile.supportingVisualElements.dataVisualization || []).map((value) => `Data Visualization: ${value}`),
+          ]),
+        },
+        {
+          title: 'Assessments',
+          lines: toLines([
+            profile.consistencyAssessment ? `Consistency: ${profile.consistencyAssessment}` : '',
+            profile.distinctivenessAssessment ? `Distinctiveness: ${profile.distinctivenessAssessment}` : '',
+          ]),
+        },
+      ].filter((card) => card.lines.length > 0);
+
+      if ((profile.sources || []).length > 0) {
+        cards.push({
+          title: 'Sources',
+          lines: (profile.sources || [])
+            .map((source) => cleanEvidenceText(`${source.title}: ${source.url}`))
+            .filter(Boolean),
+        });
+      }
+
+      return {
+        title: cleanEvidenceText(profile.brandName) || `Brand ${index + 1}`,
+        cards,
+      };
+    }).filter((section) => section.cards.length > 0);
+
+    if ((preview.data.crossBrandReadout || []).length > 0 || (preview.data.strategicRecommendations || []).length > 0) {
+      designSections.push({
+        title: 'Cross-Brand Readout',
+        cards: [
+          {
+            title: 'Opportunity Spaces',
+            lines: toLines(preview.data.crossBrandReadout || []),
+          },
+          {
+            title: 'Strategic Recommendations',
+            lines: toLines(preview.data.strategicRecommendations || []),
+          },
+        ].filter((card) => card.lines.length > 0),
+      });
+    }
+
+    if ((preview.data.sources || []).length > 0) {
+      designSections.push({
+        title: 'Global Sources',
+        cards: (preview.data.sources || []).map((source) => ({
+          title: cleanEvidenceText(source.title || 'Source'),
+          lines: toLines([source.url]),
+        })),
+      });
+    }
+
+    return {
+      reportTitle: 'Design Excavator',
+      reportSubtitle: 'Brand Atlas Visual Identity Audit',
+      audience: toStringValue(selectedRow?.audience || selectedRow?.custom_name).trim() || 'N/A',
+      contextLines: toLines([
+        designLeadNames.length > 0 ? `Brands: ${designLeadNames.join(' vs ')}` : '',
+        toStringValue(selectedRow?.analysis_objective || selectedRow?.analysisObjective || preview.data.analysisObjective).trim()
+          ? `Objective: ${toStringValue(selectedRow?.analysis_objective || selectedRow?.analysisObjective || preview.data.analysisObjective).trim()}`
+          : '',
+      ]),
+      sections: designSections,
+    };
+  }, [preview, selectedRow]);
+
   const getExportFileBase = (): string => {
     const fallbackBase = `Admin_${modeConfig.label.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`;
     if (!preview?.data) {
@@ -1024,65 +1294,85 @@ export default function AdminPage({ onBack }: { onBack?: () => void }) {
     return buildExportFileBase(leadBrand, fallbackBase);
   };
 
+  const getExportSuffix = (): string => {
+    if (preview?.type === 'cultural') return 'Cultural_Archaeologist';
+    if (preview?.type === 'brand') return 'Brand_Navigator';
+    return 'Design_Excavator';
+  };
+
   const exportToPptx = async () => {
-    if (!preview?.data) {
-      console.log('[AdminPage] Blocked PPTX export because no parsed preview is available.');
+    if (!preview?.data || !exportDocument) {
+      console.log('[AdminPage] Blocked PPTX export because no export document is available.', {
+        hasPreviewData: Boolean(preview?.data),
+        hasExportDocument: Boolean(exportDocument),
+      });
       setExportError({ type: 'pptx', message: 'No parsed results are available to export yet. Load a valid row first.' });
       return;
     }
 
     setExportError(null);
     setIsExportingPptx(true);
-    const fileName = `${getExportFileBase()}.pptx`;
-    console.log('[AdminPage] Starting admin PPTX export.', { mode, fileName });
+    const fileName = `${getExportFileBase()}_${getExportSuffix()}.pptx`;
+    console.log('[AdminPage] Starting themed admin PPTX export.', {
+      mode,
+      fileName,
+      sectionCount: exportDocument.sections.length,
+    });
 
     try {
-      await withVisualExportErrorHandling('admin page pptx export', async () => {
-        await exportElementRefToPptx({
-          ref: exportCaptureRef,
-          fileName,
-        });
-      });
-      console.log('[AdminPage] Admin PPTX export completed.', { mode, fileName });
+      await exportBrandAtlasDocumentToPptx(exportDocument, fileName);
+      console.log('[AdminPage] Themed admin PPTX export completed.', { mode, fileName });
     } catch (err) {
       const normalized = normalizeAppError(err);
+      const detail = getExportErrorDetail(err);
       console.log('[AdminPage] Admin PPTX export failed.', {
         mode,
         message: normalized.message,
+        detail,
       });
-      setExportError({ type: 'pptx', message: normalized.message || 'Failed to export PPTX. Please retry.' });
+      setExportError({
+        type: 'pptx',
+        message: detail ? `Failed to export PPTX: ${detail}` : (normalized.message || 'Failed to export PPTX. Please retry.'),
+      });
     } finally {
       setIsExportingPptx(false);
     }
   };
 
   const exportToPdf = async () => {
-    if (!preview?.data) {
-      console.log('[AdminPage] Blocked PDF export because no parsed preview is available.');
+    if (!preview?.data || !exportDocument) {
+      console.log('[AdminPage] Blocked PDF export because no export document is available.', {
+        hasPreviewData: Boolean(preview?.data),
+        hasExportDocument: Boolean(exportDocument),
+      });
       setExportError({ type: 'pdf', message: 'No parsed results are available to export yet. Load a valid row first.' });
       return;
     }
 
     setExportError(null);
     setIsExportingPdf(true);
-    const fileName = `${getExportFileBase()}.pdf`;
-    console.log('[AdminPage] Starting admin PDF export.', { mode, fileName });
+    const fileName = `${getExportFileBase()}_${getExportSuffix()}.pdf`;
+    console.log('[AdminPage] Starting themed admin PDF export.', {
+      mode,
+      fileName,
+      sectionCount: exportDocument.sections.length,
+    });
 
     try {
-      await withVisualExportErrorHandling('admin page pdf export', async () => {
-        await exportElementRefToPdf({
-          ref: exportCaptureRef,
-          fileName,
-        });
-      });
-      console.log('[AdminPage] Admin PDF export completed.', { mode, fileName });
+      await exportBrandAtlasDocumentToPdf(exportDocument, fileName);
+      console.log('[AdminPage] Themed admin PDF export completed.', { mode, fileName });
     } catch (err) {
       const normalized = normalizeAppError(err);
+      const detail = getExportErrorDetail(err);
       console.log('[AdminPage] Admin PDF export failed.', {
         mode,
         message: normalized.message,
+        detail,
       });
-      setExportError({ type: 'pdf', message: normalized.message || 'Failed to export PDF. Please retry.' });
+      setExportError({
+        type: 'pdf',
+        message: detail ? `Failed to export PDF: ${detail}` : (normalized.message || 'Failed to export PDF. Please retry.'),
+      });
     } finally {
       setIsExportingPdf(false);
     }
@@ -1380,7 +1670,7 @@ export default function AdminPage({ onBack }: { onBack?: () => void }) {
             </div>
           )}
 
-          <div ref={exportCaptureRef} data-testid="admin-export-capture-root" data-export-capture-root="1">
+          <div data-testid="admin-export-capture-root" data-export-capture-root="1">
           {!selectedRow && (
             <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center">
               <Database className="mx-auto h-6 w-6 text-zinc-400" />

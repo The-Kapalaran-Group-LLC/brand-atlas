@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeVerticalSliceOffsets } from './visual-export';
+import { computeVerticalSliceOffsets, normalizeCssValueForExportForTest } from './visual-export';
 
 describe('visual export pagination', () => {
   it('creates a single slice when the content fits one page', () => {
@@ -23,5 +23,13 @@ describe('visual export pagination', () => {
       { yPx: 2000, heightPx: 1000 },
       { yPx: 3000, heightPx: 50 },
     ]);
+  });
+
+  it('normalizes unsupported modern color syntax for export rendering', () => {
+    const raw = 'color-mix(in oklab, oklch(62% 0.15 240) 45%, transparent)';
+    const normalized = normalizeCssValueForExportForTest(raw, document);
+
+    expect(normalized).not.toContain('color-mix(');
+    expect(normalized).not.toContain('oklch(');
   });
 });

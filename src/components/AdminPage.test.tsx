@@ -6,10 +6,9 @@ const { supabaseFrom } = vi.hoisted(() => ({
   supabaseFrom: vi.fn(),
 }));
 
-const { exportElementRefToPptx, exportElementRefToPdf, withVisualExportErrorHandling } = vi.hoisted(() => ({
-  exportElementRefToPptx: vi.fn(async () => {}),
-  exportElementRefToPdf: vi.fn(async () => {}),
-  withVisualExportErrorHandling: vi.fn(async (_taskName: string, fn: () => Promise<void>) => fn()),
+const { exportBrandAtlasDocumentToPptx, exportBrandAtlasDocumentToPdf } = vi.hoisted(() => ({
+  exportBrandAtlasDocumentToPptx: vi.fn(async () => {}),
+  exportBrandAtlasDocumentToPdf: vi.fn(async () => {}),
 }));
 
 const makeBuilder = (tableName: string) => {
@@ -108,10 +107,9 @@ vi.mock('../services/supabase-client', () => ({
   },
 }));
 
-vi.mock('../services/visual-export', () => ({
-  exportElementRefToPptx,
-  exportElementRefToPdf,
-  withVisualExportErrorHandling,
+vi.mock('../services/brand-atlas-themed-export', () => ({
+  exportBrandAtlasDocumentToPptx,
+  exportBrandAtlasDocumentToPdf,
 }));
 
 describe('AdminPage', () => {
@@ -313,6 +311,221 @@ describe('AdminPage', () => {
     expect(await screen.findByTestId('admin-report-preview')).toBeInTheDocument();
     expect(await screen.findByTestId('admin-export-pptx-button')).toBeInTheDocument();
     expect(await screen.findByTestId('admin-export-pdf-button')).toBeInTheDocument();
+  });
+
+  it('surfaces export failure details instead of generic validation copy', async () => {
+    exportBrandAtlasDocumentToPdf.mockRejectedValueOnce(new Error('Invalid color function: color-mix(in oklab, #fff 50%, transparent)'));
+    render(<AdminPage />);
+
+    fireEvent.change(screen.getByTestId('admin-mode-select'), { target: { value: 'design' } });
+    fireEvent.click(screen.getByTestId('admin-json-toggle-button'));
+    fireEvent.change(screen.getByTestId('admin-json-row-input'), {
+      target: {
+        value: JSON.stringify({
+          id: 'dx-export-error-1',
+          report: {
+            analysisObjective: 'Visual compare',
+            ecosystemMethod: 'test',
+            brandProfiles: [
+              {
+                brandName: 'Apple',
+                website: 'https://apple.com',
+                sampleVisuals: [],
+                logo: {
+                  mainLogo: 'Wordmark + symbol',
+                  logoVariations: [],
+                  wordmarkLogotype: 'Apple wordmark',
+                  symbolsIcons: ['Apple icon'],
+                },
+                colorPalette: {
+                  primaryColors: [{ name: 'Black', hex: '#000000' }],
+                  secondaryAccentColors: [],
+                  neutrals: [{ name: 'White', hex: '#FFFFFF' }],
+                },
+                typography: {
+                  fontFamilies: ['SF Pro'],
+                  hierarchy: { h1: 'Bold', h2: 'Semibold', body: 'Regular' },
+                  usageRules: [],
+                },
+                supportingVisualElements: {
+                  imageryStyle: ['Product-first'],
+                  icons: [],
+                  patternsTextures: [],
+                  shapes: [],
+                  dataVisualization: [],
+                },
+                consistencyAssessment: 'Consistent',
+                distinctivenessAssessment: 'High',
+                sources: [],
+              },
+            ],
+            crossBrandReadout: ['Minimalism wins'],
+            strategicRecommendations: ['Keep product-led visual system'],
+            sources: [],
+          },
+        }),
+      },
+    });
+
+    fireEvent.click(screen.getByTestId('admin-render-json-button'));
+    expect(await screen.findByTestId('admin-export-pdf-button')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('admin-export-pdf-button'));
+
+    const errorBanner = await screen.findByTestId('admin-export-error');
+    expect(errorBanner).toHaveTextContent('Invalid color function: color-mix');
+    expect(errorBanner).not.toHaveTextContent('Some inputs are invalid or incomplete. Please review and try again.');
+  });
+
+  it('uses themed brand atlas exporter so admin downloads match public export styling', async () => {
+    render(<AdminPage />);
+
+    fireEvent.change(screen.getByTestId('admin-mode-select'), { target: { value: 'design' } });
+    fireEvent.click(screen.getByTestId('admin-json-toggle-button'));
+    fireEvent.change(screen.getByTestId('admin-json-row-input'), {
+      target: {
+        value: JSON.stringify({
+          id: 'dx-themed-1',
+          audience: 'Males in US',
+          report: {
+            analysisObjective: 'Visual compare',
+            ecosystemMethod: 'test',
+            brandProfiles: [
+              {
+                brandName: 'Apple',
+                website: 'https://apple.com',
+                sampleVisuals: [{ title: 'Hero image', url: 'https://example.com/hero' }],
+                logo: {
+                  mainLogo: 'Wordmark + symbol',
+                  logoVariations: ['Mono'],
+                  wordmarkLogotype: 'Apple wordmark',
+                  symbolsIcons: ['Apple icon'],
+                },
+                colorPalette: {
+                  primaryColors: [{ name: 'Black', hex: '#000000' }],
+                  secondaryAccentColors: [{ name: 'Blue', hex: '#2E5BFF' }],
+                  neutrals: [{ name: 'White', hex: '#FFFFFF' }],
+                },
+                typography: {
+                  fontFamilies: ['SF Pro'],
+                  hierarchy: { h1: 'Bold', h2: 'Semibold', body: 'Regular' },
+                  usageRules: ['Strong headline contrast'],
+                },
+                supportingVisualElements: {
+                  imageryStyle: ['Product-first'],
+                  icons: ['Line icons'],
+                  patternsTextures: ['Subtle grain'],
+                  shapes: ['Rounded cards'],
+                  dataVisualization: ['Minimal charts'],
+                },
+                consistencyAssessment: 'Consistent',
+                distinctivenessAssessment: 'High',
+                sources: [{ title: 'Design notes', url: 'https://example.com/design' }],
+              },
+            ],
+            crossBrandReadout: ['Minimalism wins'],
+            strategicRecommendations: ['Keep product-led visual system'],
+            sources: [{ title: 'Global source', url: 'https://example.com/global' }],
+          },
+        }),
+      },
+    });
+
+    fireEvent.click(screen.getByTestId('admin-render-json-button'));
+    expect(await screen.findByTestId('admin-export-pdf-button')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('admin-export-pdf-button'));
+
+    await waitFor(() => {
+      expect(exportBrandAtlasDocumentToPdf).toHaveBeenCalledTimes(1);
+    });
+
+    const firstCall = exportBrandAtlasDocumentToPdf.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    if (!firstCall) {
+      throw new Error('Expected themed PDF export call payload.');
+    }
+    const [documentArg, fileNameArg] = firstCall as unknown as [any, string];
+    expect(fileNameArg).toBe('Apple_Design_Excavator.pdf');
+    expect(documentArg.reportTitle).toBe('Design Excavator');
+    expect(documentArg.sections.length).toBeGreaterThan(0);
+    expect(documentArg.sections.some((section: { title: string }) => section.title === 'Apple')).toBe(true);
+  });
+
+  it('includes full cultural deep-dive copy in exports without truncating long insight details', async () => {
+    render(<AdminPage />);
+
+    fireEvent.change(screen.getByTestId('admin-mode-select'), { target: { value: 'cultural' } });
+    fireEvent.click(screen.getByTestId('admin-json-toggle-button'));
+    fireEvent.change(screen.getByTestId('admin-json-row-input'), {
+      target: {
+        value: JSON.stringify({
+          id: 'ca-export-full-copy-1',
+          audience: 'Gen Z',
+          matrix: {
+            demographics: {
+              age: '18-34',
+              race: 'Mixed',
+              gender: 'All',
+            },
+            sociological_analysis: 'Summary',
+            moments: [
+              {
+                text: 'Execution pressure is turning self-improvement into measurable routines.',
+                sourceType: 'topic-specific',
+                confidenceLevel: 'medium',
+                trendLifecycle: 'peaking',
+                deepDive: {
+                  originationDate: '2026-06-03',
+                  relevance: 'Useful for product messaging alignment.',
+                  expandedContext: 'Long context paragraph for testing full-copy export behavior.',
+                  strategicImplications: Array.from({ length: 12 }, (_, index) => `Implication ${index + 1}`),
+                  realWorldExamples: Array.from({ length: 11 }, (_, index) => `Example ${index + 1}`),
+                  sources: [
+                    { title: 'CDC brief', url: 'https://example.com/cdc' },
+                    { title: 'WHO report', url: 'https://example.com/who' },
+                  ],
+                },
+              },
+            ],
+            beliefs: [],
+            behaviors: [],
+            contradictions: [],
+            tone: [],
+            language: [],
+            community: [],
+            influencers: [],
+            sources: [{ title: 'Global source', url: 'https://example.com/global' }],
+          },
+        }),
+      },
+    });
+
+    fireEvent.click(screen.getByTestId('admin-render-json-button'));
+    expect(await screen.findByTestId('admin-export-pdf-button')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('admin-export-pdf-button'));
+
+    await waitFor(() => {
+      expect(exportBrandAtlasDocumentToPdf).toHaveBeenCalledTimes(1);
+    });
+
+    const firstCall = exportBrandAtlasDocumentToPdf.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    if (!firstCall) {
+      throw new Error('Expected cultural PDF export call payload.');
+    }
+
+    const [documentArg] = firstCall as unknown as [any, string];
+    const momentsSection = (documentArg.sections || []).find((section: { title: string }) => section.title === 'Moments');
+    expect(momentsSection).toBeDefined();
+
+    const firstInsightCard = momentsSection.cards[0];
+    expect(firstInsightCard).toBeDefined();
+    expect(firstInsightCard.lines.some((line: string) => line.includes('Origination Date: 2026-06-03'))).toBe(true);
+    expect(firstInsightCard.lines.some((line: string) => line.includes('Strategic Implication: Implication 12'))).toBe(true);
+    expect(firstInsightCard.lines.some((line: string) => line.includes('Real-World Example: Example 11'))).toBe(true);
+    expect(firstInsightCard.lines.some((line: string) => line.includes('Deep-dive Source: CDC brief: https://example.com/cdc'))).toBe(true);
   });
 
   it('renders cultural observation deep dives when they exist in the row payload', async () => {

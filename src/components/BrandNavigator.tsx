@@ -121,6 +121,7 @@ type BrandResultSectionKey =
   | 'keyOfferingsProductsServices'
   | 'strategicMoatsStrengths'
   | 'potentialThreatsWeaknesses'
+  | 'challenges'
   | 'targetAudiences'
   | 'recentCampaigns'
   | 'keyMarketingChannels'
@@ -136,6 +137,7 @@ const BRAND_RESULT_SECTION_KEYS: BrandResultSectionKey[] = [
   'keyOfferingsProductsServices',
   'strategicMoatsStrengths',
   'potentialThreatsWeaknesses',
+  'challenges',
   'targetAudiences',
   'recentCampaigns',
   'keyMarketingChannels',
@@ -558,7 +560,7 @@ export default function BrandNavigator() {
     setSelectedGenerations(sm.generations || []);
     setTopicFocus(sm.topicFocus || '');
     setSourcesType(sm.sourcesType || []);
-    setMatrix(sm.matrix);
+    setMatrix(sanitizeBrandResearchMatrix(sm.matrix));
     setMatrixMeta({
       audience: sm.audience,
       brand: sm.brand,
@@ -1381,6 +1383,7 @@ export default function BrandNavigator() {
     keyOfferingsProductsServices: 'Key Offerings / Products / Services',
     strategicMoatsStrengths: 'Strategic Moats (Strengths)',
     potentialThreatsWeaknesses: 'Potential Threats (Weaknesses)',
+    challenges: 'Challenges',
     targetAudiences: 'Target Audiences',
     recentCampaigns: 'Recent Campaigns',
     keyMarketingChannels: 'Key Marketing Channels',
@@ -1432,6 +1435,8 @@ export default function BrandNavigator() {
         return (brand.strategicMoatsStrengths || []).length > 0 ? brand.strategicMoatsStrengths! : ['N/A'];
       case 'potentialThreatsWeaknesses':
         return (brand.potentialThreatsWeaknesses || []).length > 0 ? brand.potentialThreatsWeaknesses! : ['N/A'];
+      case 'challenges':
+        return (brand.challenges || []).length > 0 ? brand.challenges! : ['N/A'];
       case 'targetAudiences': {
         if (!brand.targetAudiences || brand.targetAudiences.length === 0) return ['N/A'];
         return brand.targetAudiences.flatMap((aud, index) => [
@@ -2448,7 +2453,7 @@ export default function BrandNavigator() {
                   return;
                 }
                 if (item.matrix && item.matrixMeta) {
-                  setMatrix(item.matrix);
+                  setMatrix(sanitizeBrandResearchMatrix(item.matrix));
                   setMatrixMeta(item.matrixMeta);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
@@ -2753,7 +2758,7 @@ export default function BrandNavigator() {
                   return;
                 }
                 if (item.matrix && item.matrixMeta) {
-                  setMatrix(item.matrix);
+                  setMatrix(sanitizeBrandResearchMatrix(item.matrix));
                   setMatrixMeta(item.matrixMeta);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
@@ -2857,6 +2862,7 @@ type BrandResultEntry = {
   keyOfferingsProductsServices?: string[];
   strategicMoatsStrengths?: string[];
   potentialThreatsWeaknesses?: string[];
+  challenges?: string[];
   targetAudiences?: BrandResultAudience[];
   recentCampaigns?: string[];
   keyMarketingChannels?: string[];
@@ -3297,11 +3303,285 @@ const getPrimaryInferredEvidenceUrl = (
   return undefined;
 };
 
+const SECTION_OVERLAP_STOPWORDS = new Set([
+  'the',
+  'and',
+  'for',
+  'with',
+  'that',
+  'this',
+  'from',
+  'into',
+  'their',
+  'they',
+  'them',
+  'over',
+  'across',
+  'brand',
+  'company',
+  'products',
+  'services',
+  'channels',
+  'campaigns',
+]);
+
+const CHALLENGE_FOCUS_TERMS = [
+  'brand',
+  'positioning',
+  'awareness',
+  'perception',
+  'equity',
+  'message',
+  'messaging',
+  'creative',
+  'campaign',
+  'paid media',
+  'social',
+  'content',
+  'influencer',
+  'audience',
+  'customer',
+  'consumer',
+  'retention',
+  'churn',
+  'acquisition',
+  'conversion',
+  'loyalty',
+  'crm',
+  'journey',
+  'segmentation',
+  'targeting',
+  'engagement',
+  'funnel',
+];
+
+const CHALLENGE_BUSINESS_MACRO_TERMS = [
+  'macroeconomic',
+  'macro',
+  'inflation',
+  'interest rate',
+  'rate environment',
+  'recession',
+  'currency',
+  'fx',
+  'foreign exchange',
+  'tariff',
+  'trade policy',
+  'geopolitical',
+  'regulation',
+  'regulatory',
+  'antitrust',
+  'privacy law',
+  'labor market',
+  'unemployment',
+  'commodity',
+  'energy cost',
+  'shipping cost',
+  'tax',
+  'margin',
+  'profitability',
+  'cash flow',
+  'debt',
+  'financing',
+  'cost of capital',
+  'unit economics',
+  'working capital',
+];
+
+const DEFAULT_BUSINESS_MACRO_CHALLENGE =
+  '[INFERRED] Business/macro challenge: inflationary cost pressure and policy/regulatory shifts can increase demand volatility and planning risk.';
+
+const normalizeOverlapText = (value: string): string => {
+  return value
+    .replace(/\[[^\]]+\]/g, ' ')
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const tokenizeForOverlap = (value: string): string[] => {
+  return normalizeOverlapText(value)
+    .split(' ')
+    .map((token) => token.trim())
+    .filter((token) => token.length > 2 && !SECTION_OVERLAP_STOPWORDS.has(token));
+};
+
+const containsChallengeTerm = (value: string, terms: string[]): boolean => {
+  const normalized = normalizeOverlapText(value);
+  return terms.some((term) => normalized.includes(term));
+};
+
+type ChallengePriorityBucket = 'focus' | 'macro' | 'secondary';
+
+const classifyChallengePriority = (value: string): ChallengePriorityBucket => {
+  if (containsChallengeTerm(value, CHALLENGE_BUSINESS_MACRO_TERMS)) {
+    return 'macro';
+  }
+  if (containsChallengeTerm(value, CHALLENGE_FOCUS_TERMS)) {
+    return 'focus';
+  }
+  return 'secondary';
+};
+
+const prioritizeChallengesForMixAndOrder = (challenges: string[]): string[] => {
+  const focus: string[] = [];
+  const secondary: string[] = [];
+  const macro: string[] = [];
+
+  challenges.forEach((challenge) => {
+    const bucket = classifyChallengePriority(challenge);
+    if (bucket === 'macro') {
+      macro.push(challenge);
+      return;
+    }
+    if (bucket === 'focus') {
+      focus.push(challenge);
+      return;
+    }
+    secondary.push(challenge);
+  });
+
+  if (focus.length === 0 && secondary.length > 0) {
+    focus.push(secondary.shift()!);
+  }
+
+  if (macro.length === 0 && challenges.length > 0) {
+    macro.push(DEFAULT_BUSINESS_MACRO_CHALLENGE);
+  }
+
+  const hasFocusMajority = () => focus.length > (focus.length + secondary.length + macro.length) / 2;
+  while (!hasFocusMajority() && secondary.length > 0) {
+    secondary.pop();
+  }
+  while (!hasFocusMajority() && macro.length > 1) {
+    macro.pop();
+  }
+
+  return [...focus, ...secondary, ...macro];
+};
+
+const hasHighSectionOverlap = (candidate: string, reference: string): boolean => {
+  const normalizedCandidate = normalizeOverlapText(candidate);
+  const normalizedReference = normalizeOverlapText(reference);
+
+  if (!normalizedCandidate || !normalizedReference) {
+    return false;
+  }
+
+  if (normalizedCandidate === normalizedReference) {
+    return true;
+  }
+
+  if (
+    (normalizedCandidate.includes(normalizedReference) || normalizedReference.includes(normalizedCandidate)) &&
+    Math.min(normalizedCandidate.length, normalizedReference.length) >= 24
+  ) {
+    return true;
+  }
+
+  const candidateTokens = tokenizeForOverlap(candidate);
+  const referenceTokens = tokenizeForOverlap(reference);
+  if (candidateTokens.length === 0 || referenceTokens.length === 0) {
+    return false;
+  }
+
+  const referenceTokenSet = new Set(referenceTokens);
+  const sharedTokenCount = candidateTokens.reduce(
+    (count, token) => count + (referenceTokenSet.has(token) ? 1 : 0),
+    0
+  );
+  if (sharedTokenCount < 3) {
+    return false;
+  }
+
+  const overlapVsCandidate = sharedTokenCount / candidateTokens.length;
+  const overlapVsReference = sharedTokenCount / referenceTokens.length;
+  return overlapVsCandidate >= 0.65 && overlapVsReference >= 0.5;
+};
+
+const collectNonChallengeLines = (result: BrandResultEntry): string[] => {
+  const positioning = result.brandPositioning || {};
+  const targetAudienceLines = (result.targetAudiences || []).flatMap((audienceEntry) => [
+    audienceEntry.audience,
+    audienceEntry.priority,
+    audienceEntry.inferredRoleToConsumers,
+    ...(audienceEntry.functionalBenefits || []),
+    ...(audienceEntry.emotionalBenefits || []),
+  ]);
+  const socialLines = (result.socialMediaChannels || []).flatMap((channelEntry) => [
+    channelEntry.channel,
+    channelEntry.url,
+    `${channelEntry.channel || ''} ${channelEntry.url || ''}`.trim(),
+  ]);
+  const recentNewsLines = (result.recentNews || [])
+    .map(parseHeadlineFromNewsItem)
+    .filter((item): item is ParsedHeadline => Boolean(item))
+    .flatMap((item) => [item.headline, item.url || '']);
+
+  return [
+    result.highLevelSummary || '',
+    result.brandMission || '',
+    ...(positioning.taglines || []),
+    ...(positioning.keyMessagesAndClaims || []),
+    positioning.valueProposition || '',
+    positioning.voiceAndTone || '',
+    ...(result.keyOfferingsProductsServices || []),
+    ...(result.strategicMoatsStrengths || []),
+    ...(result.potentialThreatsWeaknesses || []),
+    ...targetAudienceLines,
+    ...(result.recentCampaigns || []),
+    ...(result.keyMarketingChannels || []),
+    ...socialLines,
+    ...recentNewsLines,
+  ]
+    .map((value) => (value || '').trim())
+    .filter((value) => value.length > 0);
+};
+
+const limitChallengeOverlap = (result: BrandResultEntry): string[] => {
+  const rawChallenges = (result.challenges || [])
+    .map((value) => (value || '').trim())
+    .filter((value) => value.length > 0 && !isMissingResultTextValue(value));
+  if (rawChallenges.length === 0) {
+    return [];
+  }
+
+  const otherSectionLines = collectNonChallengeLines(result);
+  const filteredChallenges: string[] = [];
+
+  rawChallenges.forEach((challenge) => {
+    const overlapsOtherSections = otherSectionLines.some((line) => hasHighSectionOverlap(challenge, line));
+    if (overlapsOtherSections) {
+      return;
+    }
+
+    const overlapsExistingChallenge = filteredChallenges.some((line) => hasHighSectionOverlap(challenge, line));
+    if (overlapsExistingChallenge) {
+      return;
+    }
+
+    filteredChallenges.push(challenge);
+  });
+
+  if (filteredChallenges.length > 0) {
+    return prioritizeChallengesForMixAndOrder(filteredChallenges);
+  }
+
+  const fallbackUniqueChallenges = rawChallenges.filter(
+    (challenge, index, list) =>
+      list.findIndex((entry) => hasHighSectionOverlap(entry, challenge)) === index
+  );
+  return prioritizeChallengesForMixAndOrder(fallbackUniqueChallenges.slice(0, 1));
+};
+
 const sanitizeBrandResearchMatrix = (rawMatrix: BrandResearchMatrix): BrandResearchMatrix => {
   const sanitizedResults = (rawMatrix.results || []).map((result, index) => {
     const brandName = result.brandName || `Brand ${index + 1}`;
     const sanitizedChannels = sanitizeSocialChannels(result.socialMediaChannels, brandName);
     const sanitizedSources = sanitizeSourceLinks(result.sources, { scope: 'brand', brandName });
+    const sanitizedChallenges = limitChallengeOverlap(result);
 
     logger.debug('[BrandNavigator] Sanitized social channels while loading results.', {
       brandName,
@@ -3313,10 +3593,16 @@ const sanitizeBrandResearchMatrix = (rawMatrix: BrandResearchMatrix): BrandResea
       beforeCount: (result.sources || []).length,
       afterCount: sanitizedSources.length,
     });
+    logger.debug('[BrandNavigator] Reduced overlap for challenges while loading results.', {
+      brandName,
+      beforeCount: (result.challenges || []).length,
+      afterCount: sanitizedChallenges.length,
+    });
 
     return {
       ...result,
       socialMediaChannels: sanitizedChannels,
+      challenges: sanitizedChallenges,
       sources: sanitizedSources,
     };
   });
@@ -3762,6 +4048,10 @@ function BrandResultCard({
 
         <BrandCriteriaSection sectionId={resolveBrandSectionId('potentialThreatsWeaknesses')} title="Potential threats (weaknesses)" sectionKey="potentialThreatsWeaknesses" highlighted={highlightedSections.includes('potentialThreatsWeaknesses')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('potentialThreatsWeaknesses')} onRefresh={() => onRefreshSection('potentialThreatsWeaknesses')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-potentialThreatsWeaknesses`}>
           <BrandResultBulletList items={brandResult.potentialThreatsWeaknesses || []} inferredEvidenceUrl={inferredEvidenceUrl} />
+        </BrandCriteriaSection>
+
+        <BrandCriteriaSection sectionId={resolveBrandSectionId('challenges')} title="Challenges" sectionKey="challenges" highlighted={highlightedSections.includes('challenges')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('challenges')} onRefresh={() => onRefreshSection('challenges')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-challenges`}>
+          <BrandResultBulletList items={brandResult.challenges || []} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
         <BrandCriteriaSection sectionId={resolveBrandSectionId('targetAudiences')} title="Target audiences" sectionKey="targetAudiences" highlighted={highlightedSections.includes('targetAudiences')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} fullWidth showRefresh={isSectionMissing('targetAudiences')} onRefresh={() => onRefreshSection('targetAudiences')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-targetAudiences`}>

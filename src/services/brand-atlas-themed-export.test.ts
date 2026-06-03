@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { jsPDF } from 'jspdf';
-import { measurePdfCardLayoutForTest, splitCardsIntoSlides } from './brand-atlas-themed-export';
+import {
+  measurePdfCardLayoutForTest,
+  paginatePptCardForTest,
+  splitCardsIntoSlides,
+} from './brand-atlas-themed-export';
 
 describe('brand atlas themed export layout', () => {
   it('chunks cards into slide-sized groups', () => {
@@ -42,5 +46,23 @@ describe('brand atlas themed export layout', () => {
 
     expect(longLayout.height).toBeGreaterThan(shortLayout.height);
     expect(longLayout.bulletGroups[0].length).toBeGreaterThan(1);
+  });
+
+  it('paginates long ppt card copy into continuation chunks without dropping bullets', () => {
+    const chunks = paginatePptCardForTest(
+      {
+        title: 'Moments',
+        lines: Array.from({ length: 30 }, (_, index) => `Insight ${index + 1} captures a long sentence about audience behavior shifts.`),
+      },
+      6,
+      32
+    );
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks[0]?.title).toBe('Moments');
+    expect(chunks[1]?.title).toBe('Moments (CONT.)');
+    const allRenderedLines = chunks.flatMap((chunk) => chunk.lines);
+    expect(allRenderedLines.some((line) => line.includes('• Insight 1'))).toBe(true);
+    expect(allRenderedLines.some((line) => line.includes('• Insight 30'))).toBe(true);
   });
 });

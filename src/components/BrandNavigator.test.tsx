@@ -102,6 +102,7 @@ const incompleteMatrix = {
       keyOfferingsProductsServices: [],
       strategicMoatsStrengths: [],
       potentialThreatsWeaknesses: [],
+      challenges: [],
       targetAudiences: [],
       recentCampaigns: [],
       keyMarketingChannels: [],
@@ -130,6 +131,7 @@ const matrixWithResults = {
       keyOfferingsProductsServices: ['Outerwear'],
       strategicMoatsStrengths: ['Brand trust'],
       potentialThreatsWeaknesses: ['Premium pricing'],
+      challenges: ['Balancing premium pricing with category inflation pressure'],
       targetAudiences: [],
       recentCampaigns: ['Worn Wear'],
       keyMarketingChannels: ['Owned channels'],
@@ -313,6 +315,7 @@ describe('BrandNavigator', () => {
     expect(within(mobileResultsNav).getByRole('button', { name: 'Brand Q&A' })).toBeInTheDocument();
     expect(within(mobileResultsNav).getByRole('button', { name: 'Patagonia' })).toBeInTheDocument();
     expect(within(mobileResultsNav).getByRole('button', { name: 'Patagonia: Brand Mission' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Patagonia: Challenges' })).toBeInTheDocument();
     expect(within(mobileResultsNav).getByRole('button', { name: 'Sources' })).toBeInTheDocument();
   });
 
@@ -460,6 +463,10 @@ describe('BrandNavigator', () => {
           keyOfferingsProductsServices: ['Outerwear'],
           strategicMoatsStrengths: ['Brand trust'],
           potentialThreatsWeaknesses: ['Premium pricing pressure'],
+          challenges: [
+            'Premium pricing pressure from discount-heavy competitors',
+            'Supply chain volatility across technical materials',
+          ],
           targetAudiences: [],
           recentCampaigns: [],
           keyMarketingChannels: [],
@@ -491,6 +498,156 @@ describe('BrandNavigator', () => {
     const sectionsLayout = screen.getByTestId('brand-result-sections-layout');
     expect(sectionsLayout.className).toContain('lg:columns-2');
     expect(sectionsLayout.className).not.toContain('lg:grid-cols-2');
+  });
+
+  it('renders a Challenges section and removes overlap with other result sections', async () => {
+    generateBrandResearchMatrix.mockResolvedValue({
+      analysisObjective: 'test objective',
+      ecosystemMethod: 'test method',
+      results: [
+        {
+          brandName: 'Patagonia',
+          highLevelSummary: 'Summary',
+          brandMission: 'Mission',
+          brandPositioning: {
+            taglines: [],
+            keyMessagesAndClaims: [],
+            valueProposition: 'Value',
+            voiceAndTone: 'Tone',
+          },
+          keyOfferingsProductsServices: ['Repair program'],
+          strategicMoatsStrengths: ['Vertical storytelling flywheel'],
+          potentialThreatsWeaknesses: ['Rising customer acquisition costs in paid social'],
+          challenges: [
+            'Rising customer acquisition costs in paid social',
+            'Supply chain volatility in technical fabrics',
+            'Dependence on seasonal wholesale partners',
+          ],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: ['Paid social'],
+          socialMediaChannels: [],
+          recentNews: [],
+          sources: [],
+        },
+      ],
+      sources: [],
+    });
+
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
+
+    const challengesSection = await screen.findByTestId('brand-result-section-challenges');
+    const challengeItems = within(challengesSection).getAllByRole('listitem');
+    expect(challengesSection).toBeInTheDocument();
+    expect(challengeItems).toHaveLength(2);
+    expect(within(challengesSection).getByText('Supply chain volatility in technical fabrics')).toBeInTheDocument();
+    expect(within(challengesSection).queryByText('Rising customer acquisition costs in paid social')).not.toBeInTheDocument();
+    expect(challengeItems[1]).toHaveTextContent('Business/macro challenge');
+  });
+
+  it('prioritizes brand/marketing/customer challenges and places a business-macro challenge at the bottom', async () => {
+    generateBrandResearchMatrix.mockResolvedValue({
+      analysisObjective: 'test objective',
+      ecosystemMethod: 'test method',
+      results: [
+        {
+          brandName: 'Patagonia',
+          highLevelSummary: 'Summary',
+          brandMission: 'Mission',
+          brandPositioning: {
+            taglines: [],
+            keyMessagesAndClaims: [],
+            valueProposition: 'Value',
+            voiceAndTone: 'Tone',
+          },
+          keyOfferingsProductsServices: ['Repair services'],
+          strategicMoatsStrengths: ['Loyal customer base'],
+          potentialThreatsWeaknesses: ['Threat list item'],
+          challenges: [
+            'Margin pressure from inflation and higher borrowing costs',
+            'Creative differentiation is weakening across paid social formats',
+            'Retention performance is soft among younger audience cohorts',
+          ],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: [],
+          socialMediaChannels: [],
+          recentNews: [],
+          sources: [],
+        },
+      ],
+      sources: [],
+    });
+
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
+
+    const challengesSection = await screen.findByTestId('brand-result-section-challenges');
+    const challengeItems = within(challengesSection).getAllByRole('listitem');
+    expect(challengeItems).toHaveLength(3);
+    expect(challengeItems[0]).toHaveTextContent('Creative differentiation is weakening across paid social formats');
+    expect(challengeItems[1]).toHaveTextContent('Retention performance is soft among younger audience cohorts');
+    expect(challengeItems[2]).toHaveTextContent('Margin pressure from inflation and higher borrowing costs');
+  });
+
+  it('adds an inferred business-macro challenge at the bottom when no macro item is provided', async () => {
+    generateBrandResearchMatrix.mockResolvedValue({
+      analysisObjective: 'test objective',
+      ecosystemMethod: 'test method',
+      results: [
+        {
+          brandName: 'Patagonia',
+          highLevelSummary: 'Summary',
+          brandMission: 'Mission',
+          brandPositioning: {
+            taglines: [],
+            keyMessagesAndClaims: [],
+            valueProposition: 'Value',
+            voiceAndTone: 'Tone',
+          },
+          keyOfferingsProductsServices: ['Repair services'],
+          strategicMoatsStrengths: ['Loyal customer base'],
+          potentialThreatsWeaknesses: ['Threat list item'],
+          challenges: [
+            'Creative differentiation is weakening across paid social formats',
+            'Retention performance is soft among younger audience cohorts',
+          ],
+          targetAudiences: [],
+          recentCampaigns: [],
+          keyMarketingChannels: [],
+          socialMediaChannels: [],
+          recentNews: [],
+          sources: [],
+        },
+      ],
+      sources: [],
+    });
+
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
+
+    const challengesSection = await screen.findByTestId('brand-result-section-challenges');
+    const challengeItems = within(challengesSection).getAllByRole('listitem');
+    expect(challengeItems).toHaveLength(3);
+    expect(challengeItems[0]).toHaveTextContent('Creative differentiation is weakening across paid social formats');
+    expect(challengeItems[1]).toHaveTextContent('Retention performance is soft among younger audience cohorts');
+    expect(challengeItems[2]).toHaveTextContent('Business/macro challenge');
   });
 
   it('shows Analyze Visual Identity, prefills brands, and opens Design Excavator in a new top-level tab', async () => {

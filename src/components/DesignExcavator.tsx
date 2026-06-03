@@ -97,10 +97,10 @@ import { MobileTwoLineSubcopy } from './MobileTwoLineSubcopy';
 import { MobileResultsNav } from './MobileResultsNav';
 import { ShowThinkingDropdown } from './ShowThinkingDropdown';
 import {
-  exportElementRefToPdf,
-  exportElementRefToPptx,
-  withVisualExportErrorHandling,
-} from '../services/visual-export';
+  type BrandAtlasExportDocument,
+  exportBrandAtlasDocumentToPdf,
+  exportBrandAtlasDocumentToPptx,
+} from '../services/brand-atlas-themed-export';
 
 interface VisualDesignPageProps {
   onBack: () => void;
@@ -231,6 +231,11 @@ const extractEvidenceTags = (value: string): { cleanText: string; labels: Eviden
     .trim();
 
   return { cleanText, labels };
+};
+
+const cleanEvidenceText = (value?: string | null): string => {
+  const parsed = extractEvidenceTags(value || '');
+  return (parsed.cleanText || value || '').trim();
 };
 
 const evidenceLabelChipClass = (label: EvidenceTagLabel): string => {
@@ -2447,23 +2452,167 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     return dataUrl.startsWith('data:image/jpeg') || dataUrl.startsWith('data:image/jpg') ? 'JPEG' : 'PNG';
   };
 
+  const getExportErrorDetail = (error: unknown): string | null => {
+    if (error instanceof Error && error.message.trim().length > 0) {
+      return error.message.trim();
+    }
+    if (typeof error === 'string' && error.trim().length > 0) {
+      return error.trim();
+    }
+    return null;
+  };
+
+  const buildDesignExportDocument = (): BrandAtlasExportDocument | null => {
+    if (!report) return null;
+
+    const toLines = (values: Array<string | null | undefined>, max = 8): string[] => {
+      return values
+        .map((value) => cleanEvidenceText(value || ''))
+        .filter(Boolean)
+        .slice(0, max);
+    };
+
+    const sections: BrandAtlasExportDocument['sections'] = report.brandProfiles
+      .map((profile, profileIndex) => {
+        const cards: BrandAtlasExportDocument['sections'][number]['cards'] = [
+          {
+            title: 'Logos & Visuals',
+            lines: toLines([
+              profile.logo.mainLogo ? `Main Logo: ${profile.logo.mainLogo}` : '',
+              profile.logo.wordmarkLogotype ? `Wordmark: ${profile.logo.wordmarkLogotype}` : '',
+              ...(profile.sampleVisuals || []).map((visual) => `Visual: ${visual.title || visual.url}`),
+            ], 8),
+          },
+          {
+            title: 'Logo System',
+            lines: toLines([
+              ...(profile.logo.logoVariations || []).map((variation) => `Variation: ${variation}`),
+              ...(profile.logo.symbolsIcons || []).map((symbol) => `Symbol/Icon: ${symbol}`),
+            ], 8),
+          },
+          {
+            title: 'Color Palette',
+            lines: [
+              ...(profile.colorPalette.primaryColors || []).map((color) => cleanEvidenceText(`Primary: ${color.name || 'Color'} (${color.hex || 'N/A'})`)),
+              ...(profile.colorPalette.secondaryAccentColors || []).map((color) => cleanEvidenceText(`Accent: ${color.name || 'Color'} (${color.hex || 'N/A'})`)),
+              ...(profile.colorPalette.neutrals || []).map((color) => cleanEvidenceText(`Neutral: ${color.name || 'Color'} (${color.hex || 'N/A'})`)),
+            ].filter(Boolean).slice(0, 8),
+          },
+          {
+            title: 'Typography',
+            lines: toLines([
+              ...(profile.typography.fontFamilies || []).map((family) => `Font Family: ${family}`),
+              profile.typography.hierarchy.h1 ? `H1: ${profile.typography.hierarchy.h1}` : '',
+              profile.typography.hierarchy.h2 ? `H2: ${profile.typography.hierarchy.h2}` : '',
+              profile.typography.hierarchy.body ? `Body: ${profile.typography.hierarchy.body}` : '',
+              ...(profile.typography.usageRules || []).map((rule) => `Rule: ${rule}`),
+            ], 8),
+          },
+          {
+            title: 'Supporting Visual Elements',
+            lines: toLines([
+              ...(profile.supportingVisualElements.imageryStyle || []).map((value) => `Imagery: ${value}`),
+              ...(profile.supportingVisualElements.icons || []).map((value) => `Icons: ${value}`),
+              ...(profile.supportingVisualElements.patternsTextures || []).map((value) => `Pattern/Texture: ${value}`),
+              ...(profile.supportingVisualElements.shapes || []).map((value) => `Shapes: ${value}`),
+              ...(profile.supportingVisualElements.dataVisualization || []).map((value) => `Data Visualization: ${value}`),
+            ], 8),
+          },
+          {
+            title: 'Assessments',
+            lines: toLines([
+              profile.consistencyAssessment ? `Consistency: ${profile.consistencyAssessment}` : '',
+              profile.distinctivenessAssessment ? `Distinctiveness: ${profile.distinctivenessAssessment}` : '',
+            ], 4),
+          },
+        ].filter((card) => card.lines.length > 0);
+
+        if ((profile.sources || []).length > 0) {
+          cards.push({
+            title: 'Sources',
+            lines: (profile.sources || [])
+              .slice(0, 6)
+              .map((source) => cleanEvidenceText(`${source.title}: ${source.url}`))
+              .filter(Boolean),
+          });
+        }
+
+        return {
+          title: cleanEvidenceText(profile.brandName) || `Brand ${profileIndex + 1}`,
+          cards,
+        };
+      })
+      .filter((section) => section.cards.length > 0);
+
+    if ((report.crossBrandReadout || []).length > 0 || (report.strategicRecommendations || []).length > 0) {
+      sections.push({
+        title: 'Cross-Brand Readout',
+        cards: [
+          {
+            title: 'Opportunity Spaces',
+            lines: toLines(report.crossBrandReadout || [], 10),
+          },
+          {
+            title: 'Strategic Recommendations',
+            lines: toLines(report.strategicRecommendations || [], 10),
+          },
+        ].filter((card) => card.lines.length > 0),
+      });
+    }
+
+    if ((report.sources || []).length > 0) {
+      sections.push({
+        title: 'Global Sources',
+        cards: (report.sources || []).slice(0, 24).map((source) => ({
+          title: cleanEvidenceText(source.title || 'Source'),
+          lines: toLines([source.url], 1),
+        })),
+      });
+    }
+
+    const normalizedBrands = brands
+      .map((brand) => cleanEvidenceText(brand.name))
+      .filter(Boolean);
+
+    return {
+      reportTitle: 'Design Excavator',
+      reportSubtitle: 'Brand Atlas Visual Identity Audit',
+      audience: cleanEvidenceText(targetAudience) || 'N/A',
+      contextLines: toLines([
+        normalizedBrands.length > 0 ? `Brands: ${normalizedBrands.join(' vs ')}` : '',
+        cleanEvidenceText(analysisObjective || report.analysisObjective)
+          ? `Objective: ${cleanEvidenceText(analysisObjective || report.analysisObjective)}`
+          : '',
+      ], 3),
+      sections,
+    };
+  };
+
   const exportToPPTX = async () => {
     if (!report) return;
+    const exportDocument = buildDesignExportDocument();
+    if (!exportDocument) {
+      setExportError({ type: 'pptx', message: 'No design analysis results are available to export yet.' });
+      setToast('No design analysis results are available to export yet.');
+      return;
+    }
     setExportError(null);
     setIsExporting(true);
     setToast('Generating visual PowerPoint...');
     try {
-      await withVisualExportErrorHandling('design excavator pptx export', async () => {
-        await exportElementRefToPptx({
-          ref: exportCaptureRef,
-          fileName: `Design_Excavator_${new Date().toISOString().split('T')[0]}.pptx`,
-        });
-      });
+      await exportBrandAtlasDocumentToPptx(
+        exportDocument,
+        `Design_Excavator_${new Date().toISOString().split('T')[0]}.pptx`
+      );
       setToast('PowerPoint exported successfully!');
     } catch (err) {
       const normalized = normalizeAppError(err);
+      const detail = getExportErrorDetail(err);
       logger.error('Failed to generate visual design PPTX', { err, normalized });
-      setExportError({ type: 'pptx', message: normalized.message || 'Failed to generate PowerPoint.' });
+      setExportError({
+        type: 'pptx',
+        message: detail ? `Failed to generate PowerPoint: ${detail}` : (normalized.message || 'Failed to generate PowerPoint.'),
+      });
       setToast('Failed to generate PowerPoint.');
     } finally {
       setIsExporting(false);
@@ -2472,21 +2621,29 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
   const exportToPDF = async () => {
     if (!report) return;
+    const exportDocument = buildDesignExportDocument();
+    if (!exportDocument) {
+      setExportError({ type: 'pdf', message: 'No design analysis results are available to export yet.' });
+      setToast('No design analysis results are available to export yet.');
+      return;
+    }
     setExportError(null);
     setIsExporting(true);
     setToast('Generating visual PDF...');
     try {
-      await withVisualExportErrorHandling('design excavator pdf export', async () => {
-        await exportElementRefToPdf({
-          ref: exportCaptureRef,
-          fileName: `Design_Excavator_${new Date().toISOString().split('T')[0]}.pdf`,
-        });
-      });
+      await exportBrandAtlasDocumentToPdf(
+        exportDocument,
+        `Design_Excavator_${new Date().toISOString().split('T')[0]}.pdf`
+      );
       setToast('PDF exported successfully!');
     } catch (err) {
       const normalized = normalizeAppError(err);
+      const detail = getExportErrorDetail(err);
       logger.error('Failed to generate visual design PDF', { err, normalized });
-      setExportError({ type: 'pdf', message: normalized.message || 'Failed to generate PDF.' });
+      setExportError({
+        type: 'pdf',
+        message: detail ? `Failed to generate PDF: ${detail}` : (normalized.message || 'Failed to generate PDF.'),
+      });
       setToast('Failed to generate PDF.');
     } finally {
       setIsExporting(false);

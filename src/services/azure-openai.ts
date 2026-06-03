@@ -192,6 +192,7 @@ export interface BrandResearchResult {
   keyOfferingsProductsServices: string[];
   strategicMoatsStrengths: string[];
   potentialThreatsWeaknesses: string[];
+  challenges?: string[];
   targetAudiences: BrandResearchAudience[];
   recentCampaigns: string[];
   keyMarketingChannels: string[];
@@ -2657,6 +2658,7 @@ const BrandNavigatorSectionKeySchema = z.enum([
   'keyOfferingsProductsServices',
   'strategicMoatsStrengths',
   'potentialThreatsWeaknesses',
+  'challenges',
   'targetAudiences',
   'recentCampaigns',
   'keyMarketingChannels',
@@ -2845,6 +2847,7 @@ export async function askBrandNavigatorQuestion(
     | 'keyOfferingsProductsServices'
     | 'strategicMoatsStrengths'
     | 'potentialThreatsWeaknesses'
+    | 'challenges'
     | 'targetAudiences'
     | 'recentCampaigns'
     | 'keyMarketingChannels'
@@ -3091,6 +3094,7 @@ const BrandResearchMatrixSchema = z.object({
       keyOfferingsProductsServices: z.array(z.string()),
       strategicMoatsStrengths: z.array(z.string()),
       potentialThreatsWeaknesses: z.array(z.string()),
+      challenges: z.array(z.string()).default([]).describe('Greatest challenges currently facing the brand/company. Keep concise, specific, and low-overlap with other sections.'),
       targetAudiences: z.array(BrandResearchAudienceSchema),
       recentCampaigns: z.array(z.string()),
       keyMarketingChannels: z.array(z.string()),
@@ -3911,16 +3915,22 @@ ${evidenceRulesBlock}
   4) keyOfferingsProductsServices
   5) strategicMoatsStrengths
   6) potentialThreatsWeaknesses
-  7) targetAudiences:
+  7) challenges:
+     - answer: "What are the greatest challenges facing the brand/company?"
+     - make brand, marketing, and audience/customer challenges the majority of items.
+     - include at least one business/macro challenge (for example inflation, regulation, financing/cost-of-capital, or broader economic pressure).
+     - place business/macro challenge items at the bottom of the list.
+     - keep overlap with other sections limited (do not repeat near-identical lines from moats, threats, campaigns, channels, or positioning).
+  8) targetAudiences:
      - audience
      - priority
      - inferredRoleToConsumers
      - functionalBenefits
      - emotionalBenefits
-  8) recentCampaigns
-  9) keyMarketingChannels
-  10) socialMediaChannels with channel and full URL
-  11) recentNews as actual recent brand/company article headlines from credible news outlets, each with:
+  9) recentCampaigns
+  10) keyMarketingChannels
+  11) socialMediaChannels with channel and full URL
+  12) recentNews as actual recent brand/company article headlines from credible news outlets, each with:
      - headline
      - full article URL
      - publishedAt (ISO date if available)
@@ -3956,7 +3966,301 @@ ${websiteGroundingContext ? `\n${websiteGroundingContext}` : ''}`;
     maxRetries: 3,
   });
 
-  return applyBrandMissionFallbacks(filterRecentNewsToTopMainstream(report), websiteTargets);
+  const withNormalizedNews = filterRecentNewsToTopMainstream(report);
+  const withMissionFallbacks = applyBrandMissionFallbacks(withNormalizedNews, websiteTargets);
+  return reduceChallengeOverlapInBrandMatrix(withMissionFallbacks);
+}
+
+const BRAND_SECTION_OVERLAP_STOPWORDS = new Set([
+  'the',
+  'and',
+  'for',
+  'with',
+  'that',
+  'this',
+  'from',
+  'into',
+  'their',
+  'they',
+  'them',
+  'over',
+  'across',
+  'brand',
+  'company',
+  'products',
+  'services',
+  'channels',
+  'campaigns',
+]);
+
+const CHALLENGE_FOCUS_TERMS = [
+  'brand',
+  'positioning',
+  'awareness',
+  'perception',
+  'equity',
+  'message',
+  'messaging',
+  'creative',
+  'campaign',
+  'paid media',
+  'social',
+  'content',
+  'influencer',
+  'audience',
+  'customer',
+  'consumer',
+  'retention',
+  'churn',
+  'acquisition',
+  'conversion',
+  'loyalty',
+  'crm',
+  'journey',
+  'segmentation',
+  'targeting',
+  'engagement',
+  'funnel',
+];
+
+const CHALLENGE_BUSINESS_MACRO_TERMS = [
+  'macroeconomic',
+  'macro',
+  'inflation',
+  'interest rate',
+  'rate environment',
+  'recession',
+  'currency',
+  'fx',
+  'foreign exchange',
+  'tariff',
+  'trade policy',
+  'geopolitical',
+  'regulation',
+  'regulatory',
+  'antitrust',
+  'privacy law',
+  'labor market',
+  'unemployment',
+  'commodity',
+  'energy cost',
+  'shipping cost',
+  'tax',
+  'margin',
+  'profitability',
+  'cash flow',
+  'debt',
+  'financing',
+  'cost of capital',
+  'unit economics',
+  'working capital',
+];
+
+const DEFAULT_BUSINESS_MACRO_CHALLENGE =
+  '[INFERRED] Business/macro challenge: inflationary cost pressure and policy/regulatory shifts can increase demand volatility and planning risk.';
+
+const normalizeBrandSectionTextForOverlap = (value: string): string => {
+  return value
+    .replace(/\[[^\]]+\]/g, ' ')
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const tokenizeBrandSectionForOverlap = (value: string): string[] => {
+  return normalizeBrandSectionTextForOverlap(value)
+    .split(' ')
+    .map((token) => token.trim())
+    .filter((token) => token.length > 2 && !BRAND_SECTION_OVERLAP_STOPWORDS.has(token));
+};
+
+const containsChallengeTerm = (value: string, terms: string[]): boolean => {
+  const normalized = normalizeBrandSectionTextForOverlap(value);
+  return terms.some((term) => normalized.includes(term));
+};
+
+type ChallengePriorityBucket = 'focus' | 'macro' | 'secondary';
+
+const classifyChallengePriority = (value: string): ChallengePriorityBucket => {
+  if (containsChallengeTerm(value, CHALLENGE_BUSINESS_MACRO_TERMS)) {
+    return 'macro';
+  }
+  if (containsChallengeTerm(value, CHALLENGE_FOCUS_TERMS)) {
+    return 'focus';
+  }
+  return 'secondary';
+};
+
+const prioritizeChallengesForMixAndOrder = (challenges: string[]): string[] => {
+  const focus: string[] = [];
+  const secondary: string[] = [];
+  const macro: string[] = [];
+
+  challenges.forEach((challenge) => {
+    const bucket = classifyChallengePriority(challenge);
+    if (bucket === 'macro') {
+      macro.push(challenge);
+      return;
+    }
+    if (bucket === 'focus') {
+      focus.push(challenge);
+      return;
+    }
+    secondary.push(challenge);
+  });
+
+  if (focus.length === 0 && secondary.length > 0) {
+    focus.push(secondary.shift()!);
+  }
+
+  if (macro.length === 0 && challenges.length > 0) {
+    macro.push(DEFAULT_BUSINESS_MACRO_CHALLENGE);
+  }
+
+  const hasFocusMajority = () => focus.length > (focus.length + secondary.length + macro.length) / 2;
+  while (!hasFocusMajority() && secondary.length > 0) {
+    secondary.pop();
+  }
+  while (!hasFocusMajority() && macro.length > 1) {
+    macro.pop();
+  }
+
+  return [...focus, ...secondary, ...macro];
+};
+
+const hasHighBrandSectionOverlap = (candidate: string, reference: string): boolean => {
+  const normalizedCandidate = normalizeBrandSectionTextForOverlap(candidate);
+  const normalizedReference = normalizeBrandSectionTextForOverlap(reference);
+  if (!normalizedCandidate || !normalizedReference) {
+    return false;
+  }
+  if (normalizedCandidate === normalizedReference) {
+    return true;
+  }
+  if (
+    (normalizedCandidate.includes(normalizedReference) || normalizedReference.includes(normalizedCandidate)) &&
+    Math.min(normalizedCandidate.length, normalizedReference.length) >= 24
+  ) {
+    return true;
+  }
+
+  const candidateTokens = tokenizeBrandSectionForOverlap(candidate);
+  const referenceTokens = tokenizeBrandSectionForOverlap(reference);
+  if (candidateTokens.length === 0 || referenceTokens.length === 0) {
+    return false;
+  }
+
+  const referenceTokenSet = new Set(referenceTokens);
+  const sharedTokenCount = candidateTokens.reduce(
+    (count, token) => count + (referenceTokenSet.has(token) ? 1 : 0),
+    0
+  );
+  if (sharedTokenCount < 3) {
+    return false;
+  }
+
+  const overlapVsCandidate = sharedTokenCount / candidateTokens.length;
+  const overlapVsReference = sharedTokenCount / referenceTokens.length;
+  return overlapVsCandidate >= 0.65 && overlapVsReference >= 0.5;
+};
+
+const collectNonChallengeLinesForBrandResult = (brandResult: BrandResearchResult): string[] => {
+  const positioning = brandResult.brandPositioning || {
+    taglines: [],
+    keyMessagesAndClaims: [],
+    valueProposition: null,
+    voiceAndTone: '',
+  };
+  const targetAudienceLines = (brandResult.targetAudiences || []).flatMap((entry) => [
+    entry.audience,
+    entry.priority,
+    entry.inferredRoleToConsumers,
+    ...(entry.functionalBenefits || []),
+    ...(entry.emotionalBenefits || []),
+  ]);
+  const socialLines = (brandResult.socialMediaChannels || []).flatMap((entry) => [
+    entry.channel,
+    entry.url,
+    `${entry.channel || ''} ${entry.url || ''}`.trim(),
+  ]);
+  const recentNewsLines = (brandResult.recentNews || []).flatMap((entry) => {
+    if (typeof entry === 'string') {
+      return [entry];
+    }
+    return [
+      (entry.headline || entry.title || '').trim(),
+      (entry.url || '').trim(),
+    ];
+  });
+
+  return [
+    brandResult.highLevelSummary || '',
+    brandResult.brandMission || '',
+    ...(positioning.taglines || []),
+    ...(positioning.keyMessagesAndClaims || []),
+    positioning.valueProposition || '',
+    positioning.voiceAndTone || '',
+    ...(brandResult.keyOfferingsProductsServices || []),
+    ...(brandResult.strategicMoatsStrengths || []),
+    ...(brandResult.potentialThreatsWeaknesses || []),
+    ...targetAudienceLines,
+    ...(brandResult.recentCampaigns || []),
+    ...(brandResult.keyMarketingChannels || []),
+    ...socialLines,
+    ...recentNewsLines,
+  ]
+    .map((value) => (value || '').trim())
+    .filter((value) => value.length > 0);
+};
+
+function reduceChallengeOverlapInBrandMatrix(report: BrandResearchMatrix): BrandResearchMatrix {
+  const normalizedResults = (report.results || []).map((brandResult) => {
+    const rawChallenges = (brandResult.challenges || [])
+      .map((value) => (value || '').trim())
+      .filter((value) => value.length > 0);
+    if (rawChallenges.length === 0) {
+      return {
+        ...brandResult,
+        challenges: [],
+      };
+    }
+
+    const otherSectionLines = collectNonChallengeLinesForBrandResult(brandResult);
+    const filteredChallenges: string[] = [];
+
+    rawChallenges.forEach((challenge) => {
+      const overlapsOtherSection = otherSectionLines.some((line) => hasHighBrandSectionOverlap(challenge, line));
+      if (overlapsOtherSection) {
+        return;
+      }
+
+      const overlapsKeptChallenge = filteredChallenges.some((line) => hasHighBrandSectionOverlap(challenge, line));
+      if (overlapsKeptChallenge) {
+        return;
+      }
+
+      filteredChallenges.push(challenge);
+    });
+
+    const normalizedChallenges = filteredChallenges.length > 0
+      ? filteredChallenges
+      : rawChallenges.filter(
+        (challenge, index, list) =>
+          list.findIndex((entry) => hasHighBrandSectionOverlap(entry, challenge)) === index
+      ).slice(0, 1);
+
+    return {
+      ...brandResult,
+      challenges: prioritizeChallengesForMixAndOrder(normalizedChallenges),
+    };
+  });
+
+  return {
+    ...report,
+    results: normalizedResults,
+  };
 }
 
 function filterRecentNewsToTopMainstream(report: BrandResearchMatrix): BrandResearchMatrix {

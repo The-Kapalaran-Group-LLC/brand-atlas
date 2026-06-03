@@ -35,7 +35,56 @@ const shouldSuppressImageForExport = (src?: string | null): boolean => {
   return false;
 };
 
-const UNSUPPORTED_COLOR_FN_REGEX = /(oklch|oklab)\([^()]*\)/gi;
+const MODERN_COLOR_FUNCTION_PREFIXES = ['oklch(', 'oklab(', 'color-mix(', 'color(', 'lab(', 'lch('] as const;
+
+const hasPotentiallyUnsupportedColorSyntax = (value: string): boolean => {
+  const normalized = value.toLowerCase();
+  return MODERN_COLOR_FUNCTION_PREFIXES.some((prefix) => normalized.includes(prefix));
+};
+
+const replaceFunctionTokens = (
+  input: string,
+  functionName: string,
+  replacer: (token: string) => string,
+): string => {
+  const needle = `${functionName.toLowerCase()}(`;
+  let searchFrom = 0;
+  let output = input;
+
+  while (searchFrom < output.length) {
+    const lowerOutput = output.toLowerCase();
+    const start = lowerOutput.indexOf(needle, searchFrom);
+    if (start === -1) {
+      break;
+    }
+
+    let depth = 0;
+    let end = -1;
+    for (let cursor = start + functionName.length; cursor < output.length; cursor += 1) {
+      const char = output[cursor];
+      if (char === '(') {
+        depth += 1;
+      } else if (char === ')') {
+        depth -= 1;
+        if (depth === 0) {
+          end = cursor;
+          break;
+        }
+      }
+    }
+
+    if (end === -1) {
+      break;
+    }
+
+    const token = output.slice(start, end + 1);
+    const replacement = replacer(token);
+    output = `${output.slice(0, start)}${replacement}${output.slice(end + 1)}`;
+    searchFrom = start + replacement.length;
+  }
+
+  return output;
+};
 
 const normalizeCssColorToken = (token: string, docForProbe: Document): string => {
   const probe = docForProbe.createElement('span');
@@ -50,11 +99,24 @@ const normalizeCssColorToken = (token: string, docForProbe: Document): string =>
 };
 
 const normalizeCssValueForExport = (value: string, docForProbe: Document): string => {
-  if (!value || (!value.includes('oklch(') && !value.includes('oklab('))) {
+  if (!value || !hasPotentiallyUnsupportedColorSyntax(value)) {
     return value;
   }
-  return value.replace(UNSUPPORTED_COLOR_FN_REGEX, (token) => normalizeCssColorToken(token, docForProbe));
+
+  const functionNames = ['oklch', 'oklab', 'color-mix', 'color', 'lab', 'lch'];
+  const normalized = functionNames.reduce((acc, functionName) => {
+    return replaceFunctionTokens(acc, functionName, (token) => normalizeCssColorToken(token, docForProbe));
+  }, value);
+
+  if (hasPotentiallyUnsupportedColorSyntax(normalized)) {
+    return 'rgb(0, 0, 0)';
+  }
+
+  return normalized;
 };
+
+export const normalizeCssValueForExportForTest = (value: string, docForProbe: Document): string =>
+  normalizeCssValueForExport(value, docForProbe);
 
 const inlineComputedStylesForClonedTree = ({
   originalRoot,
@@ -129,7 +191,7 @@ const sanitizeClonedDocumentForExport = (clonedDoc: Document, originalRoot: HTML
   });
 
   if (normalizedCount > 0) {
-    console.log('[visual-export] Normalized unsupported oklch/oklab styles for export.', { normalizedCount });
+    console.log('[visual-export] Normalized unsupported modern color styles for export.', { normalizedCount });
   }
 };
 
