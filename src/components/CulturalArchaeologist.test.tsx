@@ -226,10 +226,36 @@ describe('CulturalArchaeologist', () => {
     });
     expect(screen.queryByTestId('rerun-analysis-button')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /high/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^high$/i }));
 
     expect(await screen.findByTestId('rerun-analysis-button')).toBeInTheDocument();
     expect(supabaseFrom).toHaveBeenCalledWith('Cultural_Archaeologist');
+  });
+
+  it('shows results filter explainer copy in both the heading tooltip and slide-out sidebar', async () => {
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    expect(await screen.findByText(/Results? Filters/i, {}, { timeout: 3000 })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('results-filters-heading-tooltip-trigger'));
+    expect(screen.getByTestId('results-filters-heading-tooltip')).toHaveTextContent(
+      'Results Filters add more context to your observation results and help discern how mainstream or niche a trend might be.'
+    );
+
+    fireEvent.click(screen.getByTestId('results-filters-how-filtering-works-link'));
+    const sidebar = await screen.findByTestId('results-filters-explainer-sidebar');
+    expect(within(sidebar).getByText(/Results Filters add more context to your observation results/i)).toBeInTheDocument();
+    expect(within(sidebar).getByText(/High confidence, Known and Peaking/i)).toBeInTheDocument();
+    expect(within(sidebar).getByText(/Low confidence, Speculative and Emerging/i)).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByTestId('results-filters-explainer-sidebar')).not.toBeInTheDocument();
+    });
   });
 
   it('opens segmentation in a new browser tab and persists workspace context', async () => {
@@ -727,7 +753,7 @@ describe('CulturalArchaeologist', () => {
       expect(screen.getByRole('button', { name: /generate insights/i })).not.toBeDisabled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /high/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^high$/i }));
     fireEvent.click(screen.getByRole('button', { name: /known/i }));
 
     const rerunButton = await screen.findByTestId('rerun-analysis-button');
@@ -840,7 +866,7 @@ describe('CulturalArchaeologist', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /generate insights/i })).not.toBeDisabled();
     });
-    fireEvent.click(screen.getByRole('button', { name: /high/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^high$/i }));
     fireEvent.click(screen.getByRole('button', { name: /known/i }));
 
     const rerunButton = await screen.findByTestId('rerun-analysis-button');
@@ -876,6 +902,61 @@ describe('CulturalArchaeologist', () => {
     const shell = screen.getByTestId('cultural-brands-input-shell');
     expect(shell.className).toContain('flex-wrap');
     expect(shell.className).toContain('min-h-14');
+  });
+
+  it('renders helper guidance text for audience, brands/category, and topic inputs', () => {
+    render(<CulturalArchaeologist />);
+
+    expect(screen.getByTestId('cultural-audience-guidance')).toHaveTextContent('Add the key audience that you want to analyze.');
+    expect(screen.getByTestId('cultural-brands-guidance')).toHaveTextContent('Add one or more brands or a category.');
+    expect(screen.getByTestId('cultural-topic-guidance')).toHaveTextContent('Add the specific angle you want to analyze.');
+  });
+
+  it('opens guidance tooltips on click and closes with escape or outside click', async () => {
+    render(<CulturalArchaeologist />);
+
+    fireEvent.click(screen.getByTestId('cultural-audience-guidance-trigger'));
+    expect(screen.getByTestId('cultural-audience-guidance-tooltip')).toHaveTextContent(
+      'The more specific the audience, the most specific the results. Examples: Gen Z women, AI tech professionals, Homebuyers.'
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByTestId('cultural-audience-guidance-tooltip')).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('cultural-brands-guidance-trigger'));
+    expect(screen.getByTestId('cultural-brands-guidance-tooltip')).toHaveTextContent(
+      'This will help you analyze the interesection of audience and brand/category. Examples: Nike, Adidas, Hoka or categories like premium skincare, energy drinks, athleisure. Press Enter to add each.'
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByTestId('cultural-brands-guidance-tooltip')).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('cultural-topic-guidance-trigger'));
+    expect(screen.getByTestId('cultural-topic-guidance-tooltip')).toHaveTextContent(
+      'Examples: Gen Z resale behavior, post-workout rituals, why runners switch from Nike to Hoka.'
+    );
+
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => {
+      expect(screen.queryByTestId('cultural-topic-guidance-tooltip')).not.toBeInTheDocument();
+    });
+  });
+
+  it('keeps brand chip entry and topic input behavior working with guidance UI', async () => {
+    render(<CulturalArchaeologist />);
+
+    const brandsInput = screen.getByTestId('cultural-brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Nike' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+    expect(await screen.findByTestId('cultural-brand-chip-0')).toHaveTextContent('Nike');
+
+    const topicInput = screen.getByPlaceholderText('Topic Focus (Optional)');
+    fireEvent.change(topicInput, { target: { value: 'Sneakers' } });
+    expect(screen.getByDisplayValue('Sneakers')).toBeInTheDocument();
   });
 
   it('uses the same show-all button text/icon size and color as Brand Navigator', async () => {

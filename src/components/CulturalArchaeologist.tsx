@@ -4,7 +4,7 @@ import { getUserTelemetry } from '../services/telemetry';
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { Search, Loader2, Sparkles, FileText, Presentation, ExternalLink, Info, Tag, Users, Filter, ChevronDown, Check, Clock, Trash2, Target, Upload, X, RefreshCw, Calendar, Activity, Palette, ArrowLeft, Menu, Shield } from 'lucide-react';
 import { CompassRoseIcon } from './icons/CompassRoseIcon';
@@ -147,6 +147,7 @@ const CULTURAL_ARCHAEOLOGIST_TABLE_CANDIDATES = [CULTURAL_ARCHAEOLOGIST_TABLE, '
 const TREND_STAGE_FILTERS: TrendStageFilter[] = ['peaking', 'emerging', 'declining'];
 const CULTURAL_ARCHAEOLOGIST_SHOW_THINKING_TEXT = 'Applied retrieval-grounded synthesis: collected language, behavior, and community artifacts, clustered recurring motifs and tensions, and generated a structured cultural map with source-grounded claims.';
 const RESULTS_COMPLETE_SOUND_ID: CompletionSoundId = 'classic-chime';
+const RESULTS_FILTERS_EXPLAINER_COPY = 'Results Filters add more context to your observation results and help discern how mainstream or niche a trend might be. For example, a result with High confidence, Known and Peaking is more likely to be a mainstream and familiar trend. A result with Low confidence, Speculative and Emerging likely requires further explanation through an Insight Deep Dive, but could lead to a break out trend.';
 const SEGMENTATION_PASSWORD = 'segment2026';
 const SEGMENTATION_PASSWORD_SUPPORT_COPY = 'Contact Your Administrator for More Information.';
 const ADMIN_PASSWORD = 'brandatlas2026';
@@ -483,6 +484,12 @@ const SOURCES_TYPES = [
 const MAX_CULTURAL_AUDIENCE_INPUT_LENGTH = 180;
 const MAX_CULTURAL_BRAND_INPUT_LENGTH = 120;
 const MAX_CULTURAL_TOPIC_INPUT_LENGTH = 180;
+const CULTURAL_AUDIENCE_GUIDANCE_HELPER = 'Add the key audience that you want to analyze.';
+const CULTURAL_AUDIENCE_GUIDANCE_TOOLTIP = 'The more specific the audience, the most specific the results. Examples: Gen Z women, AI tech professionals, Homebuyers.';
+const CULTURAL_BRANDS_GUIDANCE_HELPER = 'Add one or more brands or a category.';
+const CULTURAL_BRANDS_GUIDANCE_TOOLTIP = 'This will help you analyze the interesection of audience and brand/category. Examples: Nike, Adidas, Hoka or categories like premium skincare, energy drinks, athleisure. Press Enter to add each.';
+const CULTURAL_TOPIC_GUIDANCE_HELPER = 'Add the specific angle you want to analyze.';
+const CULTURAL_TOPIC_GUIDANCE_TOOLTIP = 'Examples: Gen Z resale behavior, post-workout rituals, why runners switch from Nike to Hoka.';
 
 const SAVED_MATRICES_STORAGE_KEY = 'cultural_matrices';
 
@@ -571,6 +578,114 @@ const removeSegmentationWorkspaceSnapshot = (workspaceId: string): void => {
   } catch (error) {
     console.warn('Failed to remove segmentation workspace snapshot:', error);
   }
+};
+
+type InputGuidanceProps = {
+  helperText: string;
+  tooltipLabel: string;
+  tooltipText: string;
+  baseTestId: string;
+  helperTextClassName?: string;
+};
+
+const InputGuidance = ({
+  helperText,
+  tooltipLabel,
+  tooltipText,
+  baseTestId,
+  helperTextClassName = 'text-zinc-500',
+}: InputGuidanceProps) => {
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
+  const guidanceRef = useRef<HTMLDivElement | null>(null);
+  const tooltipId = `${baseTestId}-tooltip`;
+
+  const openTooltip = useCallback((reason: string) => {
+    setIsTooltipOpen((wasOpen) => {
+      if (!wasOpen) {
+        console.log('[CulturalArchaeologist] Input guidance tooltip opened.', { guidanceId: baseTestId, reason });
+      }
+      return true;
+    });
+  }, [baseTestId]);
+
+  const closeTooltip = useCallback((reason: string) => {
+    setIsTooltipOpen((wasOpen) => {
+      if (wasOpen) {
+        console.log('[CulturalArchaeologist] Input guidance tooltip closed.', { guidanceId: baseTestId, reason });
+      }
+      return false;
+    });
+  }, [baseTestId]);
+
+  useEffect(() => {
+    if (!isTooltipOpen) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const eventTarget = event.target as Node | null;
+      if (!eventTarget || !guidanceRef.current) return;
+      if (!guidanceRef.current.contains(eventTarget)) {
+        closeTooltip('outside-click');
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeTooltip('escape');
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [closeTooltip, isTooltipOpen]);
+
+  return (
+    <div data-testid={baseTestId} className="mt-2 ml-2 inline-flex items-center gap-1.5 text-xs">
+      <span className={helperTextClassName}>{helperText}</span>
+      <div
+        ref={guidanceRef}
+        className="relative inline-flex items-center"
+        onMouseEnter={() => openTooltip('hover')}
+        onMouseLeave={() => closeTooltip('mouse-leave')}
+      >
+        <button
+          type="button"
+          data-testid={`${baseTestId}-trigger`}
+          onClick={() => (isTooltipOpen ? closeTooltip('click-toggle-close') : openTooltip('click-toggle-open'))}
+          onFocus={() => openTooltip('focus')}
+          onBlur={(event) => {
+            const nextFocusedTarget = event.relatedTarget as Node | null;
+            if (!nextFocusedTarget || !guidanceRef.current?.contains(nextFocusedTarget)) {
+              closeTooltip('blur');
+            }
+          }}
+          className="inline-flex items-center justify-center rounded-full p-0.5 text-zinc-400 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+          aria-label={tooltipLabel}
+          aria-expanded={isTooltipOpen}
+          aria-describedby={isTooltipOpen ? tooltipId : undefined}
+        >
+          <Info className="w-3.5 h-3.5" />
+        </button>
+        {isTooltipOpen && (
+          <div
+            id={tooltipId}
+            role="tooltip"
+            data-testid={`${baseTestId}-tooltip`}
+            className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg"
+          >
+            {tooltipText}
+            <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default function CulturalArchaeologist() {
@@ -715,6 +830,9 @@ export default function CulturalArchaeologist() {
   const [selectedTrendStageFilters, setSelectedTrendStageFilters] = useState<TrendStageFilter[]>([]);
   const [selectedSourceFilters, setSelectedSourceFilters] = useState<string[]>([]);
   const [showHighlyUniqueOnly, setShowHighlyUniqueOnly] = useState(false);
+  const [isResultsFiltersHeadingTooltipOpen, setIsResultsFiltersHeadingTooltipOpen] = useState(false);
+  const [isResultsFiltersSidebarOpen, setIsResultsFiltersSidebarOpen] = useState(false);
+  const resultsFiltersHeadingTooltipRef = useRef<HTMLDivElement | null>(null);
   const [isResearchControlsMinimized, setIsResearchControlsMinimized] = useState(false);
   const [recentResultsRefreshNonce, setRecentResultsRefreshNonce] = useState(0);
 
@@ -738,6 +856,82 @@ export default function CulturalArchaeologist() {
         (sm.audience || '').toLowerCase().includes(search)
     );
   }, [brandInput, visibleSavedMatrices]);
+
+  const openResultsFiltersHeadingTooltip = useCallback((reason: string) => {
+    setIsResultsFiltersHeadingTooltipOpen((wasOpen) => {
+      if (!wasOpen) {
+        console.log('[CulturalArchaeologist] Results filters heading tooltip opened.', { reason });
+      }
+      return true;
+    });
+  }, []);
+
+  const closeResultsFiltersHeadingTooltip = useCallback((reason: string) => {
+    setIsResultsFiltersHeadingTooltipOpen((wasOpen) => {
+      if (wasOpen) {
+        console.log('[CulturalArchaeologist] Results filters heading tooltip closed.', { reason });
+      }
+      return false;
+    });
+  }, []);
+
+  const openResultsFiltersSidebar = useCallback((reason: string) => {
+    console.log('[CulturalArchaeologist] Opening results filters explainer sidebar.', { reason });
+    setIsResultsFiltersSidebarOpen(true);
+    setIsResultsFiltersHeadingTooltipOpen(false);
+  }, []);
+
+  const closeResultsFiltersSidebar = useCallback((reason: string) => {
+    setIsResultsFiltersSidebarOpen((wasOpen) => {
+      if (wasOpen) {
+        console.log('[CulturalArchaeologist] Closing results filters explainer sidebar.', { reason });
+      }
+      return false;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isResultsFiltersHeadingTooltipOpen) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const eventTarget = event.target as Node | null;
+      if (!eventTarget || !resultsFiltersHeadingTooltipRef.current) return;
+      if (!resultsFiltersHeadingTooltipRef.current.contains(eventTarget)) {
+        closeResultsFiltersHeadingTooltip('outside-click');
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeResultsFiltersHeadingTooltip('escape');
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [closeResultsFiltersHeadingTooltip, isResultsFiltersHeadingTooltipOpen]);
+
+  useEffect(() => {
+    if (!isResultsFiltersSidebarOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeResultsFiltersSidebar('escape');
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [closeResultsFiltersSidebar, isResultsFiltersSidebarOpen]);
 
   const activeRerunFilters = useMemo<CulturalRerunFilters>(() => ({
     confidenceLevels: [...selectedConfidenceFilters],
@@ -3741,6 +3935,13 @@ export default function CulturalArchaeologist() {
                 {showValidation && !audience.trim() && (
                   <span className="text-red-500 text-sm mt-1 ml-2 text-left">Audience is required to generate insights.</span>
                 )}
+                <InputGuidance
+                  baseTestId="cultural-audience-guidance"
+                  helperText={CULTURAL_AUDIENCE_GUIDANCE_HELPER}
+                  helperTextClassName="text-zinc-400"
+                  tooltipLabel="Primary audience input guidance"
+                  tooltipText={CULTURAL_AUDIENCE_GUIDANCE_TOOLTIP}
+                />
               </div>
               
               <div className="relative flex flex-col w-full self-start" ref={brandDropdownRef}>
@@ -3912,28 +4113,44 @@ export default function CulturalArchaeologist() {
                     </motion.div>
                   )}
                 </AnimatePresence>
+                <InputGuidance
+                  baseTestId="cultural-brands-guidance"
+                  helperText={CULTURAL_BRANDS_GUIDANCE_HELPER}
+                  helperTextClassName="text-zinc-400"
+                  tooltipLabel="Brand or category input guidance"
+                  tooltipText={CULTURAL_BRANDS_GUIDANCE_TOOLTIP}
+                />
               </div>
 
-              <div className="relative flex items-center w-full self-start">
-                <Target className="absolute left-4 top-4 w-5 h-5 text-zinc-400" />
-                <input
-                  type="text"
-                  value={topicFocus}
-                  onChange={(e) => setTopicFocus(e.target.value.slice(0, MAX_CULTURAL_TOPIC_INPUT_LENGTH))}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                    }
-                  }}
-                  placeholder="Topic Focus (Optional)"
-                  className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
-                  disabled={isLoading}
+              <div className="relative flex flex-col w-full self-start">
+                <div className="relative flex items-center w-full">
+                  <Target className="absolute left-4 top-4 w-5 h-5 text-zinc-400" />
+                  <input
+                    type="text"
+                    value={topicFocus}
+                    onChange={(e) => setTopicFocus(e.target.value.slice(0, MAX_CULTURAL_TOPIC_INPUT_LENGTH))}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                      }
+                    }}
+                    placeholder="Topic Focus (Optional)"
+                    className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
+                    disabled={isLoading}
+                  />
+                  {isDetecting && !topicFocus.trim() && (
+                    <div className="absolute right-4 flex items-center justify-center">
+                      <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+                    </div>
+                  )}
+                </div>
+                <InputGuidance
+                  baseTestId="cultural-topic-guidance"
+                  helperText={CULTURAL_TOPIC_GUIDANCE_HELPER}
+                  helperTextClassName="text-zinc-400"
+                  tooltipLabel="Topic input guidance"
+                  tooltipText={CULTURAL_TOPIC_GUIDANCE_TOOLTIP}
                 />
-                {isDetecting && !topicFocus.trim() && (
-                  <div className="absolute right-4 flex items-center justify-center">
-                    <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
-                  </div>
-                )}
               </div>
             </div>
 
@@ -4469,7 +4686,7 @@ export default function CulturalArchaeologist() {
                   }`}
                 >
                   <Sparkles className={`w-4 h-4 ${showHighlyUniqueOnly ? 'text-indigo-600' : 'text-indigo-500'}`} />
-                  <span>Highly unique observation</span>
+                  <span>Highly Unique Observation</span>
                 </button>
                 {matrixMeta?.hasUploadedDocuments && MATRIX_INSIGHT_KEYS.some((cat) =>
                   displayMatrix?.[cat]?.some((item) => item.isFromDocument)
@@ -4495,7 +4712,7 @@ export default function CulturalArchaeologist() {
                     }`}
                   >
                     <Target className={`w-4 h-4 ${activeResultsTab === 'insights' ? 'text-zinc-700' : 'text-zinc-400'}`} />
-                    <span>Insight deep dives</span>
+                    <span>Insight Deep Dives</span>
                   </button>
                   <button
                     type="button"
@@ -4520,8 +4737,60 @@ export default function CulturalArchaeologist() {
               </div>
 
               <div id="cultural-results-filters" className="mb-8 p-4 pb-14 bg-zinc-50 border border-zinc-200 rounded-2xl no-print relative">
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                  <h4 className="text-sm font-semibold text-zinc-900">Results Filters</h4>
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                  <div className="flex flex-col items-start gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-sm font-semibold text-zinc-900">Results Filters</h4>
+                      <div
+                        ref={resultsFiltersHeadingTooltipRef}
+                        className="relative inline-flex items-center"
+                        onMouseEnter={() => openResultsFiltersHeadingTooltip('hover')}
+                        onMouseLeave={() => closeResultsFiltersHeadingTooltip('mouse-leave')}
+                      >
+                        <button
+                          type="button"
+                          data-testid="results-filters-heading-tooltip-trigger"
+                          onClick={() =>
+                            isResultsFiltersHeadingTooltipOpen
+                              ? closeResultsFiltersHeadingTooltip('click-toggle-close')
+                              : openResultsFiltersHeadingTooltip('click-toggle-open')
+                          }
+                          onFocus={() => openResultsFiltersHeadingTooltip('focus')}
+                          onBlur={(event) => {
+                            const nextFocusedTarget = event.relatedTarget as Node | null;
+                            if (!nextFocusedTarget || !resultsFiltersHeadingTooltipRef.current?.contains(nextFocusedTarget)) {
+                              closeResultsFiltersHeadingTooltip('blur');
+                            }
+                          }}
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-zinc-300 text-[10px] font-semibold leading-none text-zinc-500 hover:text-zinc-700 hover:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          aria-label="Results Filters quick definition"
+                          aria-expanded={isResultsFiltersHeadingTooltipOpen}
+                          aria-describedby={isResultsFiltersHeadingTooltipOpen ? 'results-filters-heading-tooltip' : undefined}
+                        >
+                          ?
+                        </button>
+                        {isResultsFiltersHeadingTooltipOpen && (
+                          <div
+                            id="results-filters-heading-tooltip"
+                            role="tooltip"
+                            data-testid="results-filters-heading-tooltip"
+                            className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-72 -translate-x-1/2 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg"
+                          >
+                            {RESULTS_FILTERS_EXPLAINER_COPY}
+                            <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="results-filters-how-filtering-works-link"
+                      onClick={() => openResultsFiltersSidebar('how-filtering-works-link')}
+                      className="text-xs font-medium text-zinc-500 hover:text-zinc-700 underline-offset-2 hover:underline"
+                    >
+                      How filtering works
+                    </button>
+                  </div>
                   {activeFilterCount > 0 && (
                     <button
                       type="button"
@@ -4544,7 +4813,13 @@ export default function CulturalArchaeologist() {
                     <div className="flex items-center gap-1.5 mb-2 group/tip relative">
                       <div className="text-[11px] uppercase tracking-wider text-zinc-500">Confidence Level</div>
                       <div className="relative flex items-center">
-                        <Info className="w-3 h-3 text-zinc-400 cursor-default" />
+                        <span
+                          data-testid="results-filter-confidence-tooltip-trigger"
+                          aria-hidden="true"
+                          className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-zinc-300 text-[9px] font-semibold leading-none text-zinc-500 cursor-default"
+                        >
+                          ?
+                        </span>
                         <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
                           How strong &amp; reliable the evidence is for this observation. High = well-corroborated by recent sources. Low = weak or emerging signal.
                           <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
@@ -4580,7 +4855,13 @@ export default function CulturalArchaeologist() {
                     <div className="flex items-center gap-1.5 mb-2 group/tip relative">
                       <div className="text-[11px] uppercase tracking-wider text-zinc-500">Evidence Type</div>
                       <div className="relative flex items-center">
-                        <Info className="w-3 h-3 text-zinc-400 cursor-default" />
+                        <span
+                          data-testid="results-filter-evidence-tooltip-trigger"
+                          aria-hidden="true"
+                          className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-zinc-300 text-[9px] font-semibold leading-none text-zinc-500 cursor-default"
+                        >
+                          ?
+                        </span>
                         <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
                           How the observation is being gathered. Known = directly observed fact. Inferred = pattern drawn from signals or repeated behavior/language. Speculative = forward-looking or unverified hypothesis.
                           <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
@@ -4616,7 +4897,13 @@ export default function CulturalArchaeologist() {
                     <div className="flex items-center gap-1.5 mb-2 group/tip relative">
                       <div className="text-[11px] uppercase tracking-wider text-zinc-500">Trend Stage</div>
                       <div className="relative flex items-center">
-                        <Info className="w-3 h-3 text-zinc-400 cursor-default" />
+                        <span
+                          data-testid="results-filter-trend-stage-tooltip-trigger"
+                          aria-hidden="true"
+                          className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-zinc-300 text-[9px] font-semibold leading-none text-zinc-500 cursor-default"
+                        >
+                          ?
+                        </span>
                         <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
                           Where this observation sits on the trend lifecycle. Peaking = mainstream adoption. Emerging = early wave. Declining = fading or being replaced.
                           <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
@@ -4652,7 +4939,13 @@ export default function CulturalArchaeologist() {
                     <div className="flex items-center gap-1.5 mb-2 group/tip relative">
                       <div className="text-[11px] uppercase tracking-wider text-zinc-500">Sources</div>
                       <div className="relative flex items-center">
-                        <Info className="w-3 h-3 text-zinc-400 cursor-default" />
+                        <span
+                          data-testid="results-filter-sources-tooltip-trigger"
+                          aria-hidden="true"
+                          className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-zinc-300 text-[9px] font-semibold leading-none text-zinc-500 cursor-default"
+                        >
+                          ?
+                        </span>
                         <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
                           Filter insights by source tags attached to each result, including uploaded document-derived observations when available.
                           <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
@@ -4703,6 +4996,53 @@ export default function CulturalArchaeologist() {
                   </button>
                 )}
               </div>
+
+              <AnimatePresence>
+                {isResultsFiltersSidebarOpen && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[70] bg-black/35"
+                    data-testid="results-filters-explainer-overlay"
+                    onClick={(event) => {
+                      if (event.target === event.currentTarget) {
+                        closeResultsFiltersSidebar('backdrop-click');
+                      }
+                    }}
+                  >
+                    <motion.aside
+                      initial={{ x: '100%' }}
+                      animate={{ x: 0 }}
+                      exit={{ x: '100%' }}
+                      transition={{ type: 'spring', stiffness: 280, damping: 30 }}
+                      className="ml-auto h-full w-full max-w-md overflow-y-auto border-l border-zinc-200 bg-white p-5 shadow-2xl sm:p-6"
+                      data-testid="results-filters-explainer-sidebar"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label="How filtering works"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className="mb-4 flex items-start justify-between gap-4">
+                        <div>
+                          <h5 className="text-base font-semibold text-zinc-900">How filtering works</h5>
+                          <p className="mt-1 text-xs text-zinc-500">Results Filters philosophy</p>
+                        </div>
+                        <button
+                          type="button"
+                          data-testid="results-filters-explainer-close-button"
+                          onClick={() => closeResultsFiltersSidebar('close-button')}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 text-zinc-500 transition-colors hover:border-zinc-300 hover:text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-500/40"
+                          aria-label="Close how filtering works"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p className="text-sm leading-6 text-zinc-700">{RESULTS_FILTERS_EXPLAINER_COPY}</p>
+                    </motion.aside>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {isInsightsTabActive ? (
                 <>

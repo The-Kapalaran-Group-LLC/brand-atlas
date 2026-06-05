@@ -495,6 +495,12 @@ describe('BrandNavigator', () => {
     expect(missionSection.className).toContain('h-fit');
     expect(missionSection.className).toContain('self-start');
 
+    const positioningSection = screen.getByTestId('brand-result-section-brand-positioning');
+    const existingLabel = within(positioningSection).getByText('(existing)');
+    expect(existingLabel).toBeInTheDocument();
+    expect(existingLabel.className).not.toContain('normal-case');
+    expect(existingLabel.className).not.toContain('text-zinc-400');
+
     const sectionsLayout = screen.getByTestId('brand-result-sections-layout');
     expect(sectionsLayout.className).toContain('lg:columns-2');
     expect(sectionsLayout.className).not.toContain('lg:grid-cols-2');

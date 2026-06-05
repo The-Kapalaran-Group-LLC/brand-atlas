@@ -45,6 +45,16 @@ describe('App Component', () => {
     expect(screen.getByPlaceholderText(/Primary Audience \(Required\) \*/i)).toBeInTheDocument();
   });
 
+  it('shows contextual guidance for brand/category and topic inputs', async () => {
+    render(<App />);
+    await waitForSplashToDisappear();
+    await openResearchExperience();
+
+    expect(screen.getByTestId('cultural-audience-guidance')).toHaveTextContent('Add the key audience that you want to analyze.');
+    expect(screen.getByTestId('cultural-brands-guidance')).toHaveTextContent('Add one or more brands or a category.');
+    expect(screen.getByTestId('cultural-topic-guidance')).toHaveTextContent('Add the specific angle you want to analyze.');
+  });
+
   it('shows brand suggestions as user types', async () => {
     render(<App />);
     await waitForSplashToDisappear();

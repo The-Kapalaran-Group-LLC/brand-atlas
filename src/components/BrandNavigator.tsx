@@ -4205,6 +4205,7 @@ function BrandCriteriaSection({
 }) {
   const sectionTestId = `brand-result-section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
   const compareEnabled = canCompareAcrossBrands && Boolean(sectionKey) && Boolean(onRequestCompareAcrossBrands);
+  const showExistingLabel = sectionKey === 'brandPositioning';
   return (
     <div
       id={sectionId}
@@ -4218,6 +4219,7 @@ function BrandCriteriaSection({
     >
       <h4 className="text-sm font-semibold text-zinc-900 mb-3 uppercase tracking-wider inline-flex items-center gap-3">
         <span>{title}</span>
+        {showExistingLabel ? <span>(existing)</span> : null}
         {showRefresh && onRefresh ? (
           <button
             type="button"
