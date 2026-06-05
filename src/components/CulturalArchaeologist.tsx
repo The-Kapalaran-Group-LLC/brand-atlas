@@ -484,11 +484,11 @@ const SOURCES_TYPES = [
 const MAX_CULTURAL_AUDIENCE_INPUT_LENGTH = 180;
 const MAX_CULTURAL_BRAND_INPUT_LENGTH = 120;
 const MAX_CULTURAL_TOPIC_INPUT_LENGTH = 180;
-const CULTURAL_AUDIENCE_GUIDANCE_HELPER = 'Add the key audience that you want to analyze.';
+const CULTURAL_AUDIENCE_GUIDANCE_HELPER = 'Add the audience you want to analyze.';
 const CULTURAL_AUDIENCE_GUIDANCE_TOOLTIP = 'The more specific the audience, the most specific the results. Examples: Gen Z women, AI tech professionals, Homebuyers.';
 const CULTURAL_BRANDS_GUIDANCE_HELPER = 'Add one or more brands or a category.';
 const CULTURAL_BRANDS_GUIDANCE_TOOLTIP = 'This will help you analyze the interesection of audience and brand/category. Examples: Nike, Adidas, Hoka or categories like premium skincare, energy drinks, athleisure. Press Enter to add each.';
-const CULTURAL_TOPIC_GUIDANCE_HELPER = 'Add the specific angle you want to analyze.';
+const CULTURAL_TOPIC_GUIDANCE_HELPER = 'Add the specific angle you want to dive into.';
 const CULTURAL_TOPIC_GUIDANCE_TOOLTIP = 'Examples: Gen Z resale behavior, post-workout rituals, why runners switch from Nike to Hoka.';
 
 const SAVED_MATRICES_STORAGE_KEY = 'cultural_matrices';
@@ -646,8 +646,8 @@ const InputGuidance = ({
   }, [closeTooltip, isTooltipOpen]);
 
   return (
-    <div data-testid={baseTestId} className="mt-2 ml-2 inline-flex items-center gap-1.5 text-xs">
-      <span className={helperTextClassName}>{helperText}</span>
+    <div data-testid={baseTestId} className="mt-2 ml-2 inline-flex items-start gap-1.5 text-xs">
+      <span className={`self-start ${helperTextClassName}`}>{helperText}</span>
       <div
         ref={guidanceRef}
         className="relative inline-flex items-center"
@@ -831,7 +831,6 @@ export default function CulturalArchaeologist() {
   const [selectedSourceFilters, setSelectedSourceFilters] = useState<string[]>([]);
   const [showHighlyUniqueOnly, setShowHighlyUniqueOnly] = useState(false);
   const [isResultsFiltersHeadingTooltipOpen, setIsResultsFiltersHeadingTooltipOpen] = useState(false);
-  const [isResultsFiltersSidebarOpen, setIsResultsFiltersSidebarOpen] = useState(false);
   const resultsFiltersHeadingTooltipRef = useRef<HTMLDivElement | null>(null);
   const [isResearchControlsMinimized, setIsResearchControlsMinimized] = useState(false);
   const [recentResultsRefreshNonce, setRecentResultsRefreshNonce] = useState(0);
@@ -875,21 +874,6 @@ export default function CulturalArchaeologist() {
     });
   }, []);
 
-  const openResultsFiltersSidebar = useCallback((reason: string) => {
-    console.log('[CulturalArchaeologist] Opening results filters explainer sidebar.', { reason });
-    setIsResultsFiltersSidebarOpen(true);
-    setIsResultsFiltersHeadingTooltipOpen(false);
-  }, []);
-
-  const closeResultsFiltersSidebar = useCallback((reason: string) => {
-    setIsResultsFiltersSidebarOpen((wasOpen) => {
-      if (wasOpen) {
-        console.log('[CulturalArchaeologist] Closing results filters explainer sidebar.', { reason });
-      }
-      return false;
-    });
-  }, []);
-
   useEffect(() => {
     if (!isResultsFiltersHeadingTooltipOpen) return;
 
@@ -917,21 +901,6 @@ export default function CulturalArchaeologist() {
       document.removeEventListener('keydown', handleEscape);
     };
   }, [closeResultsFiltersHeadingTooltip, isResultsFiltersHeadingTooltipOpen]);
-
-  useEffect(() => {
-    if (!isResultsFiltersSidebarOpen) return;
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closeResultsFiltersSidebar('escape');
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [closeResultsFiltersSidebar, isResultsFiltersSidebarOpen]);
 
   const activeRerunFilters = useMemo<CulturalRerunFilters>(() => ({
     confidenceLevels: [...selectedConfidenceFilters],
@@ -3907,8 +3876,8 @@ export default function CulturalArchaeologist() {
           >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               <div className="relative flex flex-col w-full self-start">
-                <div className="relative flex items-center w-full">
-                  <Users className="absolute left-4 top-4 w-5 h-5 text-zinc-400" />
+                <div data-testid="cultural-audience-field" className="relative flex items-center w-full h-14">
+                  <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
                   <input
                     type="text"
                     value={audience}
@@ -3945,11 +3914,11 @@ export default function CulturalArchaeologist() {
               </div>
               
               <div className="relative flex flex-col w-full self-start" ref={brandDropdownRef}>
-                <div className="relative flex items-start w-full min-h-14 bg-white border border-zinc-200 rounded-2xl text-zinc-900 focus-within:outline-none focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all shadow-sm text-sm">
-                  <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                <div data-testid="cultural-brands-field" className={`relative flex w-full ${normalizedBrands.length > 0 ? 'min-h-14 items-start' : 'h-14 items-center'} bg-white border border-zinc-200 rounded-2xl text-zinc-900 focus-within:outline-none focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all shadow-sm text-sm`}>
+                  <Tag className={`absolute left-4 w-5 h-5 text-zinc-400 ${normalizedBrands.length > 0 ? 'top-4' : 'top-1/2 -translate-y-1/2'}`} />
                   <div
                     data-testid="cultural-brands-input-shell"
-                    className={`w-full min-h-14 pl-12 pr-10 py-2 flex gap-2 flex-wrap ${normalizedBrands.length > 0 ? 'items-start' : 'items-center'}`}
+                    className={`w-full ${normalizedBrands.length > 0 ? 'min-h-14 py-2 items-start' : 'h-14 py-0 items-center'} pl-12 pr-10 flex gap-2 flex-wrap`}
                   >
                     {normalizedBrands.map((brandChip, chipIndex) => (
                       <span
@@ -3991,7 +3960,7 @@ export default function CulturalArchaeologist() {
                         }
                       }}
                       placeholder={normalizedBrands.length > 0 ? 'Add more brands or category' : 'Brands or Category (Optional)'}
-                      className={`bg-transparent text-zinc-900 text-left placeholder:text-left placeholder-zinc-400 focus:outline-none ${normalizedBrands.length > 0 ? 'flex-1 min-w-[140px] py-1 pr-1' : 'w-full min-w-0 h-10 pr-0'}`}
+                      className={`bg-transparent text-zinc-900 text-left placeholder:text-left placeholder-zinc-400 focus:outline-none ${normalizedBrands.length > 0 ? 'flex-1 min-w-[140px] py-1 pr-1' : 'w-full min-w-0 h-10 leading-10 pr-0'}`}
                       disabled={isLoading}
                     />
                   </div>
@@ -4123,8 +4092,8 @@ export default function CulturalArchaeologist() {
               </div>
 
               <div className="relative flex flex-col w-full self-start">
-                <div className="relative flex items-center w-full">
-                  <Target className="absolute left-4 top-4 w-5 h-5 text-zinc-400" />
+                <div data-testid="cultural-topic-field" className="relative flex items-center w-full h-14">
+                  <Target className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
                   <input
                     type="text"
                     value={topicFocus}
@@ -4158,9 +4127,10 @@ export default function CulturalArchaeologist() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
               <div className="relative w-full" ref={dropdownRef}>
                 <button
+                  data-testid="cultural-generation-field"
                   type="button"
                   onClick={() => setIsGenerationDropdownOpen(!isGenerationDropdownOpen)}
-                  className="w-full flex items-center justify-between px-4 py-4 bg-white border border-zinc-200 rounded-2xl text-zinc-700 hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                  className="w-full h-14 flex items-center justify-between px-4 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-700 hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
                   disabled={isLoading}
                 >
                   <div className="flex items-center gap-3 overflow-hidden">
@@ -4214,9 +4184,10 @@ export default function CulturalArchaeologist() {
 
               <div className="relative w-full" ref={sourcesDropdownRef}>
                 <button
+                  data-testid="cultural-sources-field"
                   type="button"
                   onClick={() => setIsSourcesDropdownOpen(!isSourcesDropdownOpen)}
-                  className="w-full flex items-center justify-between px-4 py-4 bg-white border border-zinc-200 rounded-2xl text-zinc-700 hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                  className="w-full h-14 flex items-center justify-between px-4 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-700 hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
                   disabled={isLoading}
                 >
                   <div className="flex items-center gap-3 overflow-hidden">
@@ -4292,14 +4263,14 @@ export default function CulturalArchaeologist() {
                   disabled={isLoading}
                 />
                 <button
+                  data-testid="cultural-upload-field"
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isLoading}
-                  className="w-full relative flex items-center bg-white border border-dashed border-zinc-300 rounded-2xl text-zinc-600 hover:bg-zinc-50 hover:border-indigo-300 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
-                  style={{ minHeight: '56px', padding: 0 }}
+                  className="w-full h-14 relative flex items-center bg-white border border-dashed border-zinc-300 rounded-2xl text-zinc-600 hover:bg-zinc-50 hover:border-indigo-300 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
                 >
                   <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                  <span className="w-full pl-12 pr-4 py-4 text-left block">
+                  <span className="w-full pl-12 pr-4 py-0 text-left block truncate">
                     {files.length > 0
                       ? files.map(f => f.name).join(', ')
                       : 'Upload Documents (Optional)'}
@@ -4782,14 +4753,6 @@ export default function CulturalArchaeologist() {
                         )}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      data-testid="results-filters-how-filtering-works-link"
-                      onClick={() => openResultsFiltersSidebar('how-filtering-works-link')}
-                      className="text-xs font-medium text-zinc-500 hover:text-zinc-700 underline-offset-2 hover:underline"
-                    >
-                      How filtering works
-                    </button>
                   </div>
                   {activeFilterCount > 0 && (
                     <button
@@ -4996,53 +4959,6 @@ export default function CulturalArchaeologist() {
                   </button>
                 )}
               </div>
-
-              <AnimatePresence>
-                {isResultsFiltersSidebarOpen && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-[70] bg-black/35"
-                    data-testid="results-filters-explainer-overlay"
-                    onClick={(event) => {
-                      if (event.target === event.currentTarget) {
-                        closeResultsFiltersSidebar('backdrop-click');
-                      }
-                    }}
-                  >
-                    <motion.aside
-                      initial={{ x: '100%' }}
-                      animate={{ x: 0 }}
-                      exit={{ x: '100%' }}
-                      transition={{ type: 'spring', stiffness: 280, damping: 30 }}
-                      className="ml-auto h-full w-full max-w-md overflow-y-auto border-l border-zinc-200 bg-white p-5 shadow-2xl sm:p-6"
-                      data-testid="results-filters-explainer-sidebar"
-                      role="dialog"
-                      aria-modal="true"
-                      aria-label="How filtering works"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className="mb-4 flex items-start justify-between gap-4">
-                        <div>
-                          <h5 className="text-base font-semibold text-zinc-900">How filtering works</h5>
-                          <p className="mt-1 text-xs text-zinc-500">Results Filters philosophy</p>
-                        </div>
-                        <button
-                          type="button"
-                          data-testid="results-filters-explainer-close-button"
-                          onClick={() => closeResultsFiltersSidebar('close-button')}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 text-zinc-500 transition-colors hover:border-zinc-300 hover:text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-500/40"
-                          aria-label="Close how filtering works"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <p className="text-sm leading-6 text-zinc-700">{RESULTS_FILTERS_EXPLAINER_COPY}</p>
-                    </motion.aside>
-                  </motion.div>
-                )}
-              </AnimatePresence>
 
               {isInsightsTabActive ? (
                 <>

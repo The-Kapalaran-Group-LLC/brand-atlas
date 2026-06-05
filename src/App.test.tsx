@@ -52,7 +52,7 @@ describe('App Component', () => {
 
     expect(screen.getByTestId('cultural-audience-guidance')).toHaveTextContent('Add the key audience that you want to analyze.');
     expect(screen.getByTestId('cultural-brands-guidance')).toHaveTextContent('Add one or more brands or a category.');
-    expect(screen.getByTestId('cultural-topic-guidance')).toHaveTextContent('Add the specific angle you want to analyze.');
+    expect(screen.getByTestId('cultural-topic-guidance')).toHaveTextContent('Add the specific angle you want to dive into.');
   });
 
   it('shows brand suggestions as user types', async () => {

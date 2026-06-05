@@ -232,7 +232,7 @@ describe('CulturalArchaeologist', () => {
     expect(supabaseFrom).toHaveBeenCalledWith('Cultural_Archaeologist');
   });
 
-  it('shows results filter explainer copy in both the heading tooltip and slide-out sidebar', async () => {
+  it('shows results filter explainer copy in the heading tooltip and hides the how filtering link', async () => {
     render(<CulturalArchaeologist />);
 
     const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
@@ -245,17 +245,7 @@ describe('CulturalArchaeologist', () => {
     expect(screen.getByTestId('results-filters-heading-tooltip')).toHaveTextContent(
       'Results Filters add more context to your observation results and help discern how mainstream or niche a trend might be.'
     );
-
-    fireEvent.click(screen.getByTestId('results-filters-how-filtering-works-link'));
-    const sidebar = await screen.findByTestId('results-filters-explainer-sidebar');
-    expect(within(sidebar).getByText(/Results Filters add more context to your observation results/i)).toBeInTheDocument();
-    expect(within(sidebar).getByText(/High confidence, Known and Peaking/i)).toBeInTheDocument();
-    expect(within(sidebar).getByText(/Low confidence, Speculative and Emerging/i)).toBeInTheDocument();
-
-    fireEvent.keyDown(document, { key: 'Escape' });
-    await waitFor(() => {
-      expect(screen.queryByTestId('results-filters-explainer-sidebar')).not.toBeInTheDocument();
-    });
+    expect(screen.queryByTestId('results-filters-how-filtering-works-link')).not.toBeInTheDocument();
   });
 
   it('opens segmentation in a new browser tab and persists workspace context', async () => {
@@ -901,15 +891,94 @@ describe('CulturalArchaeologist', () => {
 
     const shell = screen.getByTestId('cultural-brands-input-shell');
     expect(shell.className).toContain('flex-wrap');
-    expect(shell.className).toContain('min-h-14');
+    expect(shell.className).toContain('h-14');
+  });
+
+  it('vertically centers audience, brand, and topic field text in empty state', () => {
+    render(<CulturalArchaeologist />);
+
+    const audienceField = screen.getByTestId('cultural-audience-field');
+    const brandsField = screen.getByTestId('cultural-brands-field');
+    const topicField = screen.getByTestId('cultural-topic-field');
+    const brandsShell = screen.getByTestId('cultural-brands-input-shell');
+
+    expect(audienceField.className).toContain('items-center');
+    expect(brandsField.className).toContain('items-center');
+    expect(topicField.className).toContain('items-center');
+    expect(brandsShell.className).toContain('items-center');
+
+    const audienceInput = screen.getByPlaceholderText('Primary Audience (Required) *');
+    const brandInput = screen.getByTestId('cultural-brands-input');
+    const topicInput = screen.getByPlaceholderText('Topic Focus (Optional)');
+
+    expect(audienceInput.className).toContain('py-0');
+    expect(audienceInput.className).not.toContain('pt-4');
+    expect(topicInput.className).toContain('py-0');
+    expect(topicInput.className).not.toContain('pt-4');
+    expect(brandInput.className).toContain('leading-10');
+  });
+
+  it('keeps all primary field boxes at the same base height', () => {
+    render(<CulturalArchaeologist />);
+
+    const audienceField = screen.getByTestId('cultural-audience-field');
+    const brandsField = screen.getByTestId('cultural-brands-field');
+    const brandsShell = screen.getByTestId('cultural-brands-input-shell');
+    const topicField = screen.getByTestId('cultural-topic-field');
+    const generationField = screen.getByTestId('cultural-generation-field');
+    const sourcesField = screen.getByTestId('cultural-sources-field');
+    const uploadField = screen.getByTestId('cultural-upload-field');
+
+    expect(audienceField.className).toContain('h-14');
+    expect(audienceField.className).toContain('items-center');
+    expect(brandsField.className).toContain('h-14');
+    expect(brandsShell.className).toContain('h-14');
+    expect(brandsShell.className).toContain('items-center');
+    expect(topicField.className).toContain('h-14');
+    expect(topicField.className).toContain('items-center');
+    expect(generationField.className).toContain('h-14');
+    expect(generationField.className).toContain('items-center');
+    expect(sourcesField.className).toContain('h-14');
+    expect(sourcesField.className).toContain('items-center');
+    expect(uploadField.className).toContain('h-14');
+    expect(uploadField.className).toContain('items-center');
+  });
+
+  it('vertically centers generation, sources, and upload control text', () => {
+    render(<CulturalArchaeologist />);
+
+    const generationField = screen.getByTestId('cultural-generation-field');
+    const sourcesField = screen.getByTestId('cultural-sources-field');
+    const uploadField = screen.getByTestId('cultural-upload-field');
+
+    expect(generationField.className).toContain('items-center');
+    expect(generationField.className).toContain('py-0');
+    expect(generationField.className).not.toContain('pt-3');
+
+    expect(sourcesField.className).toContain('items-center');
+    expect(sourcesField.className).toContain('py-0');
+    expect(sourcesField.className).not.toContain('pt-3');
+
+    expect(uploadField.className).toContain('items-center');
+    expect(uploadField.className).not.toContain('items-start');
   });
 
   it('renders helper guidance text for audience, brands/category, and topic inputs', () => {
     render(<CulturalArchaeologist />);
 
-    expect(screen.getByTestId('cultural-audience-guidance')).toHaveTextContent('Add the key audience that you want to analyze.');
+    const audienceHelperText = screen.getByText('Add the audience that you want to analyze.');
+    const brandsHelperText = screen.getByText('Add one or more brands or a category.');
+    const topicHelperText = screen.getByText('Add the specific angle you want to dive into.');
+
+    expect(screen.getByTestId('cultural-audience-guidance').className).toContain('items-start');
+    expect(screen.getByTestId('cultural-brands-guidance').className).toContain('items-start');
+    expect(screen.getByTestId('cultural-topic-guidance').className).toContain('items-start');
+    expect(audienceHelperText.className).toContain('self-start');
+    expect(brandsHelperText.className).toContain('self-start');
+    expect(topicHelperText.className).toContain('self-start');
+    expect(screen.getByTestId('cultural-audience-guidance')).toHaveTextContent('Add the audience that you want to analyze.');
     expect(screen.getByTestId('cultural-brands-guidance')).toHaveTextContent('Add one or more brands or a category.');
-    expect(screen.getByTestId('cultural-topic-guidance')).toHaveTextContent('Add the specific angle you want to analyze.');
+    expect(screen.getByTestId('cultural-topic-guidance')).toHaveTextContent('Add the specific angle you want to dive into.');
   });
 
   it('opens guidance tooltips on click and closes with escape or outside click', async () => {
