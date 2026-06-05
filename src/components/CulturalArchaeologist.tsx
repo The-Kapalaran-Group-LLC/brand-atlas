@@ -18,7 +18,7 @@ import { Accordion } from './Accordion';
 import { FeedbackChatWidget } from './FeedbackChatWidget';
 import { navigateToHashRoute, navigateToHomeDashboard } from '../services/navigation';
 import { toSafeExternalHref } from '../services/external-links';
-import { clearCulturalPrefill, readCulturalPrefill } from '../services/cultural-prefill';
+import { clearCulturalPrefill, readCulturalPrefill, saveCulturalPrefill } from '../services/cultural-prefill';
 import {
   BRAND_SUGGESTION_DEBOUNCE_MS,
   getLocalBrandSuggestions,
@@ -2198,6 +2198,59 @@ export default function CulturalArchaeologist() {
     }
   };
 
+  const openSegmentAudienceRerunTab = (segmentName: string, segmentIndex: number) => {
+    const segmentAudience = (segmentName || '').trim();
+    if (!segmentAudience) {
+      console.log('[CulturalArchaeologist] Segment rerun tab launch skipped because segment audience is empty.', {
+        segmentIndex,
+        segmentName,
+      });
+      return;
+    }
+    if (typeof window === 'undefined') {
+      console.log('[CulturalArchaeologist] Segment rerun tab launch skipped because window is unavailable.', {
+        segmentIndex,
+        segmentAudience,
+      });
+      return;
+    }
+
+    const brandFromContext = (matrixMeta?.brand || '').trim();
+    const topicFromContext = (matrixMeta?.topicFocus || '').trim();
+
+    saveCulturalPrefill({
+      audience: segmentAudience,
+      brand: brandFromContext,
+      topicFocus: topicFromContext,
+    });
+
+    const params = new URLSearchParams({ home: '1' });
+    params.set('ca_audience', segmentAudience);
+    if (brandFromContext) {
+      params.set('ca_brand', brandFromContext);
+    }
+    if (topicFromContext) {
+      params.set('ca_topic', topicFromContext);
+    }
+
+    const targetUrl = `${window.location.origin}/?${params.toString()}#cultural-archaeologist`;
+    console.log('[CulturalArchaeologist] Opening segment rerun analysis tab.', {
+      segmentIndex,
+      segmentAudience,
+      brandFromContext,
+      topicFromContext,
+      targetUrl,
+    });
+    const openedTab = window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    if (!openedTab) {
+      setToast('Popup blocked. Allow popups to open the segment rerun tab.');
+      console.log('[CulturalArchaeologist] Browser blocked opening segment rerun analysis tab.', {
+        segmentIndex,
+        segmentAudience,
+      });
+    }
+  };
+
   const openSegmentationTab = () => {
     if (!matrix || !matrixMeta) {
       console.log('[CulturalArchaeologist] Segmentation password popout skipped because matrix context is missing.');
@@ -2674,6 +2727,18 @@ export default function CulturalArchaeologist() {
                       <p className="text-sm text-zinc-700">
                         {renderSegmentationEvidenceText(segment.messagingApproach, `segmentation-segment-${index}-messaging`)}
                       </p>
+                    </div>
+                    <div className="mt-4 border-t border-zinc-100 pt-3">
+                      <button
+                        type="button"
+                        data-testid={`segmentation-rerun-analysis-among-segment-button-${index + 1}`}
+                        onClick={() => {
+                          openSegmentAudienceRerunTab(segment.name, index);
+                        }}
+                        className="inline-flex items-center rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
+                      >
+                        Rerun Analysis Among Segment
+                      </button>
                     </div>
                   </div>
                 );

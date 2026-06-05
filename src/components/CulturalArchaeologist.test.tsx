@@ -510,6 +510,46 @@ describe('CulturalArchaeologist', () => {
     expect(latestSegmentationContextArg?.topicFocus).toContain('budget-driven shoppers');
   });
 
+  it('opens a rerun-in-segment tab with segment audience prefilled from a segmentation card', async () => {
+    const workspaceId = 'workspace-segment-rerun-prefill';
+    window.localStorage.setItem(
+      `${SEGMENTATION_WORKSPACE_STORAGE_PREFIX}${workspaceId}`,
+      JSON.stringify(
+        createSegmentationWorkspaceSnapshot({
+          isSegmentationAuthorized: true,
+          matrixMeta: {
+            audience: 'Gen Z sneaker culture',
+            brand: 'Nike',
+            generations: [],
+            topicFocus: 'Streetwear positioning',
+            sourcesType: [],
+            hasUploadedDocuments: false,
+          },
+        })
+      )
+    );
+    window.history.pushState({}, '', `/?segmentation_workspace=${workspaceId}#cultural-archaeologist`);
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => ({ closed: false } as Window));
+
+    render(<CulturalArchaeologist />);
+    expect(await screen.findByTestId('segmentation-tab-panel')).toBeInTheDocument();
+    await screen.findByTestId('segmentation-result-state');
+
+    fireEvent.click(await screen.findByTestId('segmentation-rerun-analysis-among-segment-button-1'));
+
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    const [rawUrl, rawTarget] = openSpy.mock.calls[0];
+    expect(rawTarget).toBe('_blank');
+    const openedUrl = new URL(String(rawUrl), window.location.origin);
+    expect(openedUrl.hash).toBe('#cultural-archaeologist');
+    expect(openedUrl.searchParams.get('home')).toBe('1');
+    expect(openedUrl.searchParams.get('ca_audience')).toBe('Status Signal Chasers');
+    expect(openedUrl.searchParams.get('ca_brand')).toBe('Nike');
+    expect(openedUrl.searchParams.get('ca_topic')).toBe('Streetwear positioning');
+    openSpy.mockRestore();
+  });
+
   it('shows an Original Segments anchor after Ask refinement and restores the original segmentation when clicked', async () => {
     const workspaceId = 'workspace-segmentation-revert-original';
     generateAudienceSegmentation
