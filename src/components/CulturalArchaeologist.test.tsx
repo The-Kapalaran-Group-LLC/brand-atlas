@@ -117,6 +117,7 @@ const incompleteMatrix = {
 };
 
 const SEGMENTATION_WORKSPACE_STORAGE_PREFIX = 'cultural_segmentation_workspace:';
+const SEGMENTATION_WORKSPACE_MEMORY_KEY = '__culturalSegmentationWorkspaceSnapshots';
 
 const createSegmentationWorkspaceSnapshot = (overrides: Record<string, unknown> = {}) => ({
   matrix: mockMatrix,
@@ -296,6 +297,83 @@ describe('CulturalArchaeologist', () => {
       expect(screen.queryByTestId('segmentation-password-popout')).not.toBeInTheDocument();
     });
     openSpy.mockRestore();
+  });
+
+  it('opens segmentation in a new browser tab when localStorage quota is exceeded by using in-memory fallback', async () => {
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    const originalSetItem = window.localStorage.setItem;
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (key: string, value: string) {
+      if (String(key).startsWith(SEGMENTATION_WORKSPACE_STORAGE_PREFIX)) {
+        throw new DOMException('Quota exceeded', 'QuotaExceededError');
+      }
+      return originalSetItem.call(this, key, value);
+    });
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => ({ closed: false } as Window));
+    const segmentationButton = await screen.findByTestId('audience-segmentation-button');
+    fireEvent.click(segmentationButton);
+
+    fireEvent.change(await screen.findByTestId('segmentation-password-popout-input'), {
+      target: { value: 'segment2026' },
+    });
+    fireEvent.click(screen.getByTestId('segmentation-password-popout-submit-button'));
+
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    const [rawUrl] = openSpy.mock.calls[0];
+    const openedUrl = new URL(String(rawUrl), window.location.origin);
+    const workspaceId = openedUrl.searchParams.get('segmentation_workspace');
+    expect(workspaceId).toBeTruthy();
+    expect(window.localStorage.getItem(`${SEGMENTATION_WORKSPACE_STORAGE_PREFIX}${workspaceId}`)).toBeNull();
+    const memoryStore = (window as unknown as Record<string, unknown>)[SEGMENTATION_WORKSPACE_MEMORY_KEY] as Record<string, unknown> | undefined;
+    expect(memoryStore?.[workspaceId as string]).toBeTruthy();
+    expect(screen.queryByText('Could not open segmentation workspace in a new tab. Please try again.')).not.toBeInTheDocument();
+
+    delete (window as unknown as Record<string, unknown>)[SEGMENTATION_WORKSPACE_MEMORY_KEY];
+    setItemSpy.mockRestore();
+    openSpy.mockRestore();
+  });
+
+  it('hydrates segmentation workspace from opener memory fallback when localStorage snapshot is unavailable', async () => {
+    const workspaceId = 'workspace-opener-memory-fallback';
+    const openerWindowStore: Record<string, unknown> = {
+      [workspaceId]: createSegmentationWorkspaceSnapshot({ isSegmentationAuthorized: true }),
+    };
+    const openerWindowMock = {
+      closed: false,
+      [SEGMENTATION_WORKSPACE_MEMORY_KEY]: openerWindowStore,
+    } as unknown as Window;
+
+    const originalOpenerDescriptor = Object.getOwnPropertyDescriptor(window, 'opener');
+    Object.defineProperty(window, 'opener', {
+      configurable: true,
+      value: openerWindowMock,
+    });
+
+    try {
+      window.history.pushState({}, '', `/?segmentation_workspace=${workspaceId}#cultural-archaeologist`);
+
+      render(<CulturalArchaeologist />);
+      expect(await screen.findByTestId('segmentation-tab-panel')).toBeInTheDocument();
+      expect(screen.queryByTestId('segmentation-password-panel')).not.toBeInTheDocument();
+      expect(await screen.findByTestId('segmentation-result-state')).toBeInTheDocument();
+
+      const currentWindowStore = (window as unknown as Record<string, unknown>)[SEGMENTATION_WORKSPACE_MEMORY_KEY] as Record<string, unknown> | undefined;
+      expect(currentWindowStore?.[workspaceId]).toBeUndefined();
+      expect(openerWindowStore[workspaceId]).toBeUndefined();
+      expect(window.localStorage.getItem(`${SEGMENTATION_WORKSPACE_STORAGE_PREFIX}${workspaceId}`)).toBeNull();
+    } finally {
+      delete (window as unknown as Record<string, unknown>)[SEGMENTATION_WORKSPACE_MEMORY_KEY];
+      if (originalOpenerDescriptor) {
+        Object.defineProperty(window, 'opener', originalOpenerDescriptor);
+      } else {
+        Object.defineProperty(window, 'opener', { configurable: true, value: null });
+      }
+    }
   });
 
   it('renders KNOWN/INFERRED/SPECULATIVE markers as evidence chips in workspace segmentation tab', async () => {

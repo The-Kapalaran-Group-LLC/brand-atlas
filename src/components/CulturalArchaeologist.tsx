@@ -129,6 +129,11 @@ type SegmentationWorkspaceSnapshot = {
   createdAt: string;
 };
 
+type SegmentationWorkspaceMemoryStore = Record<string, SegmentationWorkspaceSnapshot>;
+type SegmentationWorkspaceWindow = Window & {
+  __culturalSegmentationWorkspaceSnapshots?: SegmentationWorkspaceMemoryStore;
+};
+
 const MATRIX_INSIGHT_KEYS: MatrixInsightKey[] = [
   'moments',
   'beliefs',
@@ -155,6 +160,7 @@ const ADMIN_AUTH_STORAGE_KEY = 'brand_atlas_admin_authorized';
 const ADMIN_PASSWORD_SUPPORT_COPY = 'Contact Your Administrator for More Information.';
 const SEGMENTATION_WORKSPACE_QUERY_PARAM = 'segmentation_workspace';
 const SEGMENTATION_WORKSPACE_STORAGE_PREFIX = 'cultural_segmentation_workspace:';
+const SEGMENTATION_WORKSPACE_MEMORY_KEY = '__culturalSegmentationWorkspaceSnapshots';
 
 const getExportErrorDetail = (error: unknown): string | null => {
   if (error instanceof Error && error.message.trim().length > 0) {
@@ -530,6 +536,100 @@ const buildSegmentationWorkspaceStorageKey = (workspaceId: string): string => {
   return `${SEGMENTATION_WORKSPACE_STORAGE_PREFIX}${workspaceId}`;
 };
 
+const isSegmentationWorkspaceSnapshot = (value: unknown): value is SegmentationWorkspaceSnapshot => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const candidate = value as Partial<SegmentationWorkspaceSnapshot>;
+  return Boolean(candidate.matrix && candidate.matrixMeta);
+};
+
+const persistSegmentationWorkspaceSnapshotToMemory = (
+  targetWindow: Window | null | undefined,
+  workspaceId: string,
+  snapshot: SegmentationWorkspaceSnapshot
+): boolean => {
+  if (!targetWindow) {
+    return false;
+  }
+
+  try {
+    const typedWindow = targetWindow as SegmentationWorkspaceWindow;
+    const existingStore = typedWindow[SEGMENTATION_WORKSPACE_MEMORY_KEY];
+    const memoryStore: SegmentationWorkspaceMemoryStore =
+      existingStore && typeof existingStore === 'object'
+        ? existingStore
+        : {};
+    memoryStore[workspaceId] = snapshot;
+    typedWindow[SEGMENTATION_WORKSPACE_MEMORY_KEY] = memoryStore;
+    return true;
+  } catch (error) {
+    console.warn('Failed to persist segmentation workspace snapshot in memory:', error);
+    return false;
+  }
+};
+
+const readSegmentationWorkspaceSnapshotFromMemory = (
+  targetWindow: Window | null | undefined,
+  workspaceId: string
+): SegmentationWorkspaceSnapshot | null => {
+  if (!targetWindow) {
+    return null;
+  }
+
+  try {
+    const typedWindow = targetWindow as SegmentationWorkspaceWindow;
+    const memoryStore = typedWindow[SEGMENTATION_WORKSPACE_MEMORY_KEY];
+    if (!memoryStore || typeof memoryStore !== 'object') {
+      return null;
+    }
+    const snapshotCandidate = memoryStore[workspaceId];
+    if (!isSegmentationWorkspaceSnapshot(snapshotCandidate)) {
+      return null;
+    }
+    return snapshotCandidate;
+  } catch (error) {
+    console.warn('Failed to read segmentation workspace snapshot from memory:', error);
+    return null;
+  }
+};
+
+const removeSegmentationWorkspaceSnapshotFromMemory = (
+  targetWindow: Window | null | undefined,
+  workspaceId: string
+): void => {
+  if (!targetWindow) {
+    return;
+  }
+
+  try {
+    const typedWindow = targetWindow as SegmentationWorkspaceWindow;
+    const memoryStore = typedWindow[SEGMENTATION_WORKSPACE_MEMORY_KEY];
+    if (!memoryStore || typeof memoryStore !== 'object' || !memoryStore[workspaceId]) {
+      return;
+    }
+    delete memoryStore[workspaceId];
+  } catch (error) {
+    console.warn('Failed to remove segmentation workspace snapshot from memory:', error);
+  }
+};
+
+const readSegmentationWorkspaceOpenerWindow = (): Window | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    if (!window.opener || window.opener.closed) {
+      return null;
+    }
+    return window.opener;
+  } catch (error) {
+    console.warn('Failed to access segmentation workspace opener window:', error);
+    return null;
+  }
+};
+
 const persistSegmentationWorkspaceSnapshot = (
   workspaceId: string,
   snapshot: SegmentationWorkspaceSnapshot
@@ -538,13 +638,24 @@ const persistSegmentationWorkspaceSnapshot = (
     return false;
   }
 
+  const serializedSnapshot = JSON.stringify(snapshot);
+  let didPersistToLocalStorage = false;
+
   try {
-    window.localStorage.setItem(buildSegmentationWorkspaceStorageKey(workspaceId), JSON.stringify(snapshot));
-    return true;
+    window.localStorage.setItem(buildSegmentationWorkspaceStorageKey(workspaceId), serializedSnapshot);
+    didPersistToLocalStorage = true;
   } catch (error) {
     console.warn('Failed to persist segmentation workspace snapshot:', error);
-    return false;
   }
+
+  const didPersistToMemory = persistSegmentationWorkspaceSnapshotToMemory(window, workspaceId, snapshot);
+  console.log('[CulturalArchaeologist] Segmentation workspace snapshot persistence status.', {
+    workspaceId,
+    didPersistToLocalStorage,
+    didPersistToMemory,
+    snapshotSizeBytes: serializedSnapshot.length,
+  });
+  return didPersistToLocalStorage || didPersistToMemory;
 };
 
 const readSegmentationWorkspaceSnapshot = (workspaceId: string): SegmentationWorkspaceSnapshot | null => {
@@ -555,17 +666,38 @@ const readSegmentationWorkspaceSnapshot = (workspaceId: string): SegmentationWor
   try {
     const rawSnapshot = window.localStorage.getItem(buildSegmentationWorkspaceStorageKey(workspaceId));
     if (!rawSnapshot) {
-      return null;
+      console.log('[CulturalArchaeologist] No segmentation workspace snapshot found in localStorage.', { workspaceId });
+    } else {
+      const parsed = JSON.parse(rawSnapshot);
+      if (isSegmentationWorkspaceSnapshot(parsed)) {
+        console.log('[CulturalArchaeologist] Loaded segmentation workspace snapshot from localStorage.', { workspaceId });
+        return parsed;
+      }
+      console.log('[CulturalArchaeologist] Ignoring invalid segmentation workspace snapshot from localStorage.', { workspaceId });
     }
-    const parsed = JSON.parse(rawSnapshot);
-    if (!parsed || typeof parsed !== 'object' || !parsed.matrix || !parsed.matrixMeta) {
-      return null;
-    }
-    return parsed as SegmentationWorkspaceSnapshot;
   } catch (error) {
     console.warn('Failed to read segmentation workspace snapshot:', error);
-    return null;
   }
+
+  const windowMemorySnapshot = readSegmentationWorkspaceSnapshotFromMemory(window, workspaceId);
+  if (windowMemorySnapshot) {
+    console.log('[CulturalArchaeologist] Loaded segmentation workspace snapshot from current tab memory.', { workspaceId });
+    return windowMemorySnapshot;
+  }
+
+  const openerWindow = readSegmentationWorkspaceOpenerWindow();
+  const openerMemorySnapshot = readSegmentationWorkspaceSnapshotFromMemory(openerWindow, workspaceId);
+  if (openerMemorySnapshot) {
+    const mirroredIntoCurrentWindow = persistSegmentationWorkspaceSnapshotToMemory(window, workspaceId, openerMemorySnapshot);
+    console.log('[CulturalArchaeologist] Loaded segmentation workspace snapshot from opener tab memory.', {
+      workspaceId,
+      mirroredIntoCurrentWindow,
+    });
+    return openerMemorySnapshot;
+  }
+
+  console.log('[CulturalArchaeologist] Segmentation workspace snapshot was not found in any storage layer.', { workspaceId });
+  return null;
 };
 
 const removeSegmentationWorkspaceSnapshot = (workspaceId: string): void => {
@@ -578,6 +710,10 @@ const removeSegmentationWorkspaceSnapshot = (workspaceId: string): void => {
   } catch (error) {
     console.warn('Failed to remove segmentation workspace snapshot:', error);
   }
+
+  removeSegmentationWorkspaceSnapshotFromMemory(window, workspaceId);
+  const openerWindow = readSegmentationWorkspaceOpenerWindow();
+  removeSegmentationWorkspaceSnapshotFromMemory(openerWindow, workspaceId);
 };
 
 type InputGuidanceProps = {
