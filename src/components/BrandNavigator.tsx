@@ -1383,7 +1383,7 @@ export default function BrandNavigator() {
     keyOfferingsProductsServices: 'Key Offerings / Products / Services',
     strategicMoatsStrengths: 'Strategic Moats (Strengths)',
     potentialThreatsWeaknesses: 'Potential Threats (Weaknesses)',
-    challenges: 'Challenges',
+    challenges: 'Potential Challenges',
     targetAudiences: 'Target Audiences',
     recentCampaigns: 'Recent Campaigns',
     keyMarketingChannels: 'Key Marketing Channels',
@@ -4050,7 +4050,7 @@ function BrandResultCard({
           <BrandResultBulletList items={brandResult.potentialThreatsWeaknesses || []} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
-        <BrandCriteriaSection sectionId={resolveBrandSectionId('challenges')} title="Challenges" sectionKey="challenges" highlighted={highlightedSections.includes('challenges')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('challenges')} onRefresh={() => onRefreshSection('challenges')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-challenges`}>
+        <BrandCriteriaSection sectionId={resolveBrandSectionId('challenges')} title="Potential Challenges" sectionKey="challenges" highlighted={highlightedSections.includes('challenges')} canCompareAcrossBrands={canCompareAcrossBrands} onRequestCompareAcrossBrands={onRequestCompareAcrossBrands} showRefresh={isSectionMissing('challenges')} onRefresh={() => onRefreshSection('challenges')} isRefreshing={isRefreshing} refreshTestId={`brand-section-refresh-${brandIndex}-challenges`}>
           <BrandResultBulletList items={brandResult.challenges || []} inferredEvidenceUrl={inferredEvidenceUrl} />
         </BrandCriteriaSection>
 
@@ -4218,8 +4218,7 @@ function BrandCriteriaSection({
       className={`inline-block w-full mb-6 break-inside-avoid rounded-2xl border bg-zinc-50/80 p-6 shadow-[0_1px_6px_-3px_rgba(0,0,0,0.08)] h-fit self-start ${highlighted ? 'border-indigo-300 ring-2 ring-indigo-200/70' : 'border-zinc-200'} ${compareEnabled ? 'cursor-pointer hover:border-zinc-300' : 'cursor-default'} ${className}`.trim()}
     >
       <h4 className="text-sm font-semibold text-zinc-900 mb-3 uppercase tracking-wider inline-flex items-center gap-3">
-        <span>{title}</span>
-        {showExistingLabel ? <span>(existing)</span> : null}
+        <span>{showExistingLabel ? `${title} (existing)` : title}</span>
         {showRefresh && onRefresh ? (
           <button
             type="button"

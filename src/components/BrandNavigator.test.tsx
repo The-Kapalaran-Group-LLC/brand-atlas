@@ -315,7 +315,7 @@ describe('BrandNavigator', () => {
     expect(within(mobileResultsNav).getByRole('button', { name: 'Brand Q&A' })).toBeInTheDocument();
     expect(within(mobileResultsNav).getByRole('button', { name: 'Patagonia' })).toBeInTheDocument();
     expect(within(mobileResultsNav).getByRole('button', { name: 'Patagonia: Brand Mission' })).toBeInTheDocument();
-    expect(within(mobileResultsNav).getByRole('button', { name: 'Patagonia: Challenges' })).toBeInTheDocument();
+    expect(within(mobileResultsNav).getByRole('button', { name: 'Patagonia: Potential Challenges' })).toBeInTheDocument();
     expect(within(mobileResultsNav).getByRole('button', { name: 'Sources' })).toBeInTheDocument();
   });
 
@@ -496,17 +496,15 @@ describe('BrandNavigator', () => {
     expect(missionSection.className).toContain('self-start');
 
     const positioningSection = screen.getByTestId('brand-result-section-brand-positioning');
-    const existingLabel = within(positioningSection).getByText('(existing)');
-    expect(existingLabel).toBeInTheDocument();
-    expect(existingLabel.className).not.toContain('normal-case');
-    expect(existingLabel.className).not.toContain('text-zinc-400');
+    expect(within(positioningSection).getByText(/brand positioning \(existing\)/i)).toBeInTheDocument();
+    expect(within(positioningSection).queryByText('(existing)')).not.toBeInTheDocument();
 
     const sectionsLayout = screen.getByTestId('brand-result-sections-layout');
     expect(sectionsLayout.className).toContain('lg:columns-2');
     expect(sectionsLayout.className).not.toContain('lg:grid-cols-2');
   });
 
-  it('renders a Challenges section and removes overlap with other result sections', async () => {
+  it('renders a Potential Challenges section and removes overlap with other result sections', async () => {
     generateBrandResearchMatrix.mockResolvedValue({
       analysisObjective: 'test objective',
       ecosystemMethod: 'test method',
@@ -548,7 +546,7 @@ describe('BrandNavigator', () => {
     fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
     fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
 
-    const challengesSection = await screen.findByTestId('brand-result-section-challenges');
+    const challengesSection = await screen.findByTestId('brand-result-section-potential-challenges');
     const challengeItems = within(challengesSection).getAllByRole('listitem');
     expect(challengesSection).toBeInTheDocument();
     expect(challengeItems).toHaveLength(2);
@@ -599,7 +597,7 @@ describe('BrandNavigator', () => {
     fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
     fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
 
-    const challengesSection = await screen.findByTestId('brand-result-section-challenges');
+    const challengesSection = await screen.findByTestId('brand-result-section-potential-challenges');
     const challengeItems = within(challengesSection).getAllByRole('listitem');
     expect(challengeItems).toHaveLength(3);
     expect(challengeItems[0]).toHaveTextContent('Creative differentiation is weakening across paid social formats');
@@ -648,7 +646,7 @@ describe('BrandNavigator', () => {
     fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
     fireEvent.click(await screen.findByRole('button', { name: /generate analysis/i }));
 
-    const challengesSection = await screen.findByTestId('brand-result-section-challenges');
+    const challengesSection = await screen.findByTestId('brand-result-section-potential-challenges');
     const challengeItems = within(challengesSection).getAllByRole('listitem');
     expect(challengeItems).toHaveLength(3);
     expect(challengeItems[0]).toHaveTextContent('Creative differentiation is weakening across paid social formats');

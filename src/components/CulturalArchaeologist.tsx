@@ -495,7 +495,7 @@ const CULTURAL_AUDIENCE_GUIDANCE_TOOLTIP = 'The more specific the audience, the 
 const CULTURAL_BRANDS_GUIDANCE_HELPER = 'Add one or more brands or a category.';
 const CULTURAL_BRANDS_GUIDANCE_TOOLTIP = 'This will help you analyze the interesection of audience and brand/category. Examples: Nike, Adidas, Hoka or categories like premium skincare, energy drinks, athleisure. Press Enter to add each.';
 const CULTURAL_TOPIC_GUIDANCE_HELPER = 'Add the specific angle you want to dive into.';
-const CULTURAL_TOPIC_GUIDANCE_TOOLTIP = 'Examples: Gen Z resale behavior, post-workout rituals, why runners switch from Nike to Hoka.';
+const CULTURAL_TOPIC_GUIDANCE_TOOLTIP = 'Examples: Gen Z purchase behavior, post-workout rituals, why runners switch from Nike to Hoka.';
 
 const SAVED_MATRICES_STORAGE_KEY = 'cultural_matrices';
 

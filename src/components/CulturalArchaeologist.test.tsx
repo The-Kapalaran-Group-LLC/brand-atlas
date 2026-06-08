@@ -1124,7 +1124,7 @@ describe('CulturalArchaeologist', () => {
 
     fireEvent.click(screen.getByTestId('cultural-topic-guidance-trigger'));
     expect(screen.getByTestId('cultural-topic-guidance-tooltip')).toHaveTextContent(
-      'Examples: Gen Z resale behavior, post-workout rituals, why runners switch from Nike to Hoka.'
+      'Examples: Gen Z purchase behavior, post-workout rituals, why runners switch from Nike to Hoka.'
     );
 
     fireEvent.mouseDown(document.body);
