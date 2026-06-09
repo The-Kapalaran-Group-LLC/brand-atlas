@@ -105,4 +105,26 @@ describe('MenuPage', () => {
 
     expect(onClick).not.toHaveBeenCalled();
   });
+
+  it('vertically centers card icon and title copy', () => {
+    const cards: MenuPageCard[] = [
+      {
+        id: 'brand-navigator',
+        title: 'Brand Navigator',
+        description: 'Audit multiple brands.',
+        bullets: ['Opportunity space identification'],
+        icon: <Search className="w-4 h-4" />,
+        href: '/#brand-navigator',
+        onClick: vi.fn(),
+      },
+    ];
+
+    render(<MenuPage subtitle="Start with cultural research." cards={cards} />);
+
+    const titleText = screen.getByText('Brand Navigator');
+    const iconAndTitleRow = titleText.closest('div');
+
+    expect(iconAndTitleRow).toHaveClass('items-center');
+    expect(iconAndTitleRow).not.toHaveClass('items-start');
+  });
 });

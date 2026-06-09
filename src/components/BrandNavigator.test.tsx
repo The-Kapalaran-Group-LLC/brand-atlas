@@ -241,6 +241,97 @@ describe('BrandNavigator', () => {
     expect(await screen.findByText('Type at least 2 characters for suggestions.')).toBeInTheDocument();
   });
 
+  it('opens generation, sources, and upload hover explainers on field hover', async () => {
+    render(<BrandNavigator />);
+
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
+
+    await screen.findByTestId('brand-generation-field');
+
+    fireEvent.mouseEnter(screen.getByTestId('brand-generation-field'));
+    const generationExplainerTooltip = screen.getByTestId('brand-generation-field-explainer-tooltip');
+    expect(generationExplainerTooltip).toHaveTextContent(
+      'Select one or more age groups to focus your analysis.'
+    );
+    expect(generationExplainerTooltip.className).toContain('bg-black');
+
+    fireEvent.mouseLeave(screen.getByTestId('brand-generation-field'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('brand-generation-field-explainer-tooltip')).not.toBeInTheDocument();
+    });
+
+    fireEvent.mouseEnter(screen.getByTestId('brand-sources-field'));
+    expect(screen.getByTestId('brand-sources-field-explainer-tooltip')).toHaveTextContent(
+      'Select the type of source(s) for your results. Source type adds context and specificity to observations.'
+    );
+
+    fireEvent.mouseLeave(screen.getByTestId('brand-sources-field'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('brand-sources-field-explainer-tooltip')).not.toBeInTheDocument();
+    });
+
+    fireEvent.mouseEnter(screen.getByTestId('brand-upload-field'));
+    expect(screen.getByTestId('brand-upload-field-explainer-tooltip')).toHaveTextContent(
+      'Upload one or more documents to complement your analysis.'
+    );
+
+    fireEvent.mouseLeave(screen.getByTestId('brand-upload-field'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('brand-upload-field-explainer-tooltip')).not.toBeInTheDocument();
+    });
+  });
+
+  it('renders helper guidance text for audience, brands/category, and topic inputs', async () => {
+    render(<BrandNavigator />);
+
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
+
+    await screen.findByTestId('brands-input');
+
+    const audienceHelperText = screen.getByText('Add the audience you want to analyze.');
+    const brandsHelperText = screen.getByText('Add one or more brands to analyze.');
+    const topicHelperText = screen.getByText('Add a question or topic you want to explore.');
+
+    expect(screen.getByTestId('brand-audience-guidance').className).toContain('items-start');
+    expect(screen.getByTestId('brand-brands-guidance').className).toContain('items-start');
+    expect(screen.getByTestId('brand-topic-guidance').className).toContain('items-start');
+    expect(audienceHelperText.className).toContain('self-start');
+    expect(brandsHelperText.className).toContain('self-start');
+    expect(topicHelperText.className).toContain('self-start');
+  });
+
+  it('opens audience and topic guidance tooltips and closes with escape or outside click', async () => {
+    render(<BrandNavigator />);
+
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
+
+    await screen.findByTestId('brands-input');
+
+    fireEvent.click(screen.getByTestId('brand-audience-guidance-trigger'));
+    const audienceGuidanceTooltip = screen.getByTestId('brand-audience-guidance-tooltip');
+    expect(audienceGuidanceTooltip).toHaveTextContent(
+      'The more specific the audience, the most specific the results. Examples: Gen Z women, AI tech professionals, Homebuyers.'
+    );
+    expect(audienceGuidanceTooltip.className).toContain('bg-black');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByTestId('brand-audience-guidance-tooltip')).not.toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('brand-brands-guidance-trigger')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('brand-topic-guidance-trigger'));
+    expect(screen.getByTestId('brand-topic-guidance-tooltip')).toHaveTextContent(
+      'Examples: Gen Z purchase behavior, post-workout rituals, why runners switch from Nike to Hoka.'
+    );
+
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => {
+      expect(screen.queryByTestId('brand-topic-guidance-tooltip')).not.toBeInTheDocument();
+    });
+  });
+
   it('falls back to local suggestions when API suggestions are empty', async () => {
     suggestBrands.mockResolvedValue([]);
     render(<BrandNavigator />);
@@ -434,15 +525,23 @@ describe('BrandNavigator', () => {
 
     const brandsInput = await screen.findByTestId('brands-input');
     const brandsInputShell = screen.getByTestId('brands-input-shell');
+    const brandInputFrame = screen.getByTestId('brand-input-frame');
+    const audienceInput = screen.getByTestId('audience-input');
+    const topicInput = screen.getByPlaceholderText('Topic Focus (Optional)');
 
+    expect(brandInputFrame.className).toContain('h-14');
+    expect(audienceInput.className).toContain('h-14');
+    expect(topicInput.className).toContain('h-14');
     expect(brandsInputShell.className).toContain('items-center');
     expect(brandsInputShell.className).not.toContain('items-start');
+    expect(brandsInputShell.className).toContain('h-14');
 
     fireEvent.change(brandsInput, { target: { value: 'Aesop' } });
     fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
 
     expect(await screen.findByTestId('brand-chip-0')).toBeInTheDocument();
     expect(brandsInputShell.className).toContain('items-start');
+    expect(brandsInputShell.className).toContain('min-h-14');
   });
 
   it('renders high-level summary for each brand result', async () => {

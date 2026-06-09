@@ -92,7 +92,7 @@ export default function MenuPage({
               className={MENU_CARD_CLASS_NAME}
               data-testid={`menu-page-card-${card.id}`}
             >
-              <div className="inline-flex items-center gap-2 text-zinc-800 font-semibold mb-2 text-lg md:text-xl items-start">
+              <div className="inline-flex items-center gap-2 text-zinc-800 font-semibold mb-2 text-lg md:text-xl">
                 {card.icon} {card.title}
                 {card.badgeText && (
                   <span

@@ -243,9 +243,11 @@ describe('CulturalArchaeologist', () => {
     expect(await screen.findByText(/Results? Filters/i, {}, { timeout: 3000 })).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('results-filters-heading-tooltip-trigger'));
-    expect(screen.getByTestId('results-filters-heading-tooltip')).toHaveTextContent(
+    const resultsFiltersHeadingTooltip = screen.getByTestId('results-filters-heading-tooltip');
+    expect(resultsFiltersHeadingTooltip).toHaveTextContent(
       'Results Filters add more context to your observation results and help discern how mainstream or niche a trend might be.'
     );
+    expect(resultsFiltersHeadingTooltip.className).toContain('bg-black');
     expect(screen.queryByTestId('results-filters-how-filtering-works-link')).not.toBeInTheDocument();
   });
 
@@ -1084,9 +1086,9 @@ describe('CulturalArchaeologist', () => {
   it('renders helper guidance text for audience, brands/category, and topic inputs', () => {
     render(<CulturalArchaeologist />);
 
-    const audienceHelperText = screen.getByText('Add the audience that you want to analyze.');
+    const audienceHelperText = screen.getByText('Add the audience you want to analyze.');
     const brandsHelperText = screen.getByText('Add one or more brands or a category.');
-    const topicHelperText = screen.getByText('Add the specific angle you want to dive into.');
+    const topicHelperText = screen.getByText('Add a question or topic you want to explore.');
 
     expect(screen.getByTestId('cultural-audience-guidance').className).toContain('items-start');
     expect(screen.getByTestId('cultural-brands-guidance').className).toContain('items-start');
@@ -1094,18 +1096,20 @@ describe('CulturalArchaeologist', () => {
     expect(audienceHelperText.className).toContain('self-start');
     expect(brandsHelperText.className).toContain('self-start');
     expect(topicHelperText.className).toContain('self-start');
-    expect(screen.getByTestId('cultural-audience-guidance')).toHaveTextContent('Add the audience that you want to analyze.');
+    expect(screen.getByTestId('cultural-audience-guidance')).toHaveTextContent('Add the audience you want to analyze.');
     expect(screen.getByTestId('cultural-brands-guidance')).toHaveTextContent('Add one or more brands or a category.');
-    expect(screen.getByTestId('cultural-topic-guidance')).toHaveTextContent('Add the specific angle you want to dive into.');
+    expect(screen.getByTestId('cultural-topic-guidance')).toHaveTextContent('Add a question or topic you want to explore.');
   });
 
-  it('opens guidance tooltips on click and closes with escape or outside click', async () => {
+  it('opens guidance tooltips and closes with escape or outside click', async () => {
     render(<CulturalArchaeologist />);
 
     fireEvent.click(screen.getByTestId('cultural-audience-guidance-trigger'));
-    expect(screen.getByTestId('cultural-audience-guidance-tooltip')).toHaveTextContent(
+    const audienceGuidanceTooltip = screen.getByTestId('cultural-audience-guidance-tooltip');
+    expect(audienceGuidanceTooltip).toHaveTextContent(
       'The more specific the audience, the most specific the results. Examples: Gen Z women, AI tech professionals, Homebuyers.'
     );
+    expect(audienceGuidanceTooltip.className).toContain('bg-black');
 
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => {
@@ -1130,6 +1134,38 @@ describe('CulturalArchaeologist', () => {
     fireEvent.mouseDown(document.body);
     await waitFor(() => {
       expect(screen.queryByTestId('cultural-topic-guidance-tooltip')).not.toBeInTheDocument();
+    });
+
+    fireEvent.mouseEnter(screen.getByTestId('cultural-generation-field'));
+    const generationFieldExplainerTooltip = screen.getByTestId('cultural-generation-field-explainer-tooltip');
+    expect(generationFieldExplainerTooltip).toHaveTextContent(
+      'Select one or more age groups to focus your analysis.'
+    );
+    expect(generationFieldExplainerTooltip.className).toContain('bg-black');
+
+    fireEvent.mouseLeave(screen.getByTestId('cultural-generation-field'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('cultural-generation-field-explainer-tooltip')).not.toBeInTheDocument();
+    });
+
+    fireEvent.mouseEnter(screen.getByTestId('cultural-sources-field'));
+    expect(screen.getByTestId('cultural-sources-field-explainer-tooltip')).toHaveTextContent(
+      'Select the type of source(s) for your results. Source type adds context and specificity to observations.'
+    );
+
+    fireEvent.mouseLeave(screen.getByTestId('cultural-sources-field'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('cultural-sources-field-explainer-tooltip')).not.toBeInTheDocument();
+    });
+
+    fireEvent.mouseEnter(screen.getByTestId('cultural-upload-field'));
+    expect(screen.getByTestId('cultural-upload-field-explainer-tooltip')).toHaveTextContent(
+      'Upload one or more documents to complement your analysis.'
+    );
+
+    fireEvent.mouseLeave(screen.getByTestId('cultural-upload-field'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('cultural-upload-field-explainer-tooltip')).not.toBeInTheDocument();
     });
   });
 

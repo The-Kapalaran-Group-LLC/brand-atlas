@@ -491,11 +491,14 @@ const MAX_CULTURAL_AUDIENCE_INPUT_LENGTH = 180;
 const MAX_CULTURAL_BRAND_INPUT_LENGTH = 120;
 const MAX_CULTURAL_TOPIC_INPUT_LENGTH = 180;
 const CULTURAL_AUDIENCE_GUIDANCE_HELPER = 'Add the audience you want to analyze.';
-const CULTURAL_AUDIENCE_GUIDANCE_TOOLTIP = 'The more specific the audience, the most specific the results. Examples: Gen Z women, AI tech professionals, Homebuyers.';
+const CULTURAL_AUDIENCE_GUIDANCE_TOOLTIP = 'The more specific your audience, the more specific your results. Examples: Gen Z women, AI tech professionals, Homebuyers.';
 const CULTURAL_BRANDS_GUIDANCE_HELPER = 'Add one or more brands or a category.';
 const CULTURAL_BRANDS_GUIDANCE_TOOLTIP = 'This will help you analyze the interesection of audience and brand/category. Examples: Nike, Adidas, Hoka or categories like premium skincare, energy drinks, athleisure. Press Enter to add each.';
-const CULTURAL_TOPIC_GUIDANCE_HELPER = 'Add the specific angle you want to dive into.';
+const CULTURAL_TOPIC_GUIDANCE_HELPER = 'Add a question or topic you want to explore.';
 const CULTURAL_TOPIC_GUIDANCE_TOOLTIP = 'Examples: Gen Z purchase behavior, post-workout rituals, why runners switch from Nike to Hoka.';
+const CULTURAL_GENERATION_FILTER_EXPLAINER_TOOLTIP = 'Select one or more age groups to focus your analysis.';
+const CULTURAL_SOURCES_FILTER_EXPLAINER_TOOLTIP = 'Select the type of source(s) for your results. Source type adds context and specificity to observations.';
+const CULTURAL_UPLOAD_DOCUMENTS_EXPLAINER_TOOLTIP = 'Upload one or more documents to complement your analysis.';
 
 const SAVED_MATRICES_STORAGE_KEY = 'cultural_matrices';
 
@@ -813,13 +816,110 @@ const InputGuidance = ({
             id={tooltipId}
             role="tooltip"
             data-testid={`${baseTestId}-tooltip`}
-            className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg"
+            className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded-xl bg-black px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg"
           >
             {tooltipText}
-            <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
+            <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black" />
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+type FieldHoverExplainerProps = {
+  tooltipLabel: string;
+  tooltipText: string;
+  baseTestId: string;
+  suppressTooltip?: boolean;
+  children: React.ReactNode;
+};
+
+const FieldHoverExplainer = ({
+  tooltipLabel,
+  tooltipText,
+  baseTestId,
+  suppressTooltip = false,
+  children,
+}: FieldHoverExplainerProps) => {
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
+  const explainerRef = useRef<HTMLDivElement | null>(null);
+  const tooltipId = `${baseTestId}-tooltip`;
+
+  const openTooltip = useCallback((reason: string) => {
+    if (suppressTooltip) return;
+    setIsTooltipOpen((wasOpen) => {
+      if (!wasOpen) {
+        console.log('[CulturalArchaeologist] Field explainer tooltip opened.', {
+          explainerId: baseTestId,
+          reason,
+        });
+      }
+      return true;
+    });
+  }, [baseTestId, suppressTooltip]);
+
+  const closeTooltip = useCallback((reason: string) => {
+    setIsTooltipOpen((wasOpen) => {
+      if (wasOpen) {
+        console.log('[CulturalArchaeologist] Field explainer tooltip closed.', {
+          explainerId: baseTestId,
+          reason,
+        });
+      }
+      return false;
+    });
+  }, [baseTestId]);
+
+  useEffect(() => {
+    if (suppressTooltip) {
+      closeTooltip('suppressed');
+    }
+  }, [closeTooltip, suppressTooltip]);
+
+  useEffect(() => {
+    if (!isTooltipOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeTooltip('escape');
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [closeTooltip, isTooltipOpen]);
+
+  return (
+    <div
+      ref={explainerRef}
+      data-testid={baseTestId}
+      className="relative w-full"
+      onMouseEnter={() => openTooltip('hover')}
+      onMouseLeave={() => closeTooltip('mouse-leave')}
+      onFocusCapture={() => openTooltip('focus-within')}
+      onBlurCapture={(event) => {
+        const nextFocusedTarget = event.relatedTarget as Node | null;
+        if (!nextFocusedTarget || !explainerRef.current?.contains(nextFocusedTarget)) {
+          closeTooltip('blur-within');
+        }
+      }}
+    >
+      {children}
+      {isTooltipOpen && !suppressTooltip && (
+        <div
+          id={tooltipId}
+          role="tooltip"
+          data-testid={`${baseTestId}-tooltip`}
+          aria-label={tooltipLabel}
+          className="pointer-events-none absolute top-full left-1/2 z-40 mt-2 w-72 -translate-x-1/2 rounded-xl bg-black px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg"
+        >
+          {tooltipText}
+          <span className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-black" />
+        </div>
+      )}
     </div>
   );
 };
@@ -4326,131 +4426,145 @@ export default function CulturalArchaeologist() {
 
             {/* Filters Row */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
-              <div className="relative w-full" ref={dropdownRef}>
-                <button
-                  data-testid="cultural-generation-field"
-                  type="button"
-                  onClick={() => setIsGenerationDropdownOpen(!isGenerationDropdownOpen)}
-                  className="w-full h-14 flex items-center justify-between px-4 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-700 hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
-                  disabled={isLoading}
-                >
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <Filter className="w-5 h-5 text-zinc-400 shrink-0" />
-                    <span className="truncate">
-                      {selectedGenerations.length > 0 
-                        ? `Generations: ${selectedGenerations.map(g => g.split(' ')[0] + (g.split(' ')[1] ? ' ' + g.split(' ')[1] : '')).join(', ')}` 
-                        : 'Filter by Generation (Optional)'}
-                    </span>
-                  </div>
-                  <ChevronDown className={`w-5 h-5 text-zinc-400 transition-transform ${isGenerationDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
+              <FieldHoverExplainer
+                baseTestId="cultural-generation-field-explainer"
+                tooltipLabel="Generation filter explainer"
+                tooltipText={CULTURAL_GENERATION_FILTER_EXPLAINER_TOOLTIP}
+                suppressTooltip={isGenerationDropdownOpen}
+              >
+                <div className="relative w-full" ref={dropdownRef}>
+                  <button
+                    data-testid="cultural-generation-field"
+                    type="button"
+                    onClick={() => setIsGenerationDropdownOpen(!isGenerationDropdownOpen)}
+                    className="w-full h-14 flex items-center justify-between px-4 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-700 hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                    disabled={isLoading}
+                  >
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <Filter className="w-5 h-5 text-zinc-400 shrink-0" />
+                      <span className="truncate">
+                        {selectedGenerations.length > 0
+                          ? `Generations: ${selectedGenerations.map(g => g.split(' ')[0] + (g.split(' ')[1] ? ' ' + g.split(' ')[1] : '')).join(', ')}`
+                          : 'Filter by Generation (Optional)'}
+                      </span>
+                    </div>
+                    <ChevronDown className={`w-5 h-5 text-zinc-400 transition-transform ${isGenerationDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
 
-                <AnimatePresence>
-                  {isGenerationDropdownOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute z-10 w-full mt-2 bg-white border border-zinc-200 rounded-2xl shadow-lg overflow-hidden"
-                    >
-                      <div className="max-h-60 overflow-y-auto p-2">
-                        {GENERATIONS.map((gen) => {
-                          const isSelected = selectedGenerations.includes(gen);
-                          return (
-                            <button
-                              key={gen}
-                              type="button"
-                              onClick={() => {
-                                setSelectedGenerations(prev => 
-                                  isSelected 
-                                    ? prev.filter(g => g !== gen)
-                                    : [...prev, gen]
-                                );
-                              }}
-                              className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-50 focus:bg-zinc-50 focus:outline-none rounded-xl transition-colors"
-                            >
-                              <span className={`text-sm ${isSelected ? 'font-medium text-indigo-900' : 'text-zinc-700'}`}>
-                                {gen}
-                              </span>
-                              {isSelected && <Check className="w-4 h-4 text-indigo-600" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+                  <AnimatePresence>
+                    {isGenerationDropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 w-full mt-2 bg-white border border-zinc-200 rounded-2xl shadow-lg overflow-hidden"
+                      >
+                        <div className="max-h-60 overflow-y-auto p-2">
+                          {GENERATIONS.map((gen) => {
+                            const isSelected = selectedGenerations.includes(gen);
+                            return (
+                              <button
+                                key={gen}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedGenerations(prev =>
+                                    isSelected
+                                      ? prev.filter(g => g !== gen)
+                                      : [...prev, gen]
+                                  );
+                                }}
+                                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-50 focus:bg-zinc-50 focus:outline-none rounded-xl transition-colors"
+                              >
+                                <span className={`text-sm ${isSelected ? 'font-medium text-indigo-900' : 'text-zinc-700'}`}>
+                                  {gen}
+                                </span>
+                                {isSelected && <Check className="w-4 h-4 text-indigo-600" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </FieldHoverExplainer>
 
-              <div className="relative w-full" ref={sourcesDropdownRef}>
-                <button
-                  data-testid="cultural-sources-field"
-                  type="button"
-                  onClick={() => setIsSourcesDropdownOpen(!isSourcesDropdownOpen)}
-                  className="w-full h-14 flex items-center justify-between px-4 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-700 hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
-                  disabled={isLoading}
-                >
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <FileText className="w-5 h-5 text-zinc-400 shrink-0" />
-                    <span className="truncate">
-                      {sourcesType.length > 0 ? sourcesType.join(', ') : 'Sources (Optional)'}
-                    </span>
-                  </div>
-                  <ChevronDown className={`w-5 h-5 text-zinc-400 transition-transform ${isSourcesDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
+              <FieldHoverExplainer
+                baseTestId="cultural-sources-field-explainer"
+                tooltipLabel="Sources filter explainer"
+                tooltipText={CULTURAL_SOURCES_FILTER_EXPLAINER_TOOLTIP}
+                suppressTooltip={isSourcesDropdownOpen}
+              >
+                <div className="relative w-full" ref={sourcesDropdownRef}>
+                  <button
+                    data-testid="cultural-sources-field"
+                    type="button"
+                    onClick={() => setIsSourcesDropdownOpen(!isSourcesDropdownOpen)}
+                    className="w-full h-14 flex items-center justify-between px-4 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-700 hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                    disabled={isLoading}
+                  >
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <FileText className="w-5 h-5 text-zinc-400 shrink-0" />
+                      <span className="truncate">
+                        {sourcesType.length > 0 ? sourcesType.join(', ') : 'Sources (Optional)'}
+                      </span>
+                    </div>
+                    <ChevronDown className={`w-5 h-5 text-zinc-400 transition-transform ${isSourcesDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
 
-                <AnimatePresence>
-                  {isSourcesDropdownOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute z-10 w-full mt-2 bg-white border border-zinc-200 rounded-2xl shadow-lg overflow-hidden"
-                    >
-                      <div className="max-h-60 overflow-y-auto p-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSourcesType([]);
-                            setIsSourcesDropdownOpen(false);
-                          }}
-                          className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-50 focus:bg-zinc-50 focus:outline-none rounded-xl transition-colors"
-                        >
-                          <span className={`text-sm ${sourcesType.length === 0 ? 'font-medium text-indigo-900' : 'text-zinc-700'}`}>
-                            Any Source
-                          </span>
-                          {sourcesType.length === 0 && <Check className="w-4 h-4 text-indigo-600" />}
-                        </button>
-                        {SOURCES_TYPES.map((type) => {
-                          const isSelected = sourcesType.includes(type);
-                          return (
-                            <button
-                              key={type}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSourcesType(prev => 
-                                  prev.includes(type)
-                                    ? prev.filter(t => t !== type)
-                                    : [...prev, type]
-                                );
-                              }}
-                              className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-50 focus:bg-zinc-50 focus:outline-none rounded-xl transition-colors"
-                            >
-                              <span className={`text-sm ${isSelected ? 'font-medium text-indigo-900' : 'text-zinc-700'}`}>
-                                {type}
-                              </span>
-                              {isSelected && <Check className="w-4 h-4 text-indigo-600" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+                  <AnimatePresence>
+                    {isSourcesDropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 w-full mt-2 bg-white border border-zinc-200 rounded-2xl shadow-lg overflow-hidden"
+                      >
+                        <div className="max-h-60 overflow-y-auto p-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSourcesType([]);
+                              setIsSourcesDropdownOpen(false);
+                            }}
+                            className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-50 focus:bg-zinc-50 focus:outline-none rounded-xl transition-colors"
+                          >
+                            <span className={`text-sm ${sourcesType.length === 0 ? 'font-medium text-indigo-900' : 'text-zinc-700'}`}>
+                              Any Source
+                            </span>
+                            {sourcesType.length === 0 && <Check className="w-4 h-4 text-indigo-600" />}
+                          </button>
+                          {SOURCES_TYPES.map((type) => {
+                            const isSelected = sourcesType.includes(type);
+                            return (
+                              <button
+                                key={type}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSourcesType(prev =>
+                                    prev.includes(type)
+                                      ? prev.filter(t => t !== type)
+                                      : [...prev, type]
+                                  );
+                                }}
+                                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-50 focus:bg-zinc-50 focus:outline-none rounded-xl transition-colors"
+                              >
+                                <span className={`text-sm ${isSelected ? 'font-medium text-indigo-900' : 'text-zinc-700'}`}>
+                                  {type}
+                                </span>
+                                {isSelected && <Check className="w-4 h-4 text-indigo-600" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </FieldHoverExplainer>
 
               {/* File Upload */}
               <div className="w-full">
@@ -4463,20 +4577,26 @@ export default function CulturalArchaeologist() {
                   ref={fileInputRef}
                   disabled={isLoading}
                 />
-                <button
-                  data-testid="cultural-upload-field"
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isLoading}
-                  className="w-full h-14 relative flex items-center bg-white border border-dashed border-zinc-300 rounded-2xl text-zinc-600 hover:bg-zinc-50 hover:border-indigo-300 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                <FieldHoverExplainer
+                  baseTestId="cultural-upload-field-explainer"
+                  tooltipLabel="Upload documents explainer"
+                  tooltipText={CULTURAL_UPLOAD_DOCUMENTS_EXPLAINER_TOOLTIP}
                 >
-                  <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                  <span className="w-full pl-12 pr-4 py-0 text-left block truncate">
-                    {files.length > 0
-                      ? files.map(f => f.name).join(', ')
-                      : 'Upload Documents (Optional)'}
-                  </span>
-                </button>
+                  <button
+                    data-testid="cultural-upload-field"
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isLoading}
+                    className="w-full h-14 relative flex items-center bg-white border border-dashed border-zinc-300 rounded-2xl text-zinc-600 hover:bg-zinc-50 hover:border-indigo-300 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                  >
+                    <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                    <span className="w-full pl-12 pr-4 py-0 text-left block truncate">
+                      {files.length > 0
+                        ? files.map(f => f.name).join(', ')
+                        : 'Upload Documents (Optional)'}
+                    </span>
+                  </button>
+                </FieldHoverExplainer>
                 
                 {files.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -4946,10 +5066,10 @@ export default function CulturalArchaeologist() {
                             id="results-filters-heading-tooltip"
                             role="tooltip"
                             data-testid="results-filters-heading-tooltip"
-                            className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-72 -translate-x-1/2 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg"
+                            className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-72 -translate-x-1/2 rounded-xl bg-black px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg"
                           >
                             {RESULTS_FILTERS_EXPLAINER_COPY}
-                            <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
+                            <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black" />
                           </div>
                         )}
                       </div>
@@ -4984,9 +5104,9 @@ export default function CulturalArchaeologist() {
                         >
                           ?
                         </span>
-                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-black px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
                           How strong &amp; reliable the evidence is for this observation. High = well-corroborated by recent sources. Low = weak or emerging signal.
-                          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
+                          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black" />
                         </div>
                       </div>
                     </div>
@@ -5026,9 +5146,9 @@ export default function CulturalArchaeologist() {
                         >
                           ?
                         </span>
-                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-black px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
                           How the observation is being gathered. Known = directly observed fact. Inferred = pattern drawn from signals or repeated behavior/language. Speculative = forward-looking or unverified hypothesis.
-                          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
+                          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black" />
                         </div>
                       </div>
                     </div>
@@ -5068,9 +5188,9 @@ export default function CulturalArchaeologist() {
                         >
                           ?
                         </span>
-                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-black px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
                           Where this observation sits on the trend lifecycle. Peaking = mainstream adoption. Emerging = early wave. Declining = fading or being replaced.
-                          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
+                          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black" />
                         </div>
                       </div>
                     </div>
@@ -5110,9 +5230,9 @@ export default function CulturalArchaeologist() {
                         >
                           ?
                         </span>
-                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-xl bg-black px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50">
                           Filter insights by source tags attached to each result, including uploaded document-derived observations when available.
-                          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900" />
+                          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black" />
                         </div>
                       </div>
                     </div>

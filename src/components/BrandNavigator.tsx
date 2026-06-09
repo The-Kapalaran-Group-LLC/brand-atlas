@@ -4,7 +4,7 @@ import { getUserTelemetry } from '../services/telemetry';
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Search,
@@ -160,6 +160,11 @@ const isMissingResultTextValue = (value?: string | null): boolean => {
 const MAX_BRAND_INPUT_LENGTH = 120;
 const MAX_AUDIENCE_INPUT_LENGTH = 180;
 const MAX_TOPIC_INPUT_LENGTH = 180;
+const BRAND_AUDIENCE_GUIDANCE_TOOLTIP = 'The more specific the audience, the most specific the results. Examples: Gen Z women, AI tech professionals, Homebuyers.';
+const BRAND_TOPIC_GUIDANCE_TOOLTIP = 'Examples: Gen Z purchase behavior, post-workout rituals, why runners switch from Nike to Hoka.';
+const BRAND_GENERATION_FILTER_EXPLAINER_TOOLTIP = 'Select one or more age groups to focus your analysis.';
+const BRAND_SOURCES_FILTER_EXPLAINER_TOOLTIP = 'Select the type of source(s) for your results. Source type adds context and specificity to observations.';
+const BRAND_UPLOAD_DOCUMENTS_EXPLAINER_TOOLTIP = 'Upload one or more documents to complement your analysis.';
 
 const GENERATIONS = [
   'Gen Alpha (2013–mid 2020s)',
@@ -175,6 +180,211 @@ const SOURCES_TYPES = [
   'Alternative Media',
   'Niche/Fringe',
 ];
+
+type FieldHoverExplainerProps = {
+  tooltipLabel: string;
+  tooltipText: string;
+  baseTestId: string;
+  suppressTooltip?: boolean;
+  children: React.ReactNode;
+};
+
+type InputGuidanceProps = {
+  helperText: string;
+  tooltipLabel: string;
+  tooltipText: string;
+  baseTestId: string;
+  helperTextClassName?: string;
+};
+
+const InputGuidance = ({
+  helperText,
+  tooltipLabel,
+  tooltipText,
+  baseTestId,
+  helperTextClassName = 'text-zinc-400',
+}: InputGuidanceProps) => {
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
+  const guidanceRef = useRef<HTMLDivElement | null>(null);
+  const tooltipId = `${baseTestId}-tooltip`;
+
+  const openTooltip = useCallback((reason: string) => {
+    setIsTooltipOpen((wasOpen) => {
+      if (!wasOpen) {
+        console.log('[BrandNavigator] Input guidance tooltip opened.', { guidanceId: baseTestId, reason });
+      }
+      return true;
+    });
+  }, [baseTestId]);
+
+  const closeTooltip = useCallback((reason: string) => {
+    setIsTooltipOpen((wasOpen) => {
+      if (wasOpen) {
+        console.log('[BrandNavigator] Input guidance tooltip closed.', { guidanceId: baseTestId, reason });
+      }
+      return false;
+    });
+  }, [baseTestId]);
+
+  useEffect(() => {
+    if (!isTooltipOpen) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const eventTarget = event.target as Node | null;
+      if (!eventTarget || !guidanceRef.current) return;
+      if (!guidanceRef.current.contains(eventTarget)) {
+        closeTooltip('outside-click');
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeTooltip('escape');
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [closeTooltip, isTooltipOpen]);
+
+  return (
+    <div data-testid={baseTestId} className="mt-2 ml-2 flex items-start justify-start gap-1.5 text-xs">
+      <span className={`block self-start leading-tight ${helperTextClassName}`}>{helperText}</span>
+      <div
+        ref={guidanceRef}
+        className="relative inline-flex items-start self-start"
+        onMouseEnter={() => openTooltip('hover')}
+        onMouseLeave={() => closeTooltip('mouse-leave')}
+      >
+        <button
+          type="button"
+          data-testid={`${baseTestId}-trigger`}
+          onClick={() => (isTooltipOpen ? closeTooltip('click-toggle-close') : openTooltip('click-toggle-open'))}
+          onFocus={() => openTooltip('focus')}
+          onBlur={(event) => {
+            const nextFocusedTarget = event.relatedTarget as Node | null;
+            if (!nextFocusedTarget || !guidanceRef.current?.contains(nextFocusedTarget)) {
+              closeTooltip('blur');
+            }
+          }}
+          className="inline-flex self-start items-center justify-center rounded-full p-0.5 text-zinc-400 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+          aria-label={tooltipLabel}
+          aria-expanded={isTooltipOpen}
+          aria-describedby={isTooltipOpen ? tooltipId : undefined}
+        >
+          <Info className="w-3.5 h-3.5" />
+        </button>
+        {isTooltipOpen && (
+          <div
+            id={tooltipId}
+            role="tooltip"
+            data-testid={`${baseTestId}-tooltip`}
+            className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded-xl bg-black px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg"
+          >
+            {tooltipText}
+            <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const FieldHoverExplainer = ({
+  tooltipLabel,
+  tooltipText,
+  baseTestId,
+  suppressTooltip = false,
+  children,
+}: FieldHoverExplainerProps) => {
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
+  const explainerRef = useRef<HTMLDivElement | null>(null);
+  const tooltipId = `${baseTestId}-tooltip`;
+
+  const openTooltip = useCallback((reason: string) => {
+    if (suppressTooltip) return;
+    setIsTooltipOpen((wasOpen) => {
+      if (!wasOpen) {
+        console.log('[BrandNavigator] Field explainer tooltip opened.', {
+          explainerId: baseTestId,
+          reason,
+        });
+      }
+      return true;
+    });
+  }, [baseTestId, suppressTooltip]);
+
+  const closeTooltip = useCallback((reason: string) => {
+    setIsTooltipOpen((wasOpen) => {
+      if (wasOpen) {
+        console.log('[BrandNavigator] Field explainer tooltip closed.', {
+          explainerId: baseTestId,
+          reason,
+        });
+      }
+      return false;
+    });
+  }, [baseTestId]);
+
+  useEffect(() => {
+    if (suppressTooltip) {
+      closeTooltip('suppressed');
+    }
+  }, [closeTooltip, suppressTooltip]);
+
+  useEffect(() => {
+    if (!isTooltipOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeTooltip('escape');
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [closeTooltip, isTooltipOpen]);
+
+  return (
+    <div
+      ref={explainerRef}
+      data-testid={baseTestId}
+      className="relative w-full"
+      onMouseEnter={() => openTooltip('hover')}
+      onMouseLeave={() => closeTooltip('mouse-leave')}
+      onFocusCapture={() => openTooltip('focus-within')}
+      onBlurCapture={(event) => {
+        const nextFocusedTarget = event.relatedTarget as Node | null;
+        if (!nextFocusedTarget || !explainerRef.current?.contains(nextFocusedTarget)) {
+          closeTooltip('blur-within');
+        }
+      }}
+    >
+      {children}
+      {isTooltipOpen && !suppressTooltip && (
+        <div
+          id={tooltipId}
+          role="tooltip"
+          data-testid={`${baseTestId}-tooltip`}
+          aria-label={tooltipLabel}
+          className="pointer-events-none absolute top-full left-1/2 z-40 mt-2 w-72 -translate-x-1/2 rounded-xl bg-black px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg"
+        >
+          {tooltipText}
+          <span className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-black" />
+        </div>
+      )}
+    </div>
+  );
+};
 
 const isTestEnvironment = (): boolean =>
   typeof process !== 'undefined' && process.env?.NODE_ENV === 'test';
@@ -1966,11 +2176,14 @@ export default function BrandNavigator() {
           >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start content-start">
               <div className="relative flex flex-col w-full self-start" ref={brandDropdownRef}>
-                <div className={`relative flex items-start w-full min-h-14 bg-white border ${showValidation && normalizedBrands.length === 0 ? 'border-red-500 focus-within:ring-red-500/20 focus-within:border-red-500' : 'border-zinc-200 focus-within:ring-indigo-500/20 focus-within:border-indigo-500'} rounded-2xl text-zinc-900 focus-within:outline-none focus-within:ring-2 transition-all shadow-sm text-sm`}>
+                <div
+                  data-testid="brand-input-frame"
+                  className={`relative flex items-start w-full ${normalizedBrands.length > 0 ? 'min-h-14' : 'h-14'} bg-white border ${showValidation && normalizedBrands.length === 0 ? 'border-red-500 focus-within:ring-red-500/20 focus-within:border-red-500' : 'border-zinc-200 focus-within:ring-indigo-500/20 focus-within:border-indigo-500'} rounded-2xl text-zinc-900 focus-within:outline-none focus-within:ring-2 transition-all shadow-sm text-sm`}
+                >
                   <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
                   <div
                     data-testid="brands-input-shell"
-                    className={`w-full min-h-14 pl-12 pr-12 py-2 flex gap-2 flex-wrap ${normalizedBrands.length > 0 ? 'items-start' : 'items-center'}`}
+                    className={`w-full pl-12 pr-12 flex gap-2 flex-wrap ${normalizedBrands.length > 0 ? 'min-h-14 py-2 items-start' : 'h-14 py-0 items-center'}`}
                   >
                     {normalizedBrands.map((brandChip, chipIndex) => (
                       <span
@@ -2053,6 +2266,9 @@ export default function BrandNavigator() {
                 {showValidation && normalizedBrands.length === 0 && (
                   <span className="text-red-500 text-sm mt-1 ml-2 text-left">At least one brand is required to generate insights.</span>
                 )}
+                <div data-testid="brand-brands-guidance" className="mt-2 ml-2 flex items-start justify-start gap-1.5 text-xs">
+                  <span className="block self-start leading-tight text-zinc-400">Add one or more brands to analyze.</span>
+                </div>
                 <AnimatePresence>
                   {isBrandDropdownOpen && (brandInputQuery.length > 0 || visibleSavedMatrices.length > 0 || brandSuggestions.length > 0 || isSuggestingBrands) && (
                     <motion.div
@@ -2170,7 +2386,7 @@ export default function BrandNavigator() {
               </div>
 
               <div className="relative flex flex-col w-full self-start">
-                <div className="relative flex items-start w-full">
+                <div className="relative flex h-14 items-start w-full">
                   <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
                   <input
                     data-testid="audience-input"
@@ -2194,159 +2410,189 @@ export default function BrandNavigator() {
                     </div>
                   )}
                 </div>
+                <InputGuidance
+                  baseTestId="brand-audience-guidance"
+                  helperText="Add the audience you want to analyze."
+                  tooltipLabel="Primary audience input guidance"
+                  tooltipText={BRAND_AUDIENCE_GUIDANCE_TOOLTIP}
+                />
               </div>
 
-              <div className="relative flex items-start w-full self-start">
-                <Target className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                <input
-                  type="text"
-                  value={topicFocus}
-                  onChange={(e) => setTopicFocus(e.target.value.slice(0, MAX_TOPIC_INPUT_LENGTH))}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                    }
-                  }}
-                  placeholder="Topic Focus (Optional)"
-                  className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 text-left placeholder:text-left placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
-                  disabled={isLoading}
+              <div className="relative flex flex-col w-full self-start">
+                <div className="relative flex h-14 items-start w-full">
+                  <Target className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                  <input
+                    type="text"
+                    value={topicFocus}
+                    onChange={(e) => setTopicFocus(e.target.value.slice(0, MAX_TOPIC_INPUT_LENGTH))}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                      }
+                    }}
+                    placeholder="Topic Focus (Optional)"
+                    className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 text-left placeholder:text-left placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
+                    disabled={isLoading}
+                  />
+                  {isDetecting && !topicFocus.trim() && (
+                    <div className="absolute right-4 flex items-center justify-center">
+                      <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+                    </div>
+                  )}
+                </div>
+                <InputGuidance
+                  baseTestId="brand-topic-guidance"
+                  helperText="Add a question or topic you want to explore."
+                  tooltipLabel="Topic input guidance"
+                  tooltipText={BRAND_TOPIC_GUIDANCE_TOOLTIP}
                 />
-                {isDetecting && !topicFocus.trim() && (
-                  <div className="absolute right-4 flex items-center justify-center">
-                    <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
-                  </div>
-                )}
               </div>
             </div>
 
             {/* Filters Row */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
-              <div className="relative w-full" ref={dropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsGenerationDropdownOpen(!isGenerationDropdownOpen)}
-                  className="w-full flex items-center justify-between px-4 py-4 bg-white border border-zinc-200 rounded-2xl text-zinc-700 text-left hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
-                  disabled={isLoading}
-                >
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <Filter className="w-5 h-5 text-zinc-400 shrink-0" />
-                    <span className="truncate text-left">
-                      {selectedGenerations.length > 0 
-                        ? `Generations: ${selectedGenerations.map(g => g.split(' ')[0] + (g.split(' ')[1] ? ' ' + g.split(' ')[1] : '')).join(', ')}` 
-                        : 'Filter by Generation (Optional)'}
-                    </span>
-                  </div>
-                  <ChevronDown className={`w-5 h-5 text-zinc-400 transition-transform ${isGenerationDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
+              <FieldHoverExplainer
+                baseTestId="brand-generation-field-explainer"
+                tooltipLabel="Generation filter explainer"
+                tooltipText={BRAND_GENERATION_FILTER_EXPLAINER_TOOLTIP}
+                suppressTooltip={isGenerationDropdownOpen}
+              >
+                <div className="relative flex flex-col w-full self-start" ref={dropdownRef}>
+                  <button
+                    data-testid="brand-generation-field"
+                    type="button"
+                    onClick={() => setIsGenerationDropdownOpen(!isGenerationDropdownOpen)}
+                    className="w-full flex items-center justify-between px-4 py-4 bg-white border border-zinc-200 rounded-2xl text-zinc-700 text-left hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                    disabled={isLoading}
+                  >
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <Filter className="w-5 h-5 text-zinc-400 shrink-0" />
+                      <span className="truncate text-left">
+                        {selectedGenerations.length > 0
+                          ? `Generations: ${selectedGenerations.map(g => g.split(' ')[0] + (g.split(' ')[1] ? ' ' + g.split(' ')[1] : '')).join(', ')}`
+                          : 'Filter by Generation (Optional)'}
+                      </span>
+                    </div>
+                    <ChevronDown className={`w-5 h-5 text-zinc-400 transition-transform ${isGenerationDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
 
-                <AnimatePresence>
-                  {isGenerationDropdownOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute z-10 w-full mt-2 bg-white border border-zinc-200 rounded-2xl shadow-lg overflow-hidden"
-                    >
-                      <div className="max-h-60 overflow-y-auto p-2">
-                        {GENERATIONS.map((gen) => {
-                          const isSelected = selectedGenerations.includes(gen);
-                          return (
-                            <button
-                              key={gen}
-                              type="button"
-                              onClick={() => {
-                                setSelectedGenerations(prev => 
-                                  isSelected 
-                                    ? prev.filter(g => g !== gen)
-                                    : [...prev, gen]
-                                );
-                              }}
-                              className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-50 focus:bg-zinc-50 focus:outline-none rounded-xl transition-colors"
-                            >
-                              <span className={`text-sm ${isSelected ? 'font-medium text-indigo-900' : 'text-zinc-700'}`}>
-                                {gen}
-                              </span>
-                              {isSelected && <Check className="w-4 h-4 text-indigo-600" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+                  <AnimatePresence>
+                    {isGenerationDropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 w-full mt-2 bg-white border border-zinc-200 rounded-2xl shadow-lg overflow-hidden"
+                      >
+                        <div className="max-h-60 overflow-y-auto p-2">
+                          {GENERATIONS.map((gen) => {
+                            const isSelected = selectedGenerations.includes(gen);
+                            return (
+                              <button
+                                key={gen}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedGenerations(prev =>
+                                    isSelected
+                                      ? prev.filter(g => g !== gen)
+                                      : [...prev, gen]
+                                  );
+                                }}
+                                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-50 focus:bg-zinc-50 focus:outline-none rounded-xl transition-colors"
+                              >
+                                <span className={`text-sm ${isSelected ? 'font-medium text-indigo-900' : 'text-zinc-700'}`}>
+                                  {gen}
+                                </span>
+                                {isSelected && <Check className="w-4 h-4 text-indigo-600" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </FieldHoverExplainer>
 
-              <div className="relative w-full" ref={sourcesDropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsSourcesDropdownOpen(!isSourcesDropdownOpen)}
-                  className="w-full flex items-center justify-between px-4 py-4 bg-white border border-zinc-200 rounded-2xl text-zinc-700 text-left hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
-                  disabled={isLoading}
-                >
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <FileText className="w-5 h-5 text-zinc-400 shrink-0" />
-                    <span className="truncate text-left">
-                      {sourcesType.length > 0 ? sourcesType.join(', ') : 'Sources (Optional)'}
-                    </span>
-                  </div>
-                  <ChevronDown className={`w-5 h-5 text-zinc-400 transition-transform ${isSourcesDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
+              <FieldHoverExplainer
+                baseTestId="brand-sources-field-explainer"
+                tooltipLabel="Sources filter explainer"
+                tooltipText={BRAND_SOURCES_FILTER_EXPLAINER_TOOLTIP}
+                suppressTooltip={isSourcesDropdownOpen}
+              >
+                <div className="relative flex flex-col w-full self-start" ref={sourcesDropdownRef}>
+                  <button
+                    data-testid="brand-sources-field"
+                    type="button"
+                    onClick={() => setIsSourcesDropdownOpen(!isSourcesDropdownOpen)}
+                    className="w-full flex items-center justify-between px-4 py-4 bg-white border border-zinc-200 rounded-2xl text-zinc-700 text-left hover:bg-zinc-50 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                    disabled={isLoading}
+                  >
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <FileText className="w-5 h-5 text-zinc-400 shrink-0" />
+                      <span className="truncate text-left">
+                        {sourcesType.length > 0 ? sourcesType.join(', ') : 'Sources (Optional)'}
+                      </span>
+                    </div>
+                    <ChevronDown className={`w-5 h-5 text-zinc-400 transition-transform ${isSourcesDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
 
-                <AnimatePresence>
-                  {isSourcesDropdownOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute z-10 w-full mt-2 bg-white border border-zinc-200 rounded-2xl shadow-lg overflow-hidden"
-                    >
-                      <div className="max-h-60 overflow-y-auto p-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSourcesType([]);
-                            setIsSourcesDropdownOpen(false);
-                          }}
-                          className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-50 focus:bg-zinc-50 focus:outline-none rounded-xl transition-colors"
-                        >
-                          <span className={`text-sm ${sourcesType.length === 0 ? 'font-medium text-indigo-900' : 'text-zinc-700'}`}>
-                            Any Source
-                          </span>
-                          {sourcesType.length === 0 && <Check className="w-4 h-4 text-indigo-600" />}
-                        </button>
-                        {SOURCES_TYPES.map((type) => {
-                          const isSelected = sourcesType.includes(type);
-                          return (
-                            <button
-                              key={type}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSourcesType(prev => 
-                                  prev.includes(type)
-                                    ? prev.filter(t => t !== type)
-                                    : [...prev, type]
-                                );
-                              }}
-                              className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-50 focus:bg-zinc-50 focus:outline-none rounded-xl transition-colors"
-                            >
-                              <span className={`text-sm ${isSelected ? 'font-medium text-indigo-900' : 'text-zinc-700'}`}>
-                                {type}
-                              </span>
-                              {isSelected && <Check className="w-4 h-4 text-indigo-600" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+                  <AnimatePresence>
+                    {isSourcesDropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 w-full mt-2 bg-white border border-zinc-200 rounded-2xl shadow-lg overflow-hidden"
+                      >
+                        <div className="max-h-60 overflow-y-auto p-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSourcesType([]);
+                              setIsSourcesDropdownOpen(false);
+                            }}
+                            className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-50 focus:bg-zinc-50 focus:outline-none rounded-xl transition-colors"
+                          >
+                            <span className={`text-sm ${sourcesType.length === 0 ? 'font-medium text-indigo-900' : 'text-zinc-700'}`}>
+                              Any Source
+                            </span>
+                            {sourcesType.length === 0 && <Check className="w-4 h-4 text-indigo-600" />}
+                          </button>
+                          {SOURCES_TYPES.map((type) => {
+                            const isSelected = sourcesType.includes(type);
+                            return (
+                              <button
+                                key={type}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSourcesType(prev =>
+                                    prev.includes(type)
+                                      ? prev.filter(t => t !== type)
+                                      : [...prev, type]
+                                  );
+                                }}
+                                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-50 focus:bg-zinc-50 focus:outline-none rounded-xl transition-colors"
+                              >
+                                <span className={`text-sm ${isSelected ? 'font-medium text-indigo-900' : 'text-zinc-700'}`}>
+                                  {type}
+                                </span>
+                                {isSelected && <Check className="w-4 h-4 text-indigo-600" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </FieldHoverExplainer>
 
               {/* File Upload */}
-              <div className="w-full">
+              <div className="relative flex flex-col w-full self-start">
                 <input
                   type="file"
                   multiple
@@ -2356,20 +2602,27 @@ export default function BrandNavigator() {
                   ref={fileInputRef}
                   disabled={isLoading}
                 />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isLoading}
-                  className="w-full relative flex items-center bg-white border border-dashed border-zinc-300 rounded-2xl text-zinc-600 hover:bg-zinc-50 hover:border-indigo-300 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
-                  style={{ minHeight: '56px', padding: 0 }}
+                <FieldHoverExplainer
+                  baseTestId="brand-upload-field-explainer"
+                  tooltipLabel="Upload documents explainer"
+                  tooltipText={BRAND_UPLOAD_DOCUMENTS_EXPLAINER_TOOLTIP}
                 >
-                  <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                  <span className="w-full pl-12 pr-4 py-4 text-left block">
-                    {files.length > 0
-                      ? files.map(f => f.name).join(', ')
-                      : 'Upload Documents (Optional)'}
-                  </span>
-                </button>
+                  <button
+                    data-testid="brand-upload-field"
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isLoading}
+                    className="w-full relative flex items-center bg-white border border-dashed border-zinc-300 rounded-2xl text-zinc-600 hover:bg-zinc-50 hover:border-indigo-300 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-1 transition-all shadow-sm text-sm"
+                    style={{ minHeight: '56px', padding: 0 }}
+                  >
+                    <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                    <span className="w-full pl-12 pr-4 py-4 text-left block">
+                      {files.length > 0
+                        ? files.map(f => f.name).join(', ')
+                        : 'Upload Documents (Optional)'}
+                    </span>
+                  </button>
+                </FieldHoverExplainer>
                 
                 {files.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
