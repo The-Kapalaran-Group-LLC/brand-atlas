@@ -1119,6 +1119,35 @@ describe('CulturalArchaeologist', () => {
     expect(uploadMobileGuidance).toHaveTextContent('Upload one or more documents to complement your analysis.');
   });
 
+  it('suppresses field hover explainers on mobile so inline guidance is the only tooltip source', async () => {
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes('max-width: 767px'),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    try {
+      render(<CulturalArchaeologist />);
+
+      fireEvent.mouseEnter(screen.getByTestId('cultural-generation-field'));
+      expect(screen.queryByTestId('cultural-generation-field-explainer-tooltip')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('cultural-generation-mobile-guidance-inline-trigger'));
+      expect(screen.getByTestId('cultural-generation-mobile-guidance-inline-tooltip')).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, 'matchMedia', { writable: true, value: originalMatchMedia });
+    }
+  });
+
   it('opens guidance tooltips and closes with escape or outside click', async () => {
     render(<CulturalArchaeologist />);
 

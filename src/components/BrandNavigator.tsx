@@ -186,6 +186,7 @@ type FieldHoverExplainerProps = {
   tooltipText: string;
   baseTestId: string;
   suppressTooltip?: boolean;
+  disableOnMobile?: boolean;
   children: React.ReactNode;
 };
 
@@ -302,14 +303,19 @@ const FieldHoverExplainer = ({
   tooltipText,
   baseTestId,
   suppressTooltip = false,
+  disableOnMobile = false,
   children,
 }: FieldHoverExplainerProps) => {
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
   const explainerRef = useRef<HTMLDivElement | null>(null);
   const tooltipId = `${baseTestId}-tooltip`;
+  const isTooltipSuppressedOnMobile = disableOnMobile
+    && typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(max-width: 767px)').matches;
 
   const openTooltip = useCallback((reason: string) => {
-    if (suppressTooltip) return;
+    if (suppressTooltip || isTooltipSuppressedOnMobile) return;
     setIsTooltipOpen((wasOpen) => {
       if (!wasOpen) {
         console.log('[BrandNavigator] Field explainer tooltip opened.', {
@@ -319,7 +325,7 @@ const FieldHoverExplainer = ({
       }
       return true;
     });
-  }, [baseTestId, suppressTooltip]);
+  }, [baseTestId, suppressTooltip, isTooltipSuppressedOnMobile]);
 
   const closeTooltip = useCallback((reason: string) => {
     setIsTooltipOpen((wasOpen) => {
@@ -338,6 +344,12 @@ const FieldHoverExplainer = ({
       closeTooltip('suppressed');
     }
   }, [closeTooltip, suppressTooltip]);
+
+  useEffect(() => {
+    if (isTooltipSuppressedOnMobile) {
+      closeTooltip('suppressed-mobile');
+    }
+  }, [closeTooltip, isTooltipSuppressedOnMobile]);
 
   useEffect(() => {
     if (!isTooltipOpen) return;
@@ -370,7 +382,7 @@ const FieldHoverExplainer = ({
       }}
     >
       {children}
-      {isTooltipOpen && !suppressTooltip && (
+      {isTooltipOpen && !suppressTooltip && !isTooltipSuppressedOnMobile && (
         <div
           id={tooltipId}
           role="tooltip"
@@ -2456,6 +2468,7 @@ export default function BrandNavigator() {
                 tooltipLabel="Generation filter explainer"
                 tooltipText={BRAND_GENERATION_FILTER_EXPLAINER_TOOLTIP}
                 suppressTooltip={isGenerationDropdownOpen}
+                disableOnMobile
               >
                 <div className="relative flex flex-col w-full self-start" ref={dropdownRef}>
                   <button
@@ -2528,6 +2541,7 @@ export default function BrandNavigator() {
                 tooltipLabel="Sources filter explainer"
                 tooltipText={BRAND_SOURCES_FILTER_EXPLAINER_TOOLTIP}
                 suppressTooltip={isSourcesDropdownOpen}
+                disableOnMobile
               >
                 <div className="relative flex flex-col w-full self-start" ref={sourcesDropdownRef}>
                   <button
@@ -2622,6 +2636,7 @@ export default function BrandNavigator() {
                   baseTestId="brand-upload-field-explainer"
                   tooltipLabel="Upload documents explainer"
                   tooltipText={BRAND_UPLOAD_DOCUMENTS_EXPLAINER_TOOLTIP}
+                  disableOnMobile
                 >
                   <button
                     data-testid="brand-upload-field"
