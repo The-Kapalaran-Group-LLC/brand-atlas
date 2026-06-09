@@ -767,7 +767,9 @@ describe('CulturalArchaeologist', () => {
     fireEvent.click(screen.getByRole('button', { name: /highly unique observation/i }));
 
     expect(await screen.findByText('Highly unique signal')).toBeInTheDocument();
-    expect(screen.queryByText('General signal')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('General signal')).not.toBeInTheDocument();
+    });
 
     fireEvent.click(screen.getByRole('button', { name: /highly unique observation/i }));
 
@@ -1085,10 +1087,11 @@ describe('CulturalArchaeologist', () => {
     fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
 
     const layout = await screen.findByTestId('matrix-cards-layout');
-    expect(layout.className).toContain('columns-1');
-    expect(layout.className).toContain('md:columns-2');
-    expect(layout.className).toContain('lg:columns-3');
-    expect(layout.className).not.toContain('grid-cols-1');
+    expect(layout.className).toContain('grid');
+    expect(layout.className).toContain('grid-cols-1');
+    expect(layout.className).toContain('md:grid-cols-2');
+    expect(layout.className).toContain('lg:grid-cols-3');
+    expect(layout.className).not.toContain('columns-1');
   });
 
   it('uses a wrapping brand chip input shell like Brand Navigator', () => {
@@ -1245,7 +1248,7 @@ describe('CulturalArchaeologist', () => {
     fireEvent.click(screen.getByTestId('cultural-audience-guidance-trigger'));
     const audienceGuidanceTooltip = screen.getByTestId('cultural-audience-guidance-tooltip');
     expect(audienceGuidanceTooltip).toHaveTextContent(
-      'The more specific the audience, the most specific the results. Examples: Gen Z women, AI tech professionals, Homebuyers.'
+      'The more specific your audience, the more specific your results. Examples: Gen Z women, AI tech professionals, Homebuyers.'
     );
     expect(audienceGuidanceTooltip.className).toContain('bg-black');
 

@@ -216,7 +216,7 @@ describe('BrandDeepDivePage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
 
-    await screen.findByText(/Ask About This Analysis/i);
+    await screen.findByRole('heading', { name: /Ask the Excavator/i });
 
     expect(screen.queryByRole('button', { name: /rescan/i })).not.toBeInTheDocument();
 
@@ -552,7 +552,7 @@ describe('BrandDeepDivePage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
 
-    await screen.findByText(/Ask About This Analysis/i);
+    await screen.findByRole('heading', { name: /Ask the Excavator/i });
 
     const typographyHeading = screen.getAllByText('Typography')[0];
     const typographyCard = typographyHeading.closest('.cursor-pointer') as HTMLElement | null;
@@ -735,7 +735,7 @@ describe('BrandDeepDivePage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
 
-    await screen.findByText(/Ask About This Analysis/i);
+    await screen.findByRole('heading', { name: /Ask the Excavator/i });
     expect(screen.queryByRole('button', { name: /^compare$/i })).not.toBeInTheDocument();
   });
 
@@ -756,7 +756,7 @@ describe('BrandDeepDivePage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
 
-    await screen.findByText(/Ask About This Analysis/i);
+    await screen.findByRole('heading', { name: /Ask the Excavator/i });
     expect(screen.queryByRole('button', { name: /^compare$/i })).not.toBeInTheDocument();
 
     const typographyHeading = screen.getAllByText('Typography')[0];
@@ -792,7 +792,7 @@ describe('BrandDeepDivePage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
 
-    await screen.findByText(/Ask About This Analysis/i);
+    await screen.findByRole('heading', { name: /Ask the Excavator/i });
 
     expect(screen.getByText('No primary colors documented.')).toBeInTheDocument();
     expect(screen.getByText('No accent colors documented.')).toBeInTheDocument();
@@ -830,7 +830,7 @@ describe('BrandDeepDivePage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
 
-    await screen.findByText(/Ask About This Analysis/i);
+    await screen.findByRole('heading', { name: /Ask the Excavator/i });
     expect(screen.getByRole('button', { name: /^compare$/i })).toBeInTheDocument();
   });
 
@@ -865,7 +865,7 @@ describe('BrandDeepDivePage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
 
-    await screen.findByText(/Ask About This Analysis/i);
+    await screen.findByRole('heading', { name: /Ask the Excavator/i });
 
     expect(screen.queryByText(/\[INFERRED\]/i)).not.toBeInTheDocument();
   });
@@ -902,7 +902,7 @@ describe('BrandDeepDivePage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
 
-    await screen.findByText(/Ask About This Analysis/i);
+    await screen.findByRole('heading', { name: /Ask the Excavator/i });
 
     expect(screen.getAllByText('INFERRED').length).toBeGreaterThan(0);
     expect(screen.queryByText(/\[INFERRED\]/i)).not.toBeInTheDocument();
@@ -940,7 +940,7 @@ describe('BrandDeepDivePage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
 
-    await screen.findByText(/Ask About This Analysis/i);
+    await screen.findByRole('heading', { name: /Ask the Excavator/i });
 
     fireEvent.click(screen.getByTestId('color-swatch-trigger-0-primaryColors-0'));
 
@@ -986,7 +986,7 @@ describe('BrandDeepDivePage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
 
-    await screen.findByText(/Ask About This Analysis/i);
+    await screen.findByRole('heading', { name: /Ask the Excavator/i });
 
     fireEvent.click(screen.getByTestId('color-swatch-trigger-0-primaryColors-0'));
 
@@ -1011,7 +1011,7 @@ describe('BrandDeepDivePage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
 
-    await screen.findByText(/Ask About This Analysis/i);
+    await screen.findByRole('heading', { name: /Ask the Excavator/i });
 
     expect(screen.queryByText(/devil.?s advocate/i)).not.toBeInTheDocument();
     expect(screen.getByText('Lean into differentiated editorial cues.')).toBeInTheDocument();
@@ -1025,7 +1025,7 @@ describe('BrandDeepDivePage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
 
-    await screen.findByText(/Ask About This Analysis/i);
+    await screen.findByRole('heading', { name: /Ask the Excavator/i });
 
     expect(screen.getByRole('heading', { name: /sources & research/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /\[1\].*Aesop/i })).toHaveAttribute(

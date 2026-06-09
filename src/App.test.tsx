@@ -50,9 +50,9 @@ describe('App Component', () => {
     await waitForSplashToDisappear();
     await openResearchExperience();
 
-    expect(screen.getByTestId('cultural-audience-guidance')).toHaveTextContent('Add the key audience that you want to analyze.');
+    expect(screen.getByTestId('cultural-audience-guidance')).toHaveTextContent('Add the audience you want to analyze.');
     expect(screen.getByTestId('cultural-brands-guidance')).toHaveTextContent('Add one or more brands or a category.');
-    expect(screen.getByTestId('cultural-topic-guidance')).toHaveTextContent('Add the specific angle you want to dive into.');
+    expect(screen.getByTestId('cultural-topic-guidance')).toHaveTextContent('Add a question or topic you want to explore.');
   });
 
   it('shows brand suggestions as user types', async () => {
