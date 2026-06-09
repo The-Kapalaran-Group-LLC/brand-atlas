@@ -256,8 +256,8 @@ const InputGuidance = ({
   }, [closeTooltip, isTooltipOpen]);
 
   return (
-    <div data-testid={baseTestId} className="mt-2 ml-2 flex items-start justify-start gap-1.5 text-xs">
-      <span className={`block self-start leading-tight ${helperTextClassName}`}>{helperText}</span>
+    <div data-testid={baseTestId} className="mt-2 ml-2 flex items-start justify-start gap-1.5 text-xs text-left">
+      <span className={`block self-start leading-tight text-left ${helperTextClassName}`}>{helperText}</span>
       <div
         ref={guidanceRef}
         className="relative inline-flex items-start self-start"
@@ -2278,8 +2278,8 @@ export default function BrandNavigator() {
                 {showValidation && normalizedBrands.length === 0 && (
                   <span className="text-red-500 text-sm mt-1 ml-2 text-left">At least one brand is required to generate insights.</span>
                 )}
-                <div data-testid="brand-brands-guidance" className="mt-2 ml-2 flex items-start justify-start gap-1.5 text-xs">
-                  <span className="block self-start leading-tight text-zinc-400">Add one or more brands to analyze.</span>
+                <div data-testid="brand-brands-guidance" className="mt-2 ml-2 flex items-start justify-start gap-1.5 text-xs text-left">
+                  <span className="block self-start leading-tight text-left text-zinc-400">Add one or more brands to analyze.</span>
                 </div>
                 <AnimatePresence>
                   {isBrandDropdownOpen && (brandInputQuery.length > 0 || visibleSavedMatrices.length > 0 || brandSuggestions.length > 0 || isSuggestingBrands) && (

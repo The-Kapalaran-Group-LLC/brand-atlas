@@ -295,6 +295,9 @@ describe('BrandNavigator', () => {
     expect(screen.getByTestId('brand-audience-guidance').className).toContain('items-start');
     expect(screen.getByTestId('brand-brands-guidance').className).toContain('items-start');
     expect(screen.getByTestId('brand-topic-guidance').className).toContain('items-start');
+    expect(screen.getByTestId('brand-audience-guidance').className).toContain('text-left');
+    expect(screen.getByTestId('brand-brands-guidance').className).toContain('text-left');
+    expect(screen.getByTestId('brand-topic-guidance').className).toContain('text-left');
     expect(audienceHelperText.className).toContain('self-start');
     expect(brandsHelperText.className).toContain('self-start');
     expect(topicHelperText.className).toContain('self-start');
@@ -314,6 +317,9 @@ describe('BrandNavigator', () => {
     expect(generationMobileGuidance.className).toContain('md:hidden');
     expect(sourcesMobileGuidance.className).toContain('md:hidden');
     expect(uploadMobileGuidance.className).toContain('md:hidden');
+    expect(screen.getByTestId('brand-generation-mobile-guidance-inline').className).toContain('text-left');
+    expect(screen.getByTestId('brand-sources-mobile-guidance-inline').className).toContain('text-left');
+    expect(screen.getByTestId('brand-upload-mobile-guidance-inline').className).toContain('text-left');
 
     expect(generationMobileGuidance).toHaveTextContent('Select one or more age groups to focus your analysis.');
     expect(sourcesMobileGuidance).toHaveTextContent(

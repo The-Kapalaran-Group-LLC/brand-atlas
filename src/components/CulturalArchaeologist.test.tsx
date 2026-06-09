@@ -1093,6 +1093,9 @@ describe('CulturalArchaeologist', () => {
     expect(screen.getByTestId('cultural-audience-guidance').className).toContain('items-start');
     expect(screen.getByTestId('cultural-brands-guidance').className).toContain('items-start');
     expect(screen.getByTestId('cultural-topic-guidance').className).toContain('items-start');
+    expect(screen.getByTestId('cultural-audience-guidance').className).toContain('text-left');
+    expect(screen.getByTestId('cultural-brands-guidance').className).toContain('text-left');
+    expect(screen.getByTestId('cultural-topic-guidance').className).toContain('text-left');
     expect(audienceHelperText.className).toContain('self-start');
     expect(brandsHelperText.className).toContain('self-start');
     expect(topicHelperText.className).toContain('self-start');
@@ -1111,6 +1114,9 @@ describe('CulturalArchaeologist', () => {
     expect(generationMobileGuidance.className).toContain('md:hidden');
     expect(sourcesMobileGuidance.className).toContain('md:hidden');
     expect(uploadMobileGuidance.className).toContain('md:hidden');
+    expect(screen.getByTestId('cultural-generation-mobile-guidance-inline').className).toContain('text-left');
+    expect(screen.getByTestId('cultural-sources-mobile-guidance-inline').className).toContain('text-left');
+    expect(screen.getByTestId('cultural-upload-mobile-guidance-inline').className).toContain('text-left');
 
     expect(generationMobileGuidance).toHaveTextContent('Select one or more age groups to focus your analysis.');
     expect(sourcesMobileGuidance).toHaveTextContent(

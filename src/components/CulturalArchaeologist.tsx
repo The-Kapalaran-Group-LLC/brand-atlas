@@ -785,8 +785,8 @@ const InputGuidance = ({
   }, [closeTooltip, isTooltipOpen]);
 
   return (
-    <div data-testid={baseTestId} className="mt-2 ml-2 inline-flex items-start gap-1.5 text-xs">
-      <span className={`self-start ${helperTextClassName}`}>{helperText}</span>
+    <div data-testid={baseTestId} className="mt-2 ml-2 inline-flex items-start gap-1.5 text-xs text-left">
+      <span className={`self-start leading-tight text-left ${helperTextClassName}`}>{helperText}</span>
       <div
         ref={guidanceRef}
         className="relative inline-flex items-center"
