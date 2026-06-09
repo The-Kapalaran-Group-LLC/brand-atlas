@@ -4489,6 +4489,15 @@ export default function CulturalArchaeologist() {
                   </AnimatePresence>
                 </div>
               </FieldHoverExplainer>
+              <div data-testid="cultural-generation-mobile-guidance" className="md:hidden">
+                <InputGuidance
+                  baseTestId="cultural-generation-mobile-guidance-inline"
+                  helperText={CULTURAL_GENERATION_FILTER_EXPLAINER_TOOLTIP}
+                  helperTextClassName="text-zinc-400"
+                  tooltipLabel="Generation filter explainer"
+                  tooltipText={CULTURAL_GENERATION_FILTER_EXPLAINER_TOOLTIP}
+                />
+              </div>
 
               <FieldHoverExplainer
                 baseTestId="cultural-sources-field-explainer"
@@ -4565,6 +4574,15 @@ export default function CulturalArchaeologist() {
                   </AnimatePresence>
                 </div>
               </FieldHoverExplainer>
+              <div data-testid="cultural-sources-mobile-guidance" className="md:hidden">
+                <InputGuidance
+                  baseTestId="cultural-sources-mobile-guidance-inline"
+                  helperText={CULTURAL_SOURCES_FILTER_EXPLAINER_TOOLTIP}
+                  helperTextClassName="text-zinc-400"
+                  tooltipLabel="Sources filter explainer"
+                  tooltipText={CULTURAL_SOURCES_FILTER_EXPLAINER_TOOLTIP}
+                />
+              </div>
 
               {/* File Upload */}
               <div className="w-full">
@@ -4597,6 +4615,15 @@ export default function CulturalArchaeologist() {
                     </span>
                   </button>
                 </FieldHoverExplainer>
+                <div data-testid="cultural-upload-mobile-guidance" className="md:hidden">
+                  <InputGuidance
+                    baseTestId="cultural-upload-mobile-guidance-inline"
+                    helperText={CULTURAL_UPLOAD_DOCUMENTS_EXPLAINER_TOOLTIP}
+                    helperTextClassName="text-zinc-400"
+                    tooltipLabel="Upload documents explainer"
+                    tooltipText={CULTURAL_UPLOAD_DOCUMENTS_EXPLAINER_TOOLTIP}
+                  />
+                </div>
                 
                 {files.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">

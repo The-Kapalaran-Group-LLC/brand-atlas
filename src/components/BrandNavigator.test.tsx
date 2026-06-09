@@ -300,6 +300,28 @@ describe('BrandNavigator', () => {
     expect(topicHelperText.className).toContain('self-start');
   });
 
+  it('renders mobile helper guidance rows for generation, sources, and upload fields', async () => {
+    render(<BrandNavigator />);
+
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
+
+    await screen.findByTestId('brand-generation-field');
+
+    const generationMobileGuidance = screen.getByTestId('brand-generation-mobile-guidance');
+    const sourcesMobileGuidance = screen.getByTestId('brand-sources-mobile-guidance');
+    const uploadMobileGuidance = screen.getByTestId('brand-upload-mobile-guidance');
+
+    expect(generationMobileGuidance.className).toContain('md:hidden');
+    expect(sourcesMobileGuidance.className).toContain('md:hidden');
+    expect(uploadMobileGuidance.className).toContain('md:hidden');
+
+    expect(generationMobileGuidance).toHaveTextContent('Select one or more age groups to focus your analysis.');
+    expect(sourcesMobileGuidance).toHaveTextContent(
+      'Select the type of source(s) for your results. Source type adds context and specificity to observations.'
+    );
+    expect(uploadMobileGuidance).toHaveTextContent('Upload one or more documents to complement your analysis.');
+  });
+
   it('opens audience and topic guidance tooltips and closes with escape or outside click', async () => {
     render(<BrandNavigator />);
 

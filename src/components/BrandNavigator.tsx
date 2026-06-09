@@ -2514,6 +2514,14 @@ export default function BrandNavigator() {
                   </AnimatePresence>
                 </div>
               </FieldHoverExplainer>
+              <div data-testid="brand-generation-mobile-guidance" className="md:hidden">
+                <InputGuidance
+                  baseTestId="brand-generation-mobile-guidance-inline"
+                  helperText={BRAND_GENERATION_FILTER_EXPLAINER_TOOLTIP}
+                  tooltipLabel="Generation filter explainer"
+                  tooltipText={BRAND_GENERATION_FILTER_EXPLAINER_TOOLTIP}
+                />
+              </div>
 
               <FieldHoverExplainer
                 baseTestId="brand-sources-field-explainer"
@@ -2590,6 +2598,14 @@ export default function BrandNavigator() {
                   </AnimatePresence>
                 </div>
               </FieldHoverExplainer>
+              <div data-testid="brand-sources-mobile-guidance" className="md:hidden">
+                <InputGuidance
+                  baseTestId="brand-sources-mobile-guidance-inline"
+                  helperText={BRAND_SOURCES_FILTER_EXPLAINER_TOOLTIP}
+                  tooltipLabel="Sources filter explainer"
+                  tooltipText={BRAND_SOURCES_FILTER_EXPLAINER_TOOLTIP}
+                />
+              </div>
 
               {/* File Upload */}
               <div className="relative flex flex-col w-full self-start">
@@ -2623,6 +2639,14 @@ export default function BrandNavigator() {
                     </span>
                   </button>
                 </FieldHoverExplainer>
+                <div data-testid="brand-upload-mobile-guidance" className="md:hidden">
+                  <InputGuidance
+                    baseTestId="brand-upload-mobile-guidance-inline"
+                    helperText={BRAND_UPLOAD_DOCUMENTS_EXPLAINER_TOOLTIP}
+                    tooltipLabel="Upload documents explainer"
+                    tooltipText={BRAND_UPLOAD_DOCUMENTS_EXPLAINER_TOOLTIP}
+                  />
+                </div>
                 
                 {files.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">

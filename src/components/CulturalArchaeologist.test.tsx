@@ -1101,6 +1101,24 @@ describe('CulturalArchaeologist', () => {
     expect(screen.getByTestId('cultural-topic-guidance')).toHaveTextContent('Add a question or topic you want to explore.');
   });
 
+  it('renders mobile helper guidance rows for generation, sources, and upload fields', () => {
+    render(<CulturalArchaeologist />);
+
+    const generationMobileGuidance = screen.getByTestId('cultural-generation-mobile-guidance');
+    const sourcesMobileGuidance = screen.getByTestId('cultural-sources-mobile-guidance');
+    const uploadMobileGuidance = screen.getByTestId('cultural-upload-mobile-guidance');
+
+    expect(generationMobileGuidance.className).toContain('md:hidden');
+    expect(sourcesMobileGuidance.className).toContain('md:hidden');
+    expect(uploadMobileGuidance.className).toContain('md:hidden');
+
+    expect(generationMobileGuidance).toHaveTextContent('Select one or more age groups to focus your analysis.');
+    expect(sourcesMobileGuidance).toHaveTextContent(
+      'Select the type of source(s) for your results. Source type adds context and specificity to observations.'
+    );
+    expect(uploadMobileGuidance).toHaveTextContent('Upload one or more documents to complement your analysis.');
+  });
+
   it('opens guidance tooltips and closes with escape or outside click', async () => {
     render(<CulturalArchaeologist />);
 
