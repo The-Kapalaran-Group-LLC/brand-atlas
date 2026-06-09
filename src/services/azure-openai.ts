@@ -728,7 +728,7 @@ const EvidenceBundleSchema = z.object({
 const DevilsAdvocateSchema = z.object({
   counterArgument: z.string(),
   keyWeaknesses: z.array(z.string()),
-  consolidatedSummary: z.string().describe('A concise summary that preserves every material claim from the full counter-argument and weaknesses.'),
+  consolidatedSummary: z.string().describe('A concise, display-ready summary of the highest-impact counterpoint and risks (target 1-2 sentences, <=220 characters when possible).'),
 });
 
 const QUARTERLY_MACRO_SUMMARY: Record<string, string> = {
@@ -1482,7 +1482,7 @@ async function runDevilsAdvocatePass(topic: string, draft: unknown, mode: Sessio
         content: `Topic:\n${topic}\n\nDraft analysis:\n${JSON.stringify(draft).slice(0, 12000)}\n\nReturn:
 - counterArgument: a full steelman counter-argument.
 - keyWeaknesses: the most important weaknesses.
-- consolidatedSummary: a shorter, consolidated summary of counterArgument + keyWeaknesses that preserves all material claims (no omissions).`,
+- consolidatedSummary: a concise, display-ready summary of the strongest counterpoint + top risks (target 1-2 sentences and <=220 characters when possible).`,
       },
     ],
   });
@@ -1498,14 +1498,35 @@ export function formatDevilsAdvocateLens(devil: z.infer<typeof DevilsAdvocateSch
   return 'Alternative interpretation not available.';
 }
 
-function summarizeDevilsAdvocateLens(devil: z.infer<typeof DevilsAdvocateSchema>): string {
-  const full = formatDevilsAdvocateLens(devil);
-  if (full.length <= 160) return full;
+function compactDisplayLine(value: string, maxChars: number): string {
+  const normalized = (value || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
 
-  const sentenceBreak = full.slice(0, 160).match(/^(.+?[.!?])\s/);
+  const safeMaxChars = Math.max(40, maxChars);
+  if (normalized.length <= safeMaxChars) return normalized;
+
+  const sentenceBreak = normalized.slice(0, safeMaxChars).match(/^(.+?[.!?])(?:\s|$)/);
   if (sentenceBreak?.[1]) return sentenceBreak[1].trim();
 
-  return `${full.slice(0, 157).trim()}...`;
+  return `${normalized.slice(0, safeMaxChars - 3).trim()}...`;
+}
+
+function summarizeDevilsAdvocateLens(devil: z.infer<typeof DevilsAdvocateSchema>, maxChars = 160): string {
+  return compactDisplayLine(formatDevilsAdvocateLens(devil), maxChars);
+}
+
+export function buildDeepDiveDevilsAdvocateImplications(devil: z.infer<typeof DevilsAdvocateSchema>): string[] {
+  const devilSummary = summarizeDevilsAdvocateLens(devil, 220);
+  const weaknessLines = (devil.keyWeaknesses || [])
+    .map((item) => compactDisplayLine(item, 170))
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((item) => `[SPECULATIVE] Risk check: ${item}`);
+
+  return [
+    `[INFERRED] Devil's advocate: ${devilSummary || 'Alternative interpretation not available.'}`,
+    ...weaknessLines,
+  ];
 }
 
 function buildDevilsAdvocateBackgroundWriteup(devil: z.infer<typeof DevilsAdvocateSchema>): string {
@@ -2580,10 +2601,15 @@ export async function generateDeepDive(
 
   const devil = await runDevilsAdvocatePass(`Deep dive: ${insight.text}`, parsed, 'cultural');
   const sanitized = sanitizeDeepDiveReport(parsed);
+  const summarizedDevilsAdvocate = buildDeepDiveDevilsAdvocateImplications(devil);
+  console.log('[deep-dive] Added summarized devil\'s advocate implications.', {
+    insight: insight.text,
+    appendedCount: summarizedDevilsAdvocate.length,
+    summaryPreview: summarizedDevilsAdvocate[0],
+  });
   sanitized.strategicImplications = [
     ...sanitized.strategicImplications,
-    `[INFERRED] Devil's advocate: ${devil.counterArgument}`,
-    ...devil.keyWeaknesses.slice(0, 2).map((item) => `[SPECULATIVE] Risk check: ${item}`),
+    ...summarizedDevilsAdvocate,
   ];
   updateSessionBrief('cultural', sanitized);
   return sanitized;

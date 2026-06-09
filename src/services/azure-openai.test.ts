@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildDeepDiveDevilsAdvocateImplications,
   applyBrandMissionFallbacks,
   buildBrandEvidenceRulesBlock,
   buildInsightDeepDiveBatchPrompt,
@@ -55,6 +56,46 @@ describe('formatDevilsAdvocateLens', () => {
     });
 
     expect(result).toBe('Alternative interpretation not available.');
+  });
+});
+
+describe('buildDeepDiveDevilsAdvocateImplications', () => {
+  it('uses the LLM consolidated summary for the devil line instead of the full counter argument', () => {
+    const implications = buildDeepDiveDevilsAdvocateImplications({
+      counterArgument: 'Long counter argument that should not be used directly in insight deep dives.',
+      keyWeaknesses: ['Weakness one', 'Weakness two'],
+      consolidatedSummary: 'Short consolidated summary from the model.',
+    });
+
+    expect(implications[0]).toBe("[INFERRED] Devil's advocate: Short consolidated summary from the model.");
+    expect(implications[0]).not.toContain('Long counter argument');
+  });
+
+  it('falls back to a shortened counter argument when consolidated summary is unavailable', () => {
+    const longCounter = 'This is a long fallback counter argument sentence that keeps going to guarantee it passes the summary truncation threshold and does not remain as a fully verbose deep dive implication entry that overwhelms the section in the UI.';
+    const implications = buildDeepDiveDevilsAdvocateImplications({
+      counterArgument: longCounter,
+      keyWeaknesses: [],
+      consolidatedSummary: '  ',
+    });
+    const prefix = "[INFERRED] Devil's advocate: ";
+
+    expect(implications[0]).toMatch(/^\[INFERRED\] Devil's advocate:/);
+    expect(implications[0].length).toBeLessThanOrEqual(prefix.length + 220);
+    expect(implications[0]).toContain('...');
+  });
+
+  it('limits weakness lines to at most two entries', () => {
+    const implications = buildDeepDiveDevilsAdvocateImplications({
+      counterArgument: 'Counterpoint.',
+      keyWeaknesses: ['Weakness one', 'Weakness two', 'Weakness three'],
+      consolidatedSummary: 'Consolidated.',
+    });
+
+    const weaknessLines = implications.filter((item) => item.startsWith('[SPECULATIVE] Risk check:'));
+    expect(weaknessLines).toHaveLength(2);
+    expect(weaknessLines[0]).toContain('Weakness one');
+    expect(weaknessLines[1]).toContain('Weakness two');
   });
 });
 
