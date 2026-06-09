@@ -286,10 +286,10 @@ const InputGuidance = ({
             id={tooltipId}
             role="tooltip"
             data-testid={`${baseTestId}-tooltip`}
-            className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded-xl bg-black px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg"
+            className="pointer-events-none absolute bottom-full right-0 z-50 mb-2 w-64 max-w-[calc(100vw-2rem)] rounded-xl bg-black px-3 py-2 text-[11px] leading-relaxed text-white shadow-lg md:left-1/2 md:right-auto md:-translate-x-1/2"
           >
             {tooltipText}
-            <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black" />
+            <span className="absolute top-full right-2 border-4 border-transparent border-t-black md:left-1/2 md:right-auto md:-translate-x-1/2" />
           </div>
         )}
       </div>
@@ -2512,16 +2512,16 @@ export default function BrandNavigator() {
                       </motion.div>
                     )}
                   </AnimatePresence>
+                  <div data-testid="brand-generation-mobile-guidance" className="md:hidden">
+                    <InputGuidance
+                      baseTestId="brand-generation-mobile-guidance-inline"
+                      helperText={BRAND_GENERATION_FILTER_EXPLAINER_TOOLTIP}
+                      tooltipLabel="Generation filter explainer"
+                      tooltipText={BRAND_GENERATION_FILTER_EXPLAINER_TOOLTIP}
+                    />
+                  </div>
                 </div>
               </FieldHoverExplainer>
-              <div data-testid="brand-generation-mobile-guidance" className="md:hidden">
-                <InputGuidance
-                  baseTestId="brand-generation-mobile-guidance-inline"
-                  helperText={BRAND_GENERATION_FILTER_EXPLAINER_TOOLTIP}
-                  tooltipLabel="Generation filter explainer"
-                  tooltipText={BRAND_GENERATION_FILTER_EXPLAINER_TOOLTIP}
-                />
-              </div>
 
               <FieldHoverExplainer
                 baseTestId="brand-sources-field-explainer"
@@ -2596,16 +2596,16 @@ export default function BrandNavigator() {
                       </motion.div>
                     )}
                   </AnimatePresence>
+                  <div data-testid="brand-sources-mobile-guidance" className="md:hidden">
+                    <InputGuidance
+                      baseTestId="brand-sources-mobile-guidance-inline"
+                      helperText={BRAND_SOURCES_FILTER_EXPLAINER_TOOLTIP}
+                      tooltipLabel="Sources filter explainer"
+                      tooltipText={BRAND_SOURCES_FILTER_EXPLAINER_TOOLTIP}
+                    />
+                  </div>
                 </div>
               </FieldHoverExplainer>
-              <div data-testid="brand-sources-mobile-guidance" className="md:hidden">
-                <InputGuidance
-                  baseTestId="brand-sources-mobile-guidance-inline"
-                  helperText={BRAND_SOURCES_FILTER_EXPLAINER_TOOLTIP}
-                  tooltipLabel="Sources filter explainer"
-                  tooltipText={BRAND_SOURCES_FILTER_EXPLAINER_TOOLTIP}
-                />
-              </div>
 
               {/* File Upload */}
               <div className="relative flex flex-col w-full self-start">
