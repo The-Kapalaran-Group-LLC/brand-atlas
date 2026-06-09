@@ -191,6 +191,14 @@ const buildSegmentationCustomizationInstructions = (
     .filter((line): line is string => line.length > 0);
 };
 
+const sortSegmentationByPrevalence = (segmentation: AudienceSegmentationReport): AudienceSegmentationReport => {
+  const sortedSegments = [...segmentation.segments].sort((left, right) => right.prevalencePct - left.prevalencePct);
+  return {
+    ...segmentation,
+    segments: sortedSegments,
+  };
+};
+
 const getExportErrorDetail = (error: unknown): string | null => {
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message.trim();
@@ -2536,9 +2544,14 @@ export default function CulturalArchaeologist() {
             segmentCustomizations: segmentCustomizationDirectives,
           }),
       });
-      setSegmentationResult(result);
+      const sortedResult = sortSegmentationByPrevalence(result);
+      console.log('[CulturalArchaeologist] Sorted segmentation result by prevalence percentage.', {
+        beforeOrder: result.segments.map((segment) => `${segment.name}:${segment.prevalencePct}`),
+        afterOrder: sortedResult.segments.map((segment) => `${segment.name}:${segment.prevalencePct}`),
+      });
+      setSegmentationResult(sortedResult);
       if (hasRefinementPrompt && originalSegmentationCandidate) {
-        setOriginalSegmentationResult(originalSegmentationCandidate);
+        setOriginalSegmentationResult(sortSegmentationByPrevalence(originalSegmentationCandidate));
         setHasPromptRefinedSegmentation(true);
         console.log('[CulturalArchaeologist] Stored original segmentation result for revert action.');
       } else if (hasRefinementPrompt) {
@@ -2575,7 +2588,7 @@ export default function CulturalArchaeologist() {
       return;
     }
     console.log('[CulturalArchaeologist] Reverting to original segmentation result from before prompt refinement.');
-    setSegmentationResult(originalSegmentationResult);
+    setSegmentationResult(sortSegmentationByPrevalence(originalSegmentationResult));
     setOriginalSegmentationResult(null);
     setHasPromptRefinedSegmentation(false);
     setSegmentationError(null);

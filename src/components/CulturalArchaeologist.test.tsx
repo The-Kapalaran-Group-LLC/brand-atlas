@@ -571,6 +571,122 @@ describe('CulturalArchaeologist', () => {
     expect(await screen.findByText('Status Signal Chasers - Updated')).toBeInTheDocument();
   });
 
+  it('orders segments by descending prevalence after segment updates change percentages', async () => {
+    const workspaceId = 'workspace-segmentation-sort-by-prevalence';
+    generateAudienceSegmentation.mockReset();
+    generateAudienceSegmentation
+      .mockResolvedValueOnce({
+        regressionSummary: 'Initial segmentation summary.',
+        confidenceNotes: 'Initial segmentation confidence notes.',
+        segments: [
+          {
+            name: 'Segment Alpha',
+            archetype: 'Alpha archetype',
+            profile: 'Alpha profile',
+            demographicsSnippet: 'Alpha demographics',
+            prevalencePct: 35,
+            keySignals: ['Alpha signal 1', 'Alpha signal 2'],
+            messagingApproach: 'Alpha messaging',
+          },
+          {
+            name: 'Segment Beta',
+            archetype: 'Beta archetype',
+            profile: 'Beta profile',
+            demographicsSnippet: 'Beta demographics',
+            prevalencePct: 30,
+            keySignals: ['Beta signal 1', 'Beta signal 2'],
+            messagingApproach: 'Beta messaging',
+          },
+          {
+            name: 'Segment Gamma',
+            archetype: 'Gamma archetype',
+            profile: 'Gamma profile',
+            demographicsSnippet: 'Gamma demographics',
+            prevalencePct: 20,
+            keySignals: ['Gamma signal 1', 'Gamma signal 2'],
+            messagingApproach: 'Gamma messaging',
+          },
+          {
+            name: 'Segment Delta',
+            archetype: 'Delta archetype',
+            profile: 'Delta profile',
+            demographicsSnippet: 'Delta demographics',
+            prevalencePct: 15,
+            keySignals: ['Delta signal 1', 'Delta signal 2'],
+            messagingApproach: 'Delta messaging',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        regressionSummary: 'Updated segmentation summary.',
+        confidenceNotes: 'Updated segmentation confidence notes.',
+        segments: [
+          {
+            name: 'Segment Alpha',
+            archetype: 'Alpha archetype',
+            profile: 'Alpha profile',
+            demographicsSnippet: 'Alpha demographics',
+            prevalencePct: 18,
+            keySignals: ['Alpha signal 1', 'Alpha signal 2'],
+            messagingApproach: 'Alpha messaging',
+          },
+          {
+            name: 'Segment Beta',
+            archetype: 'Beta archetype',
+            profile: 'Beta profile',
+            demographicsSnippet: 'Beta demographics',
+            prevalencePct: 41,
+            keySignals: ['Beta signal 1', 'Beta signal 2'],
+            messagingApproach: 'Beta messaging',
+          },
+          {
+            name: 'Segment Gamma',
+            archetype: 'Gamma archetype',
+            profile: 'Gamma profile',
+            demographicsSnippet: 'Gamma demographics',
+            prevalencePct: 27,
+            keySignals: ['Gamma signal 1', 'Gamma signal 2'],
+            messagingApproach: 'Gamma messaging',
+          },
+          {
+            name: 'Segment Delta',
+            archetype: 'Delta archetype',
+            profile: 'Delta profile',
+            demographicsSnippet: 'Delta demographics',
+            prevalencePct: 14,
+            keySignals: ['Delta signal 1', 'Delta signal 2'],
+            messagingApproach: 'Delta messaging',
+          },
+        ],
+      });
+
+    window.localStorage.setItem(
+      `${SEGMENTATION_WORKSPACE_STORAGE_PREFIX}${workspaceId}`,
+      JSON.stringify(createSegmentationWorkspaceSnapshot({ isSegmentationAuthorized: true }))
+    );
+    window.history.pushState({}, '', `/?segmentation_workspace=${workspaceId}#cultural-archaeologist`);
+
+    render(<CulturalArchaeologist />);
+    expect(await screen.findByTestId('segmentation-tab-panel')).toBeInTheDocument();
+    await screen.findByTestId('segmentation-result-state');
+
+    fireEvent.click(await screen.findByTestId('segmentation-apply-customization-button'));
+
+    await waitFor(() => {
+      expect(generateAudienceSegmentation).toHaveBeenCalledTimes(2);
+    });
+
+    const firstSegmentCard = await screen.findByTestId('segmentation-segment-card-1');
+    const secondSegmentCard = await screen.findByTestId('segmentation-segment-card-2');
+    const thirdSegmentCard = await screen.findByTestId('segmentation-segment-card-3');
+    const fourthSegmentCard = await screen.findByTestId('segmentation-segment-card-4');
+
+    expect(within(firstSegmentCard).getByText('Segment Beta')).toBeInTheDocument();
+    expect(within(secondSegmentCard).getByText('Segment Gamma')).toBeInTheDocument();
+    expect(within(thirdSegmentCard).getByText('Segment Alpha')).toBeInTheDocument();
+    expect(within(fourthSegmentCard).getByText('Segment Delta')).toBeInTheDocument();
+  });
+
   it('uses Ask the Archaeologist prompt to refine segmentation when segmentation tab is active', async () => {
     const workspaceId = 'workspace-ask-refine-segmentation';
     window.localStorage.setItem(
