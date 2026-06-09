@@ -2,6 +2,7 @@ export type CulturalPrefillPayload = {
   audience?: string;
   brand?: string;
   topicFocus?: string;
+  segmentContext?: string;
 };
 
 const CULTURAL_PREFILL_STORAGE_KEY = 'cultural_archaeologist_prefill_payload';

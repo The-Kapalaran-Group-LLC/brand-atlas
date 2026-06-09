@@ -753,6 +753,38 @@ describe('CulturalArchaeologist', () => {
     openSpy.mockRestore();
   });
 
+  it('keeps segment name in the audience field and injects full segment context into rerun prompt background', async () => {
+    window.localStorage.setItem(
+      'cultural_archaeologist_prefill_payload',
+      JSON.stringify({
+        audience: 'Status Signal Chasers',
+        brand: 'Nike',
+        topicFocus: 'Streetwear positioning',
+        segmentContext:
+          'Segment 1 (Status Signal Chasers) | Prevalence: 28% | Archetype: Aspirational trend adopters | Profile: Visibility-forward shoppers who seek social proof and novelty. | Demographics: Skews 18-29 with multicultural urban concentration and slight women over-index. | Key Signals: Tracks drop culture; Shares purchases socially | Messaging Approach: Lead with scarcity and social currency.',
+      })
+    );
+
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    const topicInput = await screen.findByPlaceholderText('Topic Focus (Optional)');
+    expect((audienceInput as HTMLInputElement).value).toBe('Status Signal Chasers');
+    expect((topicInput as HTMLInputElement).value).toBe('Streetwear positioning');
+
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    await waitFor(() => {
+      expect(generateCulturalMatrix).toHaveBeenCalledTimes(1);
+    });
+    const firstGenerateCall = generateCulturalMatrix.mock.calls[0];
+    expect(firstGenerateCall[0]).toBe('Status Signal Chasers');
+    expect(firstGenerateCall[3]).toContain('Streetwear positioning');
+    expect(firstGenerateCall[3]).toContain('Segment Context (background, do not rename audience)');
+    expect(firstGenerateCall[3]).toContain('Aspirational trend adopters');
+    expect(firstGenerateCall[3]).toContain('Lead with scarcity and social currency.');
+  });
+
   it('shows an Original Segments anchor after Ask refinement and restores the original segmentation when clicked', async () => {
     const workspaceId = 'workspace-segmentation-revert-original';
     generateAudienceSegmentation

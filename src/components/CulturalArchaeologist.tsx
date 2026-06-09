@@ -134,6 +134,10 @@ type SegmentationWorkspaceMemoryStore = Record<string, SegmentationWorkspaceSnap
 type SegmentationWorkspaceWindow = Window & {
   __culturalSegmentationWorkspaceSnapshots?: SegmentationWorkspaceMemoryStore;
 };
+type SegmentRerunContextState = {
+  audience: string;
+  promptContext: string;
+};
 
 const MATRIX_INSIGHT_KEYS: MatrixInsightKey[] = [
   'moments',
@@ -189,6 +193,43 @@ const buildSegmentationCustomizationInstructions = (
       return `Segment ${index + 1} (${segmentLabel}): ${customInfo}`;
     })
     .filter((line): line is string => line.length > 0);
+};
+
+const buildSegmentRerunPromptContext = (
+  segment: AudienceSegmentationReport['segments'][number],
+  segmentIndex: number
+): string => {
+  const segmentName = (segment.name || '').trim() || `Segment ${segmentIndex + 1}`;
+  const archetype = (segment.archetype || '').trim();
+  const profile = (segment.profile || '').trim();
+  const demographicsSnippet = (segment.demographicsSnippet || '').trim();
+  const keySignals = Array.isArray(segment.keySignals)
+    ? segment.keySignals.map((signal) => (signal || '').trim()).filter(Boolean)
+    : [];
+  const messagingApproach = (segment.messagingApproach || '').trim();
+
+  return [
+    `Segment ${segmentIndex + 1} (${segmentName})`,
+    `Prevalence: ${segment.prevalencePct}%`,
+    archetype ? `Archetype: ${archetype}` : '',
+    profile ? `Profile: ${profile}` : '',
+    demographicsSnippet ? `Demographics: ${demographicsSnippet}` : '',
+    keySignals.length > 0 ? `Key Signals: ${keySignals.join('; ')}` : '',
+    messagingApproach ? `Messaging Approach: ${messagingApproach}` : '',
+  ].filter(Boolean).join(' | ');
+};
+
+const buildTopicFocusWithBackgroundSegmentContext = (topicFocusValue: string, segmentPromptContext: string): string => {
+  const cleanedTopicFocus = (topicFocusValue || '').trim();
+  const cleanedSegmentPromptContext = (segmentPromptContext || '').trim();
+  if (!cleanedSegmentPromptContext) {
+    return cleanedTopicFocus;
+  }
+
+  const backgroundSegmentDirective = `Segment Context (background, do not rename audience): ${cleanedSegmentPromptContext}`;
+  return [cleanedTopicFocus, backgroundSegmentDirective]
+    .filter(Boolean)
+    .join(' | ');
 };
 
 const sortSegmentationByPrevalence = (segmentation: AudienceSegmentationReport): AudienceSegmentationReport => {
@@ -1037,6 +1078,7 @@ export default function CulturalArchaeologist() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   
   const [topicFocus, setTopicFocus] = useState('');
+  const [segmentRerunContext, setSegmentRerunContext] = useState<SegmentRerunContextState | null>(null);
   const [sourcesType, setSourcesType] = useState<string[]>([]);
   const [isSourcesDropdownOpen, setIsSourcesDropdownOpen] = useState(false);
   const sourcesDropdownRef = useRef<HTMLDivElement>(null);
@@ -1401,6 +1443,7 @@ export default function CulturalArchaeologist() {
     let prefillAudience = '';
     let prefillBrand = '';
     let prefillTopic = '';
+    let prefillSegmentContext = '';
 
     if (typeof window !== 'undefined') {
       const query = new URLSearchParams(window.location.search);
@@ -1423,9 +1466,10 @@ export default function CulturalArchaeologist() {
       prefillAudience = (prefill.audience || '').trim();
       prefillBrand = (prefill.brand || '').trim();
       prefillTopic = (prefill.topicFocus || '').trim();
+      prefillSegmentContext = (prefill.segmentContext || '').trim();
     }
 
-    if (!prefillAudience && !prefillBrand && !prefillTopic) {
+    if (!prefillAudience && !prefillBrand && !prefillTopic && !prefillSegmentContext) {
       return;
     }
 
@@ -1446,6 +1490,12 @@ export default function CulturalArchaeologist() {
 
     if (prefillTopic) {
       setTopicFocus(prefillTopic);
+    }
+    if (prefillAudience && prefillSegmentContext) {
+      setSegmentRerunContext({
+        audience: prefillAudience,
+        promptContext: prefillSegmentContext,
+      });
     }
 
     clearCulturalPrefill();
@@ -1862,6 +1912,7 @@ export default function CulturalArchaeologist() {
     setBrandInput('');
     setAudience('');
     setTopicFocus('');
+    setSegmentRerunContext(null);
     setSourcesType([]);
     setSelectedGenerations([]);
     setFiles([]);
@@ -1901,6 +1952,7 @@ export default function CulturalArchaeologist() {
     brandContextValue,
     generationsValue,
     topicFocusValue,
+    segmentPromptContextValue,
     filesValue,
     sourcesTypeValue,
     rerunFilters,
@@ -1910,6 +1962,7 @@ export default function CulturalArchaeologist() {
     brandContextValue: string;
     generationsValue: string[];
     topicFocusValue: string;
+    segmentPromptContextValue?: string;
     filesValue: UploadedFile[];
     sourcesTypeValue: string[];
     rerunFilters?: CulturalRerunFilters;
@@ -1929,12 +1982,14 @@ export default function CulturalArchaeologist() {
     resetSegmentationWorkspace('insights');
     const hasUploadedDocuments = filesValue.length > 0;
     try {
+      const effectiveTopicFocusValue = buildTopicFocusWithBackgroundSegmentContext(topicFocusValue, segmentPromptContextValue || '');
       console.log('[CulturalArchaeologist] Starting matrix generation request.', {
         actionName,
         audienceValue,
         brandContextValue,
         generationsValue,
         topicFocusValue,
+        hasBackgroundSegmentContext: Boolean((segmentPromptContextValue || '').trim()),
         sourcesTypeValue,
         rerunFilters,
       });
@@ -1944,7 +1999,7 @@ export default function CulturalArchaeologist() {
           audienceValue,
           brandContextValue,
           generationsValue,
-          topicFocusValue,
+          effectiveTopicFocusValue,
           filesValue,
           sourcesTypeValue,
           rerunFilters
@@ -2070,12 +2125,18 @@ export default function CulturalArchaeologist() {
 
     setShowValidation(true);
     if (!audience.trim()) return;
+    const shouldApplySegmentRerunContext = Boolean(
+      segmentRerunContext &&
+      segmentRerunContext.promptContext.trim() &&
+      audience.trim().toLowerCase() === segmentRerunContext.audience.trim().toLowerCase()
+    );
     await runCulturalMatrixGeneration({
       actionName: 'generate-cultural-matrix',
       audienceValue: audience,
       brandContextValue: brandContext,
       generationsValue: selectedGenerations,
       topicFocusValue: topicFocus,
+      segmentPromptContextValue: shouldApplySegmentRerunContext ? segmentRerunContext?.promptContext : undefined,
       filesValue: files,
       sourcesTypeValue: sourcesType,
     });
@@ -2098,12 +2159,18 @@ export default function CulturalArchaeologist() {
       rerunSources,
       activeRerunFilters,
     });
+    const shouldApplySegmentRerunContext = Boolean(
+      segmentRerunContext &&
+      segmentRerunContext.promptContext.trim() &&
+      rerunAudience.toLowerCase() === segmentRerunContext.audience.trim().toLowerCase()
+    );
     await runCulturalMatrixGeneration({
       actionName: 'rerun-cultural-matrix',
       audienceValue: rerunAudience,
       brandContextValue: rerunBrand,
       generationsValue: rerunGenerations,
       topicFocusValue: rerunTopic,
+      segmentPromptContextValue: shouldApplySegmentRerunContext ? segmentRerunContext?.promptContext : undefined,
       filesValue: files,
       sourcesTypeValue: rerunSources,
       rerunFilters: activeRerunFilters,
@@ -2133,6 +2200,11 @@ export default function CulturalArchaeologist() {
       rerunSources,
     });
     setToast(`Refreshing ${categoryTitle}...`);
+    const shouldApplySegmentRerunContext = Boolean(
+      segmentRerunContext &&
+      segmentRerunContext.promptContext.trim() &&
+      rerunAudience.toLowerCase() === segmentRerunContext.audience.trim().toLowerCase()
+    );
 
     await runCulturalMatrixGeneration({
       actionName: `refresh-cultural-matrix-${category}`,
@@ -2140,6 +2212,7 @@ export default function CulturalArchaeologist() {
       brandContextValue: rerunBrand,
       generationsValue: rerunGenerations,
       topicFocusValue: rerunTopic,
+      segmentPromptContextValue: shouldApplySegmentRerunContext ? segmentRerunContext?.promptContext : undefined,
       filesValue: files,
       sourcesTypeValue: rerunSources,
     });
@@ -2358,12 +2431,15 @@ export default function CulturalArchaeologist() {
     }
   };
 
-  const openSegmentAudienceRerunTab = (segmentName: string, segmentIndex: number) => {
-    const segmentAudience = (segmentName || '').trim();
+  const openSegmentAudienceRerunTab = (
+    segment: AudienceSegmentationReport['segments'][number],
+    segmentIndex: number
+  ) => {
+    const segmentAudience = (segment.name || '').trim();
     if (!segmentAudience) {
       console.log('[CulturalArchaeologist] Segment rerun tab launch skipped because segment audience is empty.', {
         segmentIndex,
-        segmentName,
+        segmentName: segment.name,
       });
       return;
     }
@@ -2377,11 +2453,13 @@ export default function CulturalArchaeologist() {
 
     const brandFromContext = (matrixMeta?.brand || '').trim();
     const topicFromContext = (matrixMeta?.topicFocus || '').trim();
+    const segmentContext = buildSegmentRerunPromptContext(segment, segmentIndex);
 
     saveCulturalPrefill({
       audience: segmentAudience,
       brand: brandFromContext,
       topicFocus: topicFromContext,
+      segmentContext,
     });
 
     const params = new URLSearchParams({ home: '1' });
@@ -2397,6 +2475,7 @@ export default function CulturalArchaeologist() {
     console.log('[CulturalArchaeologist] Opening segment rerun analysis tab.', {
       segmentIndex,
       segmentAudience,
+      segmentContextLength: segmentContext.length,
       brandFromContext,
       topicFromContext,
       targetUrl,
@@ -3012,7 +3091,7 @@ export default function CulturalArchaeologist() {
                         type="button"
                         data-testid={`segmentation-rerun-analysis-among-segment-button-${index + 1}`}
                         onClick={() => {
-                          openSegmentAudienceRerunTab(segment.name, index);
+                          openSegmentAudienceRerunTab(segment, index);
                         }}
                         className="inline-flex items-center rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
                       >
@@ -4362,7 +4441,14 @@ export default function CulturalArchaeologist() {
                     type="text"
                     value={audience}
                     onChange={(e) => {
-                      setAudience(e.target.value.slice(0, MAX_CULTURAL_AUDIENCE_INPUT_LENGTH));
+                      const nextAudience = e.target.value.slice(0, MAX_CULTURAL_AUDIENCE_INPUT_LENGTH);
+                      setAudience(nextAudience);
+                      if (
+                        segmentRerunContext &&
+                        nextAudience.trim().toLowerCase() !== segmentRerunContext.audience.trim().toLowerCase()
+                      ) {
+                        setSegmentRerunContext(null);
+                      }
                       if (showValidation) setShowValidation(false);
                     }}
                     onKeyDown={e => {
