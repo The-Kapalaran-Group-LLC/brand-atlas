@@ -117,6 +117,7 @@ type EvidenceLabelFilter = 'known' | 'inferred' | 'speculative';
 type EvidenceTagLabel = EvidenceLabelFilter | 'analogy';
 type TrendStageFilter = 'emerging' | 'peaking' | 'declining';
 type ResultsTab = 'insights' | 'segmentation';
+type SegmentationCustomInfoMap = Record<number, string>;
 type SegmentationWorkspaceSnapshot = {
   matrix: CulturalMatrix;
   matrixMeta: MatrixMetaState;
@@ -158,9 +159,37 @@ const SEGMENTATION_PASSWORD_SUPPORT_COPY = 'Contact Your Administrator for More 
 const ADMIN_PASSWORD = 'brandatlas2026';
 const ADMIN_AUTH_STORAGE_KEY = 'brand_atlas_admin_authorized';
 const ADMIN_PASSWORD_SUPPORT_COPY = 'Contact Your Administrator for More Information.';
+const DEFAULT_SEGMENTATION_TARGET_COUNT = 4;
+const MIN_SEGMENTATION_TARGET_COUNT = 1;
+const MAX_SEGMENTATION_TARGET_COUNT = 6;
 const SEGMENTATION_WORKSPACE_QUERY_PARAM = 'segmentation_workspace';
 const SEGMENTATION_WORKSPACE_STORAGE_PREFIX = 'cultural_segmentation_workspace:';
 const SEGMENTATION_WORKSPACE_MEMORY_KEY = '__culturalSegmentationWorkspaceSnapshots';
+
+const clampSegmentationTargetCount = (value: number): number => {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_SEGMENTATION_TARGET_COUNT;
+  }
+  return Math.max(MIN_SEGMENTATION_TARGET_COUNT, Math.min(MAX_SEGMENTATION_TARGET_COUNT, Math.round(value)));
+};
+
+const buildSegmentationCustomizationInstructions = (
+  segmentation: AudienceSegmentationReport | null,
+  customInfoByIndex: SegmentationCustomInfoMap
+): string[] => {
+  if (!segmentation || !Array.isArray(segmentation.segments)) {
+    return [];
+  }
+
+  return segmentation.segments
+    .map((segment, index) => {
+      const customInfo = (customInfoByIndex[index] || '').trim();
+      if (!customInfo) return '';
+      const segmentLabel = (segment.name || '').trim() || `Segment ${index + 1}`;
+      return `Segment ${index + 1} (${segmentLabel}): ${customInfo}`;
+    })
+    .filter((line): line is string => line.length > 0);
+};
 
 const getExportErrorDetail = (error: unknown): string | null => {
   if (error instanceof Error && error.message.trim().length > 0) {
@@ -1023,6 +1052,8 @@ export default function CulturalArchaeologist() {
   const [segmentationResult, setSegmentationResult] = useState<AudienceSegmentationReport | null>(null);
   const [originalSegmentationResult, setOriginalSegmentationResult] = useState<AudienceSegmentationReport | null>(null);
   const [hasPromptRefinedSegmentation, setHasPromptRefinedSegmentation] = useState(false);
+  const [segmentationTargetCount, setSegmentationTargetCount] = useState<number>(DEFAULT_SEGMENTATION_TARGET_COUNT);
+  const [segmentationCustomInfoByIndex, setSegmentationCustomInfoByIndex] = useState<SegmentationCustomInfoMap>({});
   const [segmentationError, setSegmentationError] = useState<string | null>(null);
   const [segmentationPasswordInput, setSegmentationPasswordInput] = useState('');
   const [segmentationPasswordError, setSegmentationPasswordError] = useState<string | null>(null);
@@ -1202,6 +1233,11 @@ export default function CulturalArchaeologist() {
   const isSegmentationTabActive = activeResultsTab === 'segmentation';
   const hasVisibleInsights =
     !!displayMatrix && MATRIX_INSIGHT_KEYS.some((key) => (displayMatrix[key] || []).length > 0);
+  const segmentationCustomizationInstructions = useMemo(
+    () => buildSegmentationCustomizationInstructions(segmentationResult, segmentationCustomInfoByIndex),
+    [segmentationResult, segmentationCustomInfoByIndex]
+  );
+  const hasSegmentationCustomizationInstructions = segmentationCustomizationInstructions.length > 0;
   const structuredMatrixAnswer = useMemo(() => structureAskAnswer(matrixAnswer), [matrixAnswer]);
   const culturalResultNavItems = useMemo(() => {
     if (!matrix) {
@@ -1462,6 +1498,8 @@ export default function CulturalArchaeologist() {
     setSegmentationResult(null);
     setOriginalSegmentationResult(null);
     setHasPromptRefinedSegmentation(false);
+    setSegmentationTargetCount(DEFAULT_SEGMENTATION_TARGET_COUNT);
+    setSegmentationCustomInfoByIndex({});
     setSegmentationError(null);
     setSegmentationPasswordInput('');
     setSegmentationPasswordError(null);
@@ -1802,6 +1840,8 @@ export default function CulturalArchaeologist() {
     setSegmentationResult(null);
     setOriginalSegmentationResult(null);
     setHasPromptRefinedSegmentation(false);
+    setSegmentationTargetCount(DEFAULT_SEGMENTATION_TARGET_COUNT);
+    setSegmentationCustomInfoByIndex({});
     setSegmentationError(null);
     setSegmentationPasswordInput('');
     setSegmentationPasswordError(null);
@@ -2445,6 +2485,8 @@ export default function CulturalArchaeologist() {
 
     const refinementPrompt = (options?.refinementPrompt || '').trim();
     const hasRefinementPrompt = refinementPrompt.length > 0;
+    const normalizedTargetSegmentCount = clampSegmentationTargetCount(segmentationTargetCount);
+    const segmentCustomizationDirectives = [...segmentationCustomizationInstructions];
     const originalSegmentationCandidate = hasRefinementPrompt
       ? (originalSegmentationResult || segmentationResult)
       : null;
@@ -2459,6 +2501,8 @@ export default function CulturalArchaeologist() {
       generations: matrixMeta.generations,
       topicFocus: segmentationTopicFocus,
       refinementPrompt,
+      targetSegmentCount: normalizedTargetSegmentCount,
+      segmentCustomizationCount: segmentCustomizationDirectives.length,
       confidenceFilters: selectedConfidenceFilters,
       evidenceFilters: selectedEvidenceFilters,
       trendStageFilters: selectedTrendStageFilters,
@@ -2488,6 +2532,8 @@ export default function CulturalArchaeologist() {
             topicFocus: segmentationTopicFocus,
             generations: matrixMeta.generations,
             sourcesType: matrixMeta.sourcesType,
+            targetSegmentCount: normalizedTargetSegmentCount,
+            segmentCustomizations: segmentCustomizationDirectives,
           }),
       });
       setSegmentationResult(result);
@@ -2562,6 +2608,45 @@ export default function CulturalArchaeologist() {
     void runSegmentationAnalysis(displayMatrix || matrix);
   };
 
+  const handleSegmentationTargetCountChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = event.target.value;
+    const parsed = Number.parseInt(rawValue, 10);
+    const nextCount = clampSegmentationTargetCount(Number.isNaN(parsed) ? DEFAULT_SEGMENTATION_TARGET_COUNT : parsed);
+    console.log('[CulturalArchaeologist] Segmentation target segment count changed.', {
+      rawValue,
+      parsedValue: Number.isNaN(parsed) ? null : parsed,
+      nextCount,
+    });
+    setSegmentationTargetCount(nextCount);
+  };
+
+  const handleSegmentationCustomInfoChange = (segmentIndex: number, value: string) => {
+    console.log('[CulturalArchaeologist] Segmentation custom info changed for segment.', {
+      segmentIndex,
+      valueLength: value.length,
+    });
+    setSegmentationCustomInfoByIndex((previous) => ({
+      ...previous,
+      [segmentIndex]: value,
+    }));
+  };
+
+  const handleApplySegmentationCustomization = async () => {
+    if (!matrix || !isSegmentationAuthorized || isSegmentationLoading) {
+      console.log('[CulturalArchaeologist] Segmentation customization apply skipped.', {
+        hasMatrix: Boolean(matrix),
+        isSegmentationAuthorized,
+        isSegmentationLoading,
+      });
+      return;
+    }
+    console.log('[CulturalArchaeologist] Applying segmentation customization settings.', {
+      targetSegmentCount: segmentationTargetCount,
+      segmentCustomizationCount: segmentationCustomizationInstructions.length,
+    });
+    await runSegmentationAnalysis(displayMatrix || matrix);
+  };
+
   const handleRerunSegmentation = async () => {
     if (!matrix || !isSegmentationAuthorized || isSegmentationLoading) return;
     console.log('[CulturalArchaeologist] Triggering segmentation rerun with active filters.', {
@@ -2570,6 +2655,8 @@ export default function CulturalArchaeologist() {
       trendStageFilters: selectedTrendStageFilters,
       sourceFilters: selectedSourceFilters,
       showHighlyUniqueOnly,
+      targetSegmentCount: segmentationTargetCount,
+      segmentCustomizationCount: segmentationCustomizationInstructions.length,
     });
     await runSegmentationAnalysis(displayMatrix || matrix);
   };
@@ -2686,7 +2773,7 @@ export default function CulturalArchaeologist() {
             </div>
             <div>
               <h3 className="text-xl font-bold text-zinc-900">Audience Segmentation</h3>
-              <p className="text-sm text-zinc-500">Regression-style segmentation into 4-6 audience archetypes based on the filtered dataset.</p>
+              <p className="text-sm text-zinc-500">Regression-style segmentation into up to 6 audience archetypes based on the filtered dataset.</p>
             </div>
           </div>
           {segmentationResult && hasPromptRefinedSegmentation && (
@@ -2702,6 +2789,53 @@ export default function CulturalArchaeologist() {
             </button>
           )}
         </div>
+
+        {isSegmentationAuthorized && (
+          <div
+            className="mb-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 sm:p-5"
+            data-testid="segmentation-customization-controls"
+          >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="w-full sm:max-w-[220px]">
+                <label htmlFor="segmentation-segment-count-input" className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                  Segment Count
+                </label>
+                <input
+                  id="segmentation-segment-count-input"
+                  data-testid="segmentation-segment-count-input"
+                  type="number"
+                  min={MIN_SEGMENTATION_TARGET_COUNT}
+                  max={MAX_SEGMENTATION_TARGET_COUNT}
+                  step={1}
+                  value={segmentationTargetCount}
+                  onChange={handleSegmentationTargetCountChange}
+                  className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-300"
+                />
+                <p className="mt-1 text-xs text-zinc-500">Choose between {MIN_SEGMENTATION_TARGET_COUNT} and {MAX_SEGMENTATION_TARGET_COUNT} segments.</p>
+              </div>
+              <button
+                type="button"
+                data-testid="segmentation-apply-customization-button"
+                onClick={() => {
+                  void handleApplySegmentationCustomization();
+                }}
+                disabled={isSegmentationLoading}
+                className="inline-flex items-center justify-center rounded-lg border border-indigo-600 bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-700 hover:border-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Update Segments
+              </button>
+            </div>
+            {hasSegmentationCustomizationInstructions ? (
+              <p className="mt-3 text-xs text-zinc-600" data-testid="segmentation-customization-summary">
+                Applying custom guidance to {segmentationCustomizationInstructions.length} segment{segmentationCustomizationInstructions.length === 1 ? '' : 's'}.
+              </p>
+            ) : (
+              <p className="mt-3 text-xs text-zinc-500">
+                Add custom details to any segment card below, then click Update Segments.
+              </p>
+            )}
+          </div>
+        )}
 
         {!isSegmentationAuthorized ? (
           <div data-testid="segmentation-password-panel" className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 sm:p-5">
@@ -2789,6 +2923,7 @@ export default function CulturalArchaeologist() {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {segmentationResult.segments.map((segment, index) => {
                 const demographicsSnippet = (segment.demographicsSnippet || '').trim() || buildSegmentationDemographicsFallback();
+                const segmentCustomInfo = segmentationCustomInfoByIndex[index] || '';
                 if (!(segment.demographicsSnippet || '').trim()) {
                   console.log('[CulturalArchaeologist] Using segmentation demographics fallback for segment.', {
                     segmentIndex: index,
@@ -2839,6 +2974,25 @@ export default function CulturalArchaeologist() {
                       <p className="text-sm text-zinc-700">
                         {renderSegmentationEvidenceText(segment.messagingApproach, `segmentation-segment-${index}-messaging`)}
                       </p>
+                    </div>
+                    <div className="mt-3">
+                      <label
+                        htmlFor={`segmentation-segment-custom-input-${index + 1}`}
+                        className="text-xs font-semibold uppercase tracking-wider text-zinc-500"
+                      >
+                        Custom Segment Info
+                      </label>
+                      <textarea
+                        id={`segmentation-segment-custom-input-${index + 1}`}
+                        data-testid={`segmentation-segment-custom-input-${index + 1}`}
+                        value={segmentCustomInfo}
+                        onChange={(event) => {
+                          handleSegmentationCustomInfoChange(index, event.target.value);
+                        }}
+                        rows={3}
+                        placeholder="Add custom context to refine this segment..."
+                        className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-300"
+                      />
                     </div>
                     <div className="mt-4 border-t border-zinc-100 pt-3">
                       <button

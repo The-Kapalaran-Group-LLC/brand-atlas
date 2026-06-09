@@ -138,6 +138,20 @@ const createSegmentationWorkspaceSnapshot = (overrides: Record<string, unknown> 
   ...overrides,
 });
 
+const createSegmentationReport = (segmentNames: string[]) => ({
+  regressionSummary: 'Regression signals show distinct motivation clusters.',
+  confidenceNotes: 'Directional segmentation based on cultural signal strength.',
+  segments: segmentNames.map((name, index) => ({
+    name,
+    archetype: `${name} archetype`,
+    profile: `${name} profile`,
+    demographicsSnippet: `${name} demographics`,
+    prevalencePct: Math.max(1, 100 - index * 5),
+    keySignals: [`${name} signal 1`, `${name} signal 2`],
+    messagingApproach: `${name} messaging`,
+  })),
+});
+
 describe('CulturalArchaeologist', () => {
   beforeEach(() => {
     window.history.pushState({}, '', '/#cultural-archaeologist');
@@ -484,6 +498,77 @@ describe('CulturalArchaeologist', () => {
     const latestMatrixArg = generateAudienceSegmentation.mock.calls[1]?.[0];
     expect(latestMatrixArg?.moments).toHaveLength(1);
     expect(latestMatrixArg?.moments?.[0]?.text).toContain('High confidence signal');
+  });
+
+  it('lets users set a target segment count and caps it at 6 before rerunning segmentation', async () => {
+    const workspaceId = 'workspace-segmentation-count-control';
+    window.localStorage.setItem(
+      `${SEGMENTATION_WORKSPACE_STORAGE_PREFIX}${workspaceId}`,
+      JSON.stringify(createSegmentationWorkspaceSnapshot({ isSegmentationAuthorized: true }))
+    );
+    window.history.pushState({}, '', `/?segmentation_workspace=${workspaceId}#cultural-archaeologist`);
+
+    render(<CulturalArchaeologist />);
+    expect(await screen.findByTestId('segmentation-tab-panel')).toBeInTheDocument();
+    await screen.findByTestId('segmentation-result-state');
+
+    const segmentCountInput = await screen.findByTestId('segmentation-segment-count-input');
+    fireEvent.change(segmentCountInput, { target: { value: '7' } });
+    expect(segmentCountInput).toHaveValue(6);
+
+    fireEvent.click(await screen.findByTestId('segmentation-apply-customization-button'));
+
+    await waitFor(() => {
+      expect(generateAudienceSegmentation).toHaveBeenCalledTimes(2);
+    });
+    const latestSegmentationContextArg = generateAudienceSegmentation.mock.calls[1]?.[1];
+    expect(latestSegmentationContextArg?.targetSegmentCount).toBe(6);
+  });
+
+  it('applies custom per-segment information and updates segmentation with those instructions', async () => {
+    const workspaceId = 'workspace-segmentation-custom-info';
+    generateAudienceSegmentation.mockReset();
+    generateAudienceSegmentation
+      .mockResolvedValueOnce(
+        createSegmentationReport([
+          'Status Signal Chasers',
+          'Performance Pragmatists',
+          'Identity Curators',
+          'Ethical Evaluators',
+        ])
+      )
+      .mockResolvedValueOnce(
+        createSegmentationReport([
+          'Status Signal Chasers - Updated',
+          'Performance Pragmatists',
+          'Identity Curators',
+          'Ethical Evaluators',
+        ])
+      );
+
+    window.localStorage.setItem(
+      `${SEGMENTATION_WORKSPACE_STORAGE_PREFIX}${workspaceId}`,
+      JSON.stringify(createSegmentationWorkspaceSnapshot({ isSegmentationAuthorized: true }))
+    );
+    window.history.pushState({}, '', `/?segmentation_workspace=${workspaceId}#cultural-archaeologist`);
+
+    render(<CulturalArchaeologist />);
+    expect(await screen.findByTestId('segmentation-tab-panel')).toBeInTheDocument();
+    await screen.findByTestId('segmentation-result-state');
+
+    fireEvent.change(await screen.findByTestId('segmentation-segment-custom-input-1'), {
+      target: { value: 'Make this segment more value-conscious and promo-sensitive.' },
+    });
+    fireEvent.click(await screen.findByTestId('segmentation-apply-customization-button'));
+
+    await waitFor(() => {
+      expect(generateAudienceSegmentation).toHaveBeenCalledTimes(2);
+    });
+    const latestSegmentationContextArg = generateAudienceSegmentation.mock.calls[1]?.[1];
+    expect(Array.isArray(latestSegmentationContextArg?.segmentCustomizations)).toBe(true);
+    expect(latestSegmentationContextArg?.segmentCustomizations?.[0]).toContain('Segment 1');
+    expect(latestSegmentationContextArg?.segmentCustomizations?.[0]).toContain('value-conscious and promo-sensitive');
+    expect(await screen.findByText('Status Signal Chasers - Updated')).toBeInTheDocument();
   });
 
   it('uses Ask the Archaeologist prompt to refine segmentation when segmentation tab is active', async () => {
