@@ -2349,6 +2349,10 @@ export default function CulturalArchaeologist() {
       completed,
       totalItems,
     });
+    if (totalItems > 0 && completed >= totalItems) {
+      console.log('[CulturalArchaeologist] Showing deep-dive completion toast.');
+      setToast('Insight deep dives are complete');
+    }
     setIsGeneratingDeepDives(false);
   };
 
@@ -3918,6 +3922,7 @@ export default function CulturalArchaeologist() {
         <AnimatePresence>
           {toast && (
             <motion.div
+              data-testid="cultural-toast"
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}

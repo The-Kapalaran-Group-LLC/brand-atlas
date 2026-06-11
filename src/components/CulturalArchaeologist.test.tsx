@@ -975,6 +975,27 @@ describe('CulturalArchaeologist', () => {
     expect(supabaseEq).toHaveBeenCalledWith('id', 'saved-row-id');
   });
 
+  it('shows a completion toast when background deep-dive generation finishes', async () => {
+    generateDeepDivesBatch.mockResolvedValueOnce([
+      {
+        originationDate: '2026-06-02',
+        relevance: 'High',
+        expandedContext: 'Deep dive context from batch generation.',
+        strategicImplications: ['Implication one'],
+        realWorldExamples: ['Example one'],
+        sources: [{ title: 'Example Source', url: 'https://example.com' }],
+      },
+    ]);
+
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    expect(await screen.findByText('Insight deep dives are complete')).toBeInTheDocument();
+  });
+
   it('renders mobile results navigation for all cultural result sections', async () => {
     render(<CulturalArchaeologist />);
 
