@@ -184,6 +184,21 @@ const MAX_EXCAVATOR_OBJECTIVE_LENGTH = 240;
 const MAX_EXCAVATOR_AUDIENCE_LENGTH = 180;
 const MAX_EXCAVATOR_QUESTION_LENGTH = 400;
 
+const buildDetailedAudiencePrompt = (audienceValue: string, audienceDetailValue: string): string => {
+  const trimmedAudience = (audienceValue || '').trim();
+  const trimmedAudienceDetail = (audienceDetailValue || '').trim();
+
+  if (!trimmedAudienceDetail) {
+    return trimmedAudience;
+  }
+
+  if (!trimmedAudience) {
+    return `Detailed Audience Definition:\n${trimmedAudienceDetail}`;
+  }
+
+  return `${trimmedAudience}\n\nDetailed Audience Definition (background context):\n${trimmedAudienceDetail}`;
+};
+
 interface ComparePopupState {
   x: number;
   y: number;
@@ -840,6 +855,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
   ]);
   const [analysisObjective, setAnalysisObjective] = useState('');
   const [targetAudience, setTargetAudience] = useState('');
+  const [targetAudienceDetail, setTargetAudienceDetail] = useState('');
+  const [isTargetAudienceDetailOpen, setIsTargetAudienceDetailOpen] = useState(false);
   const [resultTab, setResultTab] = useState<ResultTab>('profiles');
   const [compareElement, setCompareElement] = useState<CompareElement>('primaryColors');
   const [comparePopup, setComparePopup] = useState<ComparePopupState | null>(null);
@@ -923,6 +940,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     }
     setAnalysisObjective('');
     setTargetAudience('');
+    setTargetAudienceDetail('');
+    setIsTargetAudienceDetailOpen(false);
     setResultTab('profiles');
     setCompareElement('primaryColors');
     setShowValidation(false);
@@ -1009,6 +1028,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     setBrands(loadedBrands.length > 0 ? loadedBrands : [{ id: 'brand-1', name: '', website: '' }]);
     setAnalysisObjective(saved.analysisObjective || '');
     setTargetAudience(saved.targetAudience || '');
+    setTargetAudienceDetail('');
+    setIsTargetAudienceDetailOpen(false);
     setReport(saved.report);
     setReportQuestion('');
     setReportAnswer('');
@@ -1294,11 +1315,13 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     normalizedBrands,
     resolvedAnalysisObjective,
     targetAudienceValue,
+    targetAudienceDetailValue,
   }: {
     actionName: string;
     normalizedBrands: Array<{ name: string; website: string }>;
     resolvedAnalysisObjective: string;
     targetAudienceValue: string;
+    targetAudienceDetailValue?: string;
   }) => {
     setFakeProgress(5);
     setIsLoading(true);
@@ -1311,13 +1334,14 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
     setBestVisualsByBrand({});
 
     try {
+      const effectiveTargetAudienceValue = buildDetailedAudiencePrompt(targetAudienceValue, targetAudienceDetailValue || '');
       const result = await runUserAction({
         actionName,
         action: () =>
           generateVisualDesign({
             brands: normalizedBrands,
             analysisObjective: resolvedAnalysisObjective,
-            targetAudience: targetAudienceValue,
+            targetAudience: effectiveTargetAudienceValue,
           }),
         onError: (normalized) => setError(normalized.message),
       });
@@ -1424,6 +1448,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       normalizedBrands,
       resolvedAnalysisObjective,
       targetAudienceValue: targetAudience,
+      targetAudienceDetailValue: targetAudienceDetail,
     });
   };
 
@@ -1447,6 +1472,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
       normalizedBrands,
       resolvedAnalysisObjective,
       targetAudienceValue: rerunTargetAudience,
+      targetAudienceDetailValue: targetAudienceDetail,
     });
   };
 
@@ -1478,7 +1504,7 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
           submitVisualDesignPrompt({
             brands: normalizedBrands,
             analysisObjective: resolvedAnalysisObjective,
-            targetAudience,
+            targetAudience: buildDetailedAudiencePrompt(targetAudience, targetAudienceDetail),
             currentReport: report,
             prompt: reportQuestion,
           }),
@@ -2161,6 +2187,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
 
     if ((prefill.targetAudience || '').trim()) {
       setTargetAudience((prefill.targetAudience || '').trim().slice(0, MAX_EXCAVATOR_AUDIENCE_LENGTH));
+      setTargetAudienceDetail('');
+      setIsTargetAudienceDetailOpen(false);
     }
 
     clearDesignExcavatorPrefill();
@@ -2951,7 +2979,22 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
           </div>
 
           <div className="relative col-span-2 md:col-span-1">
-            <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+            <button
+              type="button"
+              data-testid="design-audience-detail-toggle"
+              aria-label="Toggle detailed audience definition"
+              aria-expanded={isTargetAudienceDetailOpen}
+              onClick={() => {
+                setIsTargetAudienceDetailOpen((wasOpen) => {
+                  const nextOpen = !wasOpen;
+                  console.log('[DesignExcavator] Audience detail input toggled.', { isOpen: nextOpen });
+                  return nextOpen;
+                });
+              }}
+              className="absolute left-3 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+            >
+              <Users className="w-5 h-5" />
+            </button>
             <input
               type="text"
               value={targetAudience}
@@ -2960,6 +3003,22 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
               className="w-full bg-white pl-12 pr-4 py-3 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-left"
               disabled={isLoading}
             />
+            {isTargetAudienceDetailOpen && (
+              <div data-testid="design-audience-detail-box" className="mt-2">
+                <label htmlFor="design-audience-detail-input" className="mb-1 block text-xs font-medium text-zinc-500">
+                  Detailed audience definition (optional)
+                </label>
+                <textarea
+                  id="design-audience-detail-input"
+                  data-testid="design-audience-detail-input"
+                  value={targetAudienceDetail}
+                  onChange={(event) => setTargetAudienceDetail(event.target.value)}
+                  placeholder={`Add more audience details.\n- Demographics\n- Motivations\n- Behaviors`}
+                  className="w-full min-h-[128px] rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-y"
+                  disabled={isLoading}
+                />
+              </div>
+            )}
           </div>
           <div
             className="hidden md:flex items-center justify-center px-3 py-3 rounded-2xl border border-transparent"
@@ -3058,6 +3117,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
             setBrands(loadedBrands.length > 0 ? loadedBrands : [{ id: 'brand-1', name: '', website: '' }]);
             setAnalysisObjective(item.analysisObjective || '');
             setTargetAudience(item.targetAudience || '');
+            setTargetAudienceDetail('');
+            setIsTargetAudienceDetailOpen(false);
             setReport(item.report);
             setResultTab('profiles');
             setIsSearchControlsMinimized(true);
@@ -3925,6 +3986,8 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                 setBrands(loadedBrands.length > 0 ? loadedBrands : [{ id: 'brand-1', name: '', website: '' }]);
                 setAnalysisObjective(item.analysisObjective || '');
                 setTargetAudience(item.targetAudience || '');
+                setTargetAudienceDetail('');
+                setIsTargetAudienceDetailOpen(false);
                 setReport(item.report);
                 setResultTab('profiles');
                 setIsSearchControlsMinimized(true);

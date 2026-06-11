@@ -392,6 +392,55 @@ describe('BrandNavigator', () => {
     });
   });
 
+  it('expands a detailed audience definition box from the audience icon and accepts long bullet lists', async () => {
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
+    await screen.findByTestId('audience-input');
+
+    expect(screen.queryByTestId('brand-audience-detail-input')).not.toBeInTheDocument();
+
+    const detailToggle = screen.getByTestId('brand-audience-detail-toggle');
+    fireEvent.click(detailToggle);
+
+    const detailInput = screen.getByTestId('brand-audience-detail-input');
+    const longDetail = `${'Audience context line. '.repeat(30)}\n- Highly price sensitive\n- Learns from creators`;
+    fireEvent.change(detailInput, { target: { value: longDetail } });
+
+    expect(detailInput).toHaveValue(longDetail);
+
+    fireEvent.click(detailToggle);
+    expect(screen.queryByTestId('brand-audience-detail-input')).not.toBeInTheDocument();
+  });
+
+  it('uses the expanded audience definition in sourcing context for generation', async () => {
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
+
+    const brandsInput = await screen.findByTestId('brands-input');
+    fireEvent.change(brandsInput, { target: { value: 'Patagonia' } });
+    fireEvent.keyDown(brandsInput, { key: 'Enter', code: 'Enter' });
+
+    fireEvent.change(screen.getByTestId('audience-input'), {
+      target: { value: 'Outdoor enthusiasts' },
+    });
+    fireEvent.click(screen.getByTestId('brand-audience-detail-toggle'));
+    fireEvent.change(screen.getByTestId('brand-audience-detail-input'), {
+      target: { value: '- Actively repairs gear\n- Researches sustainability reports before purchasing' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /generate analysis/i }));
+
+    await waitFor(() => {
+      expect(generateBrandResearchMatrix).toHaveBeenCalled();
+    });
+
+    const sourcedAudience = generateBrandResearchMatrix.mock.calls[0]?.[0];
+    expect(typeof sourcedAudience).toBe('string');
+    expect(sourcedAudience).toContain('Outdoor enthusiasts');
+    expect(sourcedAudience).toContain('Detailed Audience Definition');
+    expect(sourcedAudience).toContain('Actively repairs gear');
+  });
+
   it('falls back to local suggestions when API suggestions are empty', async () => {
     suggestBrands.mockResolvedValue([]);
     render(<BrandNavigator />);

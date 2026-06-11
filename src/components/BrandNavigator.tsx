@@ -166,6 +166,21 @@ const BRAND_GENERATION_FILTER_EXPLAINER_TOOLTIP = 'Select one or more age groups
 const BRAND_SOURCES_FILTER_EXPLAINER_TOOLTIP = 'Select the type of source(s) for your results. Source type adds context and specificity to observations.';
 const BRAND_UPLOAD_DOCUMENTS_EXPLAINER_TOOLTIP = 'Upload one or more documents to complement your analysis.';
 
+const buildDetailedAudiencePrompt = (audienceValue: string, audienceDetailValue: string): string => {
+  const trimmedAudience = (audienceValue || '').trim();
+  const trimmedAudienceDetail = (audienceDetailValue || '').trim();
+
+  if (!trimmedAudienceDetail) {
+    return trimmedAudience;
+  }
+
+  if (!trimmedAudience) {
+    return `Detailed Audience Definition:\n${trimmedAudienceDetail}`;
+  }
+
+  return `${trimmedAudience}\n\nDetailed Audience Definition (background context):\n${trimmedAudienceDetail}`;
+};
+
 const GENERATIONS = [
   'Gen Alpha (2013–mid 2020s)',
   'Gen Z (1997–2012)',
@@ -689,6 +704,8 @@ export default function BrandNavigator() {
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [brandInput, setBrandInput] = useState('');
   const [audience, setAudience] = useState('');
+  const [audienceDetail, setAudienceDetail] = useState('');
+  const [isAudienceDetailOpen, setIsAudienceDetailOpen] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [brandSuggestions, setBrandSuggestions] = useState<string[]>([]);
@@ -779,6 +796,8 @@ export default function BrandNavigator() {
     setSelectedBrands(parseBrandsInput(sm.brand || ''));
     setBrandInput('');
     setAudience(sm.audience);
+    setAudienceDetail('');
+    setIsAudienceDetailOpen(false);
     setSelectedGenerations(sm.generations || []);
     setTopicFocus(sm.topicFocus || '');
     setSourcesType(sm.sourcesType || []);
@@ -1259,6 +1278,8 @@ export default function BrandNavigator() {
     setSelectedBrands([]);
     setBrandInput('');
     setAudience('');
+    setAudienceDetail('');
+    setIsAudienceDetailOpen(false);
     setTopicFocus('');
     setSourcesType([]);
     setSelectedGenerations([]);
@@ -1306,10 +1327,11 @@ export default function BrandNavigator() {
 
     setIsAskingBrandQuestion(true);
     try {
+      const audienceForSourcing = buildDetailedAudiencePrompt(matrixMeta?.audience || audience, audienceDetail);
       const response = await runUserAction({
         actionName: 'brand-followup-question',
         action: async () => askBrandNavigatorQuestion(matrix, brandQuestion, {
-          audience: matrixMeta?.audience || audience,
+          audience: audienceForSourcing,
           brand: matrixMeta?.brand || selectedBrands.join(', '),
           topicFocus: matrixMeta?.topicFocus || topicFocus,
         }),
@@ -1330,6 +1352,7 @@ export default function BrandNavigator() {
   const runBrandGeneration = async ({
     actionName,
     audienceValue,
+    audienceDetailValue,
     brandsForGenerate,
     generationsValue,
     topicFocusValue,
@@ -1338,6 +1361,7 @@ export default function BrandNavigator() {
   }: {
     actionName: string;
     audienceValue: string;
+    audienceDetailValue?: string;
     brandsForGenerate: Array<{ name: string; website: string }>;
     generationsValue: string[];
     topicFocusValue: string;
@@ -1361,11 +1385,12 @@ export default function BrandNavigator() {
     setShowValidation(false);
     const hasUploadedDocuments = filesValue.length > 0;
     try {
+      const effectiveAudienceValue = buildDetailedAudiencePrompt(audienceValue, audienceDetailValue || '');
       const result = await runUserAction({
         actionName,
         action: async () =>
           generateBrandResearchMatrix(
-            audienceValue,
+            effectiveAudienceValue,
             brandsForGenerate,
             generationsValue,
             topicFocusValue,
@@ -1490,6 +1515,7 @@ export default function BrandNavigator() {
     await runBrandGeneration({
       actionName: 'brand-generate-report',
       audienceValue: audience,
+      audienceDetailValue: audienceDetail,
       brandsForGenerate,
       generationsValue: selectedGenerations,
       topicFocusValue: topicFocus,
@@ -1531,6 +1557,7 @@ export default function BrandNavigator() {
     await runBrandGeneration({
       actionName: `brand-refresh-section-${sectionKey}`,
       audienceValue: rerunAudience,
+      audienceDetailValue: audienceDetail,
       brandsForGenerate: rerunBrands,
       generationsValue: rerunGenerations,
       topicFocusValue: rerunTopic,
@@ -2399,7 +2426,22 @@ export default function BrandNavigator() {
 
               <div className="relative flex flex-col w-full self-start">
                 <div className="relative flex h-14 items-start w-full">
-                  <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                  <button
+                    type="button"
+                    data-testid="brand-audience-detail-toggle"
+                    aria-label="Toggle detailed audience definition"
+                    aria-expanded={isAudienceDetailOpen}
+                    onClick={() => {
+                      setIsAudienceDetailOpen((wasOpen) => {
+                        const nextOpen = !wasOpen;
+                        console.log('[BrandNavigator] Audience detail input toggled.', { isOpen: nextOpen });
+                        return nextOpen;
+                      });
+                    }}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                  >
+                    <Users className="w-5 h-5" />
+                  </button>
                   <input
                     data-testid="audience-input"
                     type="text"
@@ -2422,6 +2464,22 @@ export default function BrandNavigator() {
                     </div>
                   )}
                 </div>
+                {isAudienceDetailOpen && (
+                  <div data-testid="brand-audience-detail-box" className="mt-2 ml-2">
+                    <label htmlFor="brand-audience-detail-input" className="mb-1 block text-xs font-medium text-zinc-500">
+                      Detailed audience definition (optional)
+                    </label>
+                    <textarea
+                      id="brand-audience-detail-input"
+                      data-testid="brand-audience-detail-input"
+                      value={audienceDetail}
+                      onChange={(event) => setAudienceDetail(event.target.value)}
+                      placeholder={`Add more audience details.\n- Demographics\n- Motivations\n- Behaviors`}
+                      className="w-full min-h-[128px] rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-y"
+                      disabled={isLoading}
+                    />
+                  </div>
+                )}
                 <InputGuidance
                   baseTestId="brand-audience-guidance"
                   helperText="Add the audience you want to analyze."
@@ -2747,6 +2805,9 @@ export default function BrandNavigator() {
                 if (item.matrix && item.matrixMeta) {
                   setMatrix(sanitizeBrandResearchMatrix(item.matrix));
                   setMatrixMeta(item.matrixMeta);
+                  setAudience(item.matrixMeta.audience || '');
+                  setAudienceDetail('');
+                  setIsAudienceDetailOpen(false);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
               }}
@@ -3052,6 +3113,9 @@ export default function BrandNavigator() {
                 if (item.matrix && item.matrixMeta) {
                   setMatrix(sanitizeBrandResearchMatrix(item.matrix));
                   setMatrixMeta(item.matrixMeta);
+                  setAudience(item.matrixMeta.audience || '');
+                  setAudienceDetail('');
+                  setIsAudienceDetailOpen(false);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
               }}

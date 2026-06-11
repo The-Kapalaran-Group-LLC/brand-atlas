@@ -439,6 +439,51 @@ describe('BrandDeepDivePage', () => {
     expect(screen.getByPlaceholderText('Target Audience (Optional)')).toHaveValue('');
   });
 
+  it('expands a detailed audience definition box from the audience icon and accepts long bullet lists', () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    expect(screen.queryByTestId('design-audience-detail-input')).not.toBeInTheDocument();
+
+    const detailToggle = screen.getByTestId('design-audience-detail-toggle');
+    fireEvent.click(detailToggle);
+
+    const detailInput = screen.getByTestId('design-audience-detail-input');
+    const longDetail = `${'Audience profile detail. '.repeat(30)}\n- Luxury leaning\n- Mobile-first discovery`;
+    fireEvent.change(detailInput, { target: { value: longDetail } });
+
+    expect(detailInput).toHaveValue(longDetail);
+
+    fireEvent.click(detailToggle);
+    expect(screen.queryByTestId('design-audience-detail-input')).not.toBeInTheDocument();
+  });
+
+  it('uses the expanded audience definition in sourcing context for generation', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Brand 1 Name'), {
+      target: { value: 'Aesop' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Target Audience (Optional)'), {
+      target: { value: 'Luxury skincare shoppers' },
+    });
+
+    fireEvent.click(screen.getByTestId('design-audience-detail-toggle'));
+    fireEvent.change(screen.getByTestId('design-audience-detail-input'), {
+      target: { value: '- Seeks ingredient transparency\n- Prefers elevated in-store sensory experiences' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /generate visual analysis/i }));
+
+    await waitFor(() => {
+      expect(generateBrandDeepDive).toHaveBeenCalled();
+    });
+
+    const firstCallInput = generateBrandDeepDive.mock.calls[0]?.[0];
+    expect(firstCallInput.targetAudience).toContain('Luxury skincare shoppers');
+    expect(firstCallInput.targetAudience).toContain('Detailed Audience Definition');
+    expect(firstCallInput.targetAudience).toContain('ingredient transparency');
+  });
+
   it('moves focus to the next brand name input when pressing Enter', () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 

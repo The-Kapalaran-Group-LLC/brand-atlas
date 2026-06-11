@@ -1458,6 +1458,48 @@ describe('CulturalArchaeologist', () => {
     });
   });
 
+  it('expands a detailed audience definition box from the audience icon and accepts long bullet lists', () => {
+    render(<CulturalArchaeologist />);
+
+    expect(screen.queryByTestId('cultural-audience-detail-input')).not.toBeInTheDocument();
+
+    const detailToggle = screen.getByTestId('cultural-audience-detail-toggle');
+    fireEvent.click(detailToggle);
+
+    const detailInput = screen.getByTestId('cultural-audience-detail-input');
+    const longDetail = `${'Primary audience persona details. '.repeat(30)}\n- Shops by peer validation\n- Values sustainability`;
+    fireEvent.change(detailInput, { target: { value: longDetail } });
+
+    expect(detailInput).toHaveValue(longDetail);
+
+    fireEvent.click(detailToggle);
+    expect(screen.queryByTestId('cultural-audience-detail-input')).not.toBeInTheDocument();
+  });
+
+  it('uses the expanded audience definition in sourcing context for generation', async () => {
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+
+    fireEvent.click(screen.getByTestId('cultural-audience-detail-toggle'));
+    fireEvent.change(screen.getByTestId('cultural-audience-detail-input'), {
+      target: { value: '- Prioritizes peer validation\n- Values niche drops over mass trends' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    await waitFor(() => {
+      expect(generateCulturalMatrix).toHaveBeenCalled();
+    });
+
+    const sourcedAudience = generateCulturalMatrix.mock.calls[0]?.[0];
+    expect(typeof sourcedAudience).toBe('string');
+    expect(sourcedAudience).toContain('Gen Z sneaker culture');
+    expect(sourcedAudience).toContain('Detailed Audience Definition');
+    expect(sourcedAudience).toContain('Prioritizes peer validation');
+  });
+
   it('keeps brand chip entry and topic input behavior working with guidance UI', async () => {
     render(<CulturalArchaeologist />);
 

@@ -578,6 +578,21 @@ const CULTURAL_GENERATION_FILTER_EXPLAINER_TOOLTIP = 'Select one or more age gro
 const CULTURAL_SOURCES_FILTER_EXPLAINER_TOOLTIP = 'Select the type of source(s) for your results. Source type adds context and specificity to observations.';
 const CULTURAL_UPLOAD_DOCUMENTS_EXPLAINER_TOOLTIP = 'Upload one or more documents to complement your analysis.';
 
+const buildDetailedAudiencePrompt = (audienceValue: string, audienceDetailValue: string): string => {
+  const trimmedAudience = (audienceValue || '').trim();
+  const trimmedAudienceDetail = (audienceDetailValue || '').trim();
+
+  if (!trimmedAudienceDetail) {
+    return trimmedAudience;
+  }
+
+  if (!trimmedAudience) {
+    return `Detailed Audience Definition:\n${trimmedAudienceDetail}`;
+  }
+
+  return `${trimmedAudience}\n\nDetailed Audience Definition (background context):\n${trimmedAudienceDetail}`;
+};
+
 const SAVED_MATRICES_STORAGE_KEY = 'cultural_matrices';
 
 const readSavedMatrices = (): SavedMatrix[] => {
@@ -1067,6 +1082,8 @@ export default function CulturalArchaeologist() {
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [brandInput, setBrandInput] = useState('');
   const [audience, setAudience] = useState('');
+  const [audienceDetail, setAudienceDetail] = useState('');
+  const [isAudienceDetailOpen, setIsAudienceDetailOpen] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [brandSuggestions, setBrandSuggestions] = useState<string[]>([]);
@@ -1357,6 +1374,8 @@ export default function CulturalArchaeologist() {
       setBrandInput(sm.brand || '');
     }
     setAudience(sm.audience);
+    setAudienceDetail('');
+    setIsAudienceDetailOpen(false);
     setSelectedGenerations(sm.generations || []);
     setTopicFocus(sm.topicFocus || '');
     setSourcesType(sm.sourcesType || []);
@@ -1475,6 +1494,8 @@ export default function CulturalArchaeologist() {
 
     if (prefillAudience) {
       setAudience(prefillAudience);
+      setAudienceDetail('');
+      setIsAudienceDetailOpen(false);
     }
 
     if (prefillBrand) {
@@ -1536,6 +1557,8 @@ export default function CulturalArchaeologist() {
     }
 
     setAudience(snapshot.matrixMeta.audience || '');
+    setAudienceDetail('');
+    setIsAudienceDetailOpen(false);
     setSelectedGenerations(snapshot.matrixMeta.generations || []);
     setTopicFocus(snapshot.matrixMeta.topicFocus || '');
     setSourcesType(snapshot.matrixMeta.sourcesType || []);
@@ -1911,6 +1934,8 @@ export default function CulturalArchaeologist() {
     setSelectedBrands([]);
     setBrandInput('');
     setAudience('');
+    setAudienceDetail('');
+    setIsAudienceDetailOpen(false);
     setTopicFocus('');
     setSegmentRerunContext(null);
     setSourcesType([]);
@@ -1949,6 +1974,7 @@ export default function CulturalArchaeologist() {
 
   const runCulturalMatrixGeneration = async ({
     audienceValue,
+    audienceDetailValue,
     brandContextValue,
     generationsValue,
     topicFocusValue,
@@ -1959,6 +1985,7 @@ export default function CulturalArchaeologist() {
     actionName,
   }: {
     audienceValue: string;
+    audienceDetailValue?: string;
     brandContextValue: string;
     generationsValue: string[];
     topicFocusValue: string;
@@ -1982,10 +2009,13 @@ export default function CulturalArchaeologist() {
     resetSegmentationWorkspace('insights');
     const hasUploadedDocuments = filesValue.length > 0;
     try {
+      const effectiveAudienceValue = buildDetailedAudiencePrompt(audienceValue, audienceDetailValue || '');
       const effectiveTopicFocusValue = buildTopicFocusWithBackgroundSegmentContext(topicFocusValue, segmentPromptContextValue || '');
       console.log('[CulturalArchaeologist] Starting matrix generation request.', {
         actionName,
         audienceValue,
+        audienceDetailLength: (audienceDetailValue || '').trim().length,
+        effectiveAudienceLength: effectiveAudienceValue.length,
         brandContextValue,
         generationsValue,
         topicFocusValue,
@@ -1996,7 +2026,7 @@ export default function CulturalArchaeologist() {
       const result = await runUserAction({
         actionName,
         action: () => generateCulturalMatrix(
-          audienceValue,
+          effectiveAudienceValue,
           brandContextValue,
           generationsValue,
           effectiveTopicFocusValue,
@@ -2084,7 +2114,7 @@ export default function CulturalArchaeologist() {
       await playCompletionSound(RESULTS_COMPLETE_SOUND_ID);
 
       runBackgroundDeepDives(nextMatrix, {
-        audience: audienceValue,
+        audience: effectiveAudienceValue,
         brand: brandContextValue,
         generations: generationsValue,
         topicFocus: topicFocusValue,
@@ -2133,6 +2163,7 @@ export default function CulturalArchaeologist() {
     await runCulturalMatrixGeneration({
       actionName: 'generate-cultural-matrix',
       audienceValue: audience,
+      audienceDetailValue: audienceDetail,
       brandContextValue: brandContext,
       generationsValue: selectedGenerations,
       topicFocusValue: topicFocus,
@@ -2167,6 +2198,7 @@ export default function CulturalArchaeologist() {
     await runCulturalMatrixGeneration({
       actionName: 'rerun-cultural-matrix',
       audienceValue: rerunAudience,
+      audienceDetailValue: audienceDetail,
       brandContextValue: rerunBrand,
       generationsValue: rerunGenerations,
       topicFocusValue: rerunTopic,
@@ -2209,6 +2241,7 @@ export default function CulturalArchaeologist() {
     await runCulturalMatrixGeneration({
       actionName: `refresh-cultural-matrix-${category}`,
       audienceValue: rerunAudience,
+      audienceDetailValue: audienceDetail,
       brandContextValue: rerunBrand,
       generationsValue: rerunGenerations,
       topicFocusValue: rerunTopic,
@@ -2340,11 +2373,12 @@ export default function CulturalArchaeologist() {
 
     setIsAskingQuestion(true);
     try {
+      const audienceForSourcing = buildDetailedAudiencePrompt(matrixMeta?.audience || audience, audienceDetail);
       const result = await runUserAction({
         actionName: 'ask-cultural-question',
         action: () =>
           askMatrixQuestion(matrix, matrixQuestion, {
-            audience: matrixMeta?.audience,
+            audience: audienceForSourcing,
             brand: matrixMeta?.brand,
             topicFocus: matrixMeta?.topicFocus,
             generations: matrixMeta?.generations,
@@ -2377,7 +2411,12 @@ export default function CulturalArchaeologist() {
     setDeepDiveResult(null);
     setIsDeepDiveLoading(true);
     try {
-      const result = await generateDeepDive(item, matrixMeta);
+      const result = await generateDeepDive(item, {
+        audience: buildDetailedAudiencePrompt(matrixMeta.audience || audience, audienceDetail),
+        brand: matrixMeta.brand,
+        generations: matrixMeta.generations,
+        topicFocus: matrixMeta.topicFocus,
+      });
       if (!result || typeof result !== 'object') throw new Error('No deep dive result');
       setDeepDiveResult(result);
     } catch (err) {
@@ -2574,6 +2613,7 @@ export default function CulturalArchaeologist() {
     const hasRefinementPrompt = refinementPrompt.length > 0;
     const normalizedTargetSegmentCount = clampSegmentationTargetCount(segmentationTargetCount);
     const segmentCustomizationDirectives = [...segmentationCustomizationInstructions];
+    const audienceForSegmentation = buildDetailedAudiencePrompt(matrixMeta.audience || audience, audienceDetail);
     const originalSegmentationCandidate = hasRefinementPrompt
       ? (originalSegmentationResult || segmentationResult)
       : null;
@@ -2584,6 +2624,7 @@ export default function CulturalArchaeologist() {
 
     console.log('[CulturalArchaeologist] Running segmentation analysis from tab.', {
       audience: matrixMeta.audience,
+      audienceForSegmentationLength: audienceForSegmentation.length,
       brand: matrixMeta.brand,
       generations: matrixMeta.generations,
       topicFocus: segmentationTopicFocus,
@@ -2614,7 +2655,7 @@ export default function CulturalArchaeologist() {
         actionName: 'generate-audience-segmentation',
         action: () =>
           generateAudienceSegmentation(matrixForSegmentation, {
-            audience: matrixMeta.audience,
+            audience: audienceForSegmentation,
             brand: matrixMeta.brand,
             topicFocus: segmentationTopicFocus,
             generations: matrixMeta.generations,
@@ -4436,7 +4477,22 @@ export default function CulturalArchaeologist() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               <div className="relative flex flex-col w-full self-start">
                 <div data-testid="cultural-audience-field" className="relative flex items-center w-full h-14">
-                  <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                  <button
+                    type="button"
+                    data-testid="cultural-audience-detail-toggle"
+                    aria-label="Toggle detailed audience definition"
+                    aria-expanded={isAudienceDetailOpen}
+                    onClick={() => {
+                      setIsAudienceDetailOpen((wasOpen) => {
+                        const nextOpen = !wasOpen;
+                        console.log('[CulturalArchaeologist] Audience detail input toggled.', { isOpen: nextOpen });
+                        return nextOpen;
+                      });
+                    }}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                  >
+                    <Users className="w-5 h-5" />
+                  </button>
                   <input
                     type="text"
                     value={audience}
@@ -4469,6 +4525,24 @@ export default function CulturalArchaeologist() {
                 </div>
                 {showValidation && !audience.trim() && (
                   <span className="text-red-500 text-sm mt-1 ml-2 text-left">Audience is required to generate insights.</span>
+                )}
+                {isAudienceDetailOpen && (
+                  <div data-testid="cultural-audience-detail-box" className="mt-2 ml-2">
+                    <label htmlFor="cultural-audience-detail-input" className="mb-1 block text-xs font-medium text-zinc-500">
+                      Detailed audience definition (optional)
+                    </label>
+                    <textarea
+                      id="cultural-audience-detail-input"
+                      data-testid="cultural-audience-detail-input"
+                      value={audienceDetail}
+                      onChange={(event) => {
+                        setAudienceDetail(event.target.value);
+                      }}
+                      placeholder={`Add more audience details.\n- Demographics\n- Motivations\n- Behaviors`}
+                      className="w-full min-h-[128px] rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-y"
+                      disabled={isLoading}
+                    />
+                  </div>
                 )}
                 <InputGuidance
                   baseTestId="cultural-audience-guidance"
@@ -5035,6 +5109,8 @@ export default function CulturalArchaeologist() {
                       setBrandInput(sm.brand || '');
                     }
                     setAudience(sm.audience);
+                    setAudienceDetail('');
+                    setIsAudienceDetailOpen(false);
                     setSelectedGenerations(sm.generations || []);
                     setTopicFocus(sm.topicFocus || '');
                     setSourcesType(sm.sourcesType || []);
