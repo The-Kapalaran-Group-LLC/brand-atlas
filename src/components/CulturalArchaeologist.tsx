@@ -1187,6 +1187,8 @@ export default function CulturalArchaeologist() {
 
   const [isGeneratingDeepDives, setIsGeneratingDeepDives] = useState(false);
   const [deepDiveProgress, setDeepDiveProgress] = useState({ current: 0, total: 0 });
+  const [isInsightDeepDivesButtonHovered, setIsInsightDeepDivesButtonHovered] = useState(false);
+  const [deepDivePersistenceContext, setDeepDivePersistenceContext] = useState<DeepDivePersistenceContext | null>(null);
 
   const [selectedConfidenceFilters, setSelectedConfidenceFilters] = useState<ConfidenceLevelFilter[]>([]);
   const [selectedEvidenceFilters, setSelectedEvidenceFilters] = useState<EvidenceLabelFilter[]>([]);
@@ -1473,6 +1475,15 @@ export default function CulturalArchaeologist() {
       sourcesType: sm.sourcesType || [],
       hasUploadedDocuments: sm.hasUploadedDocuments || false,
     });
+    const persistedRowId = toSupabaseRowId(sm.id);
+    setDeepDivePersistenceContext(
+      persistedRowId
+        ? {
+            tableName: resolvedCulturalTable,
+            rowId: persistedRowId,
+          }
+        : null
+    );
     const recentItem: CulturalRecentResult = {
       id: sm.id,
       title: (sm.customName || sm.brand || 'Saved Cultural Result').trim(),
@@ -1657,6 +1668,7 @@ export default function CulturalArchaeologist() {
     setMatrixQuestion('');
     setMatrixAnswer('');
     setHighlightedInsights([]);
+    setDeepDivePersistenceContext(null);
     setActiveResultsTab('segmentation');
     const hydratedSegmentationAccess = Boolean(snapshot.isSegmentationAuthorized);
     setIsSegmentationAuthorized(hydratedSegmentationAccess);
@@ -2041,6 +2053,7 @@ export default function CulturalArchaeologist() {
     setSuggestionsRetryNonce(0);
     setFileReadErrors([]);
     setExportError(null);
+    setDeepDivePersistenceContext(null);
     resetSegmentationWorkspace('insights');
   };
 
@@ -2177,6 +2190,7 @@ export default function CulturalArchaeologist() {
       });
       saveRecentResult(APP_RECENT_RESULTS_MODES.CULTURAL_ARCHAEOLOGIST, generatedRecentItem);
       setRecentResultsRefreshNonce((prev) => prev + 1);
+      setDeepDivePersistenceContext(null);
 
       let persistedSupabaseRowId: string | null = null;
       try {
@@ -2211,6 +2225,11 @@ export default function CulturalArchaeologist() {
         if (!insertedRowId) {
           console.log('[CulturalArchaeologist] Supabase insert succeeded without a readable row id. Deep dives will remain local only.', {
             table: resolvedCulturalTable,
+          });
+        } else {
+          setDeepDivePersistenceContext({
+            tableName: resolvedCulturalTable,
+            rowId: insertedRowId,
           });
         }
       } catch (saveErr) {
@@ -2382,7 +2401,13 @@ export default function CulturalArchaeologist() {
     setDeepDiveProgress({ current: 0, total: totalItems });
     let completed = 0;
 
-    const updatedMatrix = { ...currentMatrix };
+    let updatedMatrix: CulturalMatrix;
+    try {
+      updatedMatrix = structuredClone(currentMatrix);
+    } catch (cloneError) {
+      console.warn('[CulturalArchaeologist] structuredClone failed for deep-dive generation. Falling back to JSON clone.', cloneError);
+      updatedMatrix = JSON.parse(JSON.stringify(currentMatrix)) as CulturalMatrix;
+    }
 
     for (const category of categories) {
       const items = updatedMatrix[category] as MatrixItem[];
@@ -2460,6 +2485,56 @@ export default function CulturalArchaeologist() {
       setToast('Insight deep dives are complete');
     }
     setIsGeneratingDeepDives(false);
+  };
+
+  const handleRefreshAllDeepDives = async () => {
+    console.log('[CulturalArchaeologist] Insight Deep Dives control clicked.', {
+      hasMatrix: Boolean(matrix),
+      hasMatrixMeta: Boolean(matrixMeta),
+      isGeneratingDeepDives,
+      activeResultsTab,
+    });
+    setActiveResultsTab('insights');
+
+    if (!matrix || !matrixMeta) {
+      console.log('[CulturalArchaeologist] Insight deep-dive refresh skipped due to missing matrix context.');
+      return;
+    }
+
+    if (isGeneratingDeepDives) {
+      console.log('[CulturalArchaeologist] Insight deep-dive refresh skipped because generation is already in progress.');
+      setToast('Insight deep dives are already refreshing.');
+      return;
+    }
+
+    const totalItems = MATRIX_INSIGHT_KEYS.reduce((count, category) => {
+      const items = matrix[category] as MatrixItem[] | undefined;
+      return count + (Array.isArray(items) ? items.length : 0);
+    }, 0);
+
+    if (totalItems === 0) {
+      console.log('[CulturalArchaeologist] Insight deep-dive refresh skipped because no insights are available.');
+      setToast('No insights available to refresh yet.');
+      return;
+    }
+
+    console.log('[CulturalArchaeologist] Starting manual refresh for all insight deep dives.', {
+      totalItems,
+      persistenceTable: deepDivePersistenceContext?.tableName || null,
+      persistenceRowId: deepDivePersistenceContext?.rowId || null,
+    });
+    setToast('Refreshing insight deep dives...');
+
+    await runBackgroundDeepDives(
+      matrix,
+      {
+        audience: buildDetailedAudiencePrompt(matrixMeta.audience || audience, audienceDetail),
+        brand: matrixMeta.brand || '',
+        generations: matrixMeta.generations || [],
+        topicFocus: matrixMeta.topicFocus,
+      },
+      deepDivePersistenceContext || undefined,
+    );
   };
 
   const handleAskQuestion = async () => {
@@ -5240,6 +5315,7 @@ export default function CulturalArchaeologist() {
                 }
                 if (item.matrix && item.matrixMeta) {
                   resetSegmentationWorkspace('insights');
+                  setDeepDivePersistenceContext(null);
                   setMatrix(item.matrix);
                   setMatrixMeta(item.matrixMeta);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -5556,9 +5632,12 @@ export default function CulturalArchaeologist() {
                     type="button"
                     data-testid="insight-deep-dives-button"
                     aria-pressed={activeResultsTab === 'insights'}
+                    onMouseEnter={() => setIsInsightDeepDivesButtonHovered(true)}
+                    onMouseLeave={() => setIsInsightDeepDivesButtonHovered(false)}
+                    onFocus={() => setIsInsightDeepDivesButtonHovered(true)}
+                    onBlur={() => setIsInsightDeepDivesButtonHovered(false)}
                     onClick={() => {
-                      console.log('[CulturalArchaeologist] Switching to insights tab.');
-                      setActiveResultsTab('insights');
+                      void handleRefreshAllDeepDives();
                     }}
                     className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm transition-colors ${
                       activeResultsTab === 'insights'
@@ -5566,7 +5645,17 @@ export default function CulturalArchaeologist() {
                         : 'text-zinc-600 hover:text-zinc-800'
                     }`}
                   >
-                    <Target className={`w-4 h-4 ${activeResultsTab === 'insights' ? 'text-zinc-700' : 'text-zinc-400'}`} />
+                    {isInsightDeepDivesButtonHovered || isGeneratingDeepDives ? (
+                      <RefreshCw
+                        data-testid="insight-deep-dives-icon-refresh"
+                        className={`w-4 h-4 ${isGeneratingDeepDives ? 'animate-spin' : ''} ${activeResultsTab === 'insights' ? 'text-zinc-700' : 'text-zinc-400'}`}
+                      />
+                    ) : (
+                      <Target
+                        data-testid="insight-deep-dives-icon-target"
+                        className={`w-4 h-4 ${activeResultsTab === 'insights' ? 'text-zinc-700' : 'text-zinc-400'}`}
+                      />
+                    )}
                     <span>Insight Deep Dives</span>
                   </button>
                   <button
@@ -5854,7 +5943,7 @@ export default function CulturalArchaeologist() {
 
                   <div
                     data-testid="matrix-cards-layout"
-                    className="grid grid-cols-[repeat(auto-fit,minmax(19rem,1fr))] gap-6"
+                    className="grid grid-cols-1 gap-6 justify-center sm:grid-cols-[repeat(auto-fit,minmax(19rem,19rem))]"
                   >
                     <MatrixCard title="Moments" sectionKey="moments" sectionAnchorId="cultural-result-section-moments" subtext="External forces shaping their behavior" items={displayMatrix?.moments || []} delay={0.1} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.moments || []).length === 0 || (displayMatrix?.moments || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('moments', 'Moments'); }} />
                     <MatrixCard title="Beliefs" sectionKey="beliefs" sectionAnchorId="cultural-result-section-beliefs" subtext="Values they’re operating from" items={displayMatrix?.beliefs || []} delay={0.2} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.beliefs || []).length === 0 || (displayMatrix?.beliefs || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('beliefs', 'Beliefs'); }} />
@@ -5914,6 +6003,7 @@ export default function CulturalArchaeologist() {
                 }
                 if (item.matrix && item.matrixMeta) {
                   resetSegmentationWorkspace('insights');
+                  setDeepDivePersistenceContext(null);
                   setMatrix(item.matrix);
                   setMatrixMeta(item.matrixMeta);
                   window.scrollTo({ top: 0, behavior: 'smooth' });

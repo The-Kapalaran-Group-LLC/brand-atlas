@@ -962,6 +962,61 @@ describe('CulturalArchaeologist', () => {
     });
   });
 
+  it('swaps the insight deep dives icon on hover and refreshes all deep dives on click', async () => {
+    generateDeepDivesBatch.mockReset();
+    generateDeepDivesBatch
+      .mockResolvedValueOnce([
+        {
+          originationDate: '2026-06-02',
+          relevance: 'Initial',
+          expandedContext: 'Initial deep dive context.',
+          strategicImplications: ['Initial implication'],
+          realWorldExamples: ['Initial example'],
+          sources: [{ title: 'Initial Source', url: 'https://example.com/initial' }],
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          originationDate: '2026-06-11',
+          relevance: 'Refreshed',
+          expandedContext: 'Refreshed deep dive context.',
+          strategicImplications: ['Refreshed implication'],
+          realWorldExamples: ['Refreshed example'],
+          sources: [{ title: 'Refreshed Source', url: 'https://example.com/refreshed' }],
+        },
+      ]);
+
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    expect(await screen.findByText('Insight deep dives are complete')).toBeInTheDocument();
+    expect(generateDeepDivesBatch).toHaveBeenCalledTimes(1);
+
+    const deepDiveButton = await screen.findByTestId('insight-deep-dives-button');
+    expect(screen.getByTestId('insight-deep-dives-icon-target')).toBeInTheDocument();
+    expect(screen.queryByTestId('insight-deep-dives-icon-refresh')).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(deepDiveButton);
+    expect(screen.getByTestId('insight-deep-dives-icon-refresh')).toBeInTheDocument();
+    expect(screen.queryByTestId('insight-deep-dives-icon-target')).not.toBeInTheDocument();
+
+    fireEvent.click(deepDiveButton);
+
+    await waitFor(() => {
+      expect(generateDeepDivesBatch).toHaveBeenCalledTimes(2);
+    });
+    const refreshedItems = generateDeepDivesBatch.mock.calls[1]?.[0];
+    expect(Array.isArray(refreshedItems)).toBe(true);
+    expect(refreshedItems).toHaveLength(1);
+    expect(refreshedItems?.[0]?.text).toContain('First signal');
+
+    fireEvent.mouseLeave(deepDiveButton);
+    expect(screen.getByTestId('insight-deep-dives-icon-target')).toBeInTheDocument();
+  });
+
   it('persists deep dives back into Supabase results JSONB after background generation completes', async () => {
     generateDeepDivesBatch.mockResolvedValueOnce([
       {
@@ -1317,7 +1372,7 @@ describe('CulturalArchaeologist', () => {
     expect(screen.getByText('Women and non-binary skew')).toBeInTheDocument();
   });
 
-  it('uses dynamic masonry-style layout for matrix cards so expanded cards can reflow without row gaps', async () => {
+  it('uses fixed-width responsive columns for matrix cards so wider windows add columns without stretching cards', async () => {
     render(<CulturalArchaeologist />);
 
     const main = screen.getByRole('main');
@@ -1330,7 +1385,10 @@ describe('CulturalArchaeologist', () => {
 
     const layout = await screen.findByTestId('matrix-cards-layout');
     expect(layout.className).toContain('grid');
-    expect(layout.className).toContain('grid-cols-[repeat(auto-fit,minmax(19rem,1fr))]');
+    expect(layout.className).toContain('grid-cols-1');
+    expect(layout.className).toContain('sm:grid-cols-[repeat(auto-fit,minmax(19rem,19rem))]');
+    expect(layout.className).toContain('justify-center');
+    expect(layout.className).not.toContain('minmax(19rem,1fr)');
     expect(layout.className).not.toContain('md:grid-cols-2');
     expect(layout.className).not.toContain('lg:grid-cols-3');
     expect(layout.className).not.toContain('columns-1');
