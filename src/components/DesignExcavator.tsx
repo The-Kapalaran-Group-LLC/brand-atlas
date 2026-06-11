@@ -64,7 +64,7 @@ const useAllVisualsLoaded = (
   return { allVisualsLoaded, handleImageLoad, handleImageError, expectedCount };
 };
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Info, Users, Trash2, Plus, Crosshair, Loader2, Presentation, FileText, ImageIcon, Type, Palette, Clock, ExternalLink, Share2, Globe, Tag, Sparkles, ArrowLeft, RefreshCw, X, Pipette, Menu } from 'lucide-react';
+import { Search, Info, ChevronDown, Trash2, Plus, Crosshair, Loader2, Presentation, FileText, ImageIcon, Type, Palette, Clock, ExternalLink, Share2, Globe, Tag, Sparkles, ArrowLeft, RefreshCw, X, Pipette, Menu } from 'lucide-react';
 import { CompassRoseIcon } from './icons/CompassRoseIcon';
 import { navigateToHashRoute } from '../services/navigation';
 import { toSafeExternalHref } from '../services/external-links';
@@ -2992,23 +2992,20 @@ export function VisualDesignPage({ onBack }: VisualDesignPageProps) {
                   return nextOpen;
                 });
               }}
-              className="absolute left-3 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+              className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
             >
-              <Users className="w-5 h-5" />
+              <ChevronDown className={`w-5 h-5 transition-transform ${isTargetAudienceDetailOpen ? 'rotate-180' : ''}`} />
             </button>
             <input
               type="text"
               value={targetAudience}
               onChange={(e) => setTargetAudience(e.target.value.slice(0, MAX_EXCAVATOR_AUDIENCE_LENGTH))}
               placeholder="Target Audience (Optional)"
-              className="w-full bg-white pl-12 pr-4 py-3 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-left"
+              className="w-full bg-white pl-4 pr-12 py-3 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-left"
               disabled={isLoading}
             />
             {isTargetAudienceDetailOpen && (
               <div data-testid="design-audience-detail-box" className="mt-2">
-                <label htmlFor="design-audience-detail-input" className="mb-1 block text-xs font-medium text-zinc-500">
-                  Detailed audience definition (optional)
-                </label>
                 <textarea
                   id="design-audience-detail-input"
                   data-testid="design-audience-detail-input"

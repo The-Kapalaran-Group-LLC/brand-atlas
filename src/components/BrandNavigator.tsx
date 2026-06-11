@@ -15,7 +15,6 @@ import {
   ExternalLink,
   Info,
   Tag,
-  Users,
   Filter,
   ChevronDown,
   Check,
@@ -2439,9 +2438,9 @@ export default function BrandNavigator() {
                         return nextOpen;
                       });
                     }}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                   >
-                    <Users className="w-5 h-5" />
+                    <ChevronDown className={`w-5 h-5 transition-transform ${isAudienceDetailOpen ? 'rotate-180' : ''}`} />
                   </button>
                   <input
                     data-testid="audience-input"
@@ -2456,20 +2455,17 @@ export default function BrandNavigator() {
                       }
                     }}
                     placeholder="Primary Audience (Optional)"
-                    className="w-full h-14 pl-12 pr-12 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 text-left placeholder:text-left placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
+                    className="w-full h-14 pl-4 pr-20 py-0 bg-white border border-zinc-200 rounded-2xl text-zinc-900 text-left placeholder:text-left placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
                     disabled={isLoading}
                   />
                   {isDetecting && !audience.trim() && (
-                    <div className="absolute right-4 flex items-center justify-center">
+                    <div className="absolute right-12 flex items-center justify-center">
                       <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
                     </div>
                   )}
                 </div>
                 {isAudienceDetailOpen && (
                   <div data-testid="brand-audience-detail-box" className="mt-2 ml-2">
-                    <label htmlFor="brand-audience-detail-input" className="mb-1 block text-xs font-medium text-zinc-500">
-                      Detailed audience definition (optional)
-                    </label>
                     <textarea
                       id="brand-audience-detail-input"
                       data-testid="brand-audience-detail-input"

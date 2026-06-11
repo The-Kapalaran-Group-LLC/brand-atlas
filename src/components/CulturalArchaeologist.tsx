@@ -4490,9 +4490,9 @@ export default function CulturalArchaeologist() {
                         return nextOpen;
                       });
                     }}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                   >
-                    <Users className="w-5 h-5" />
+                    <ChevronDown className={`w-5 h-5 transition-transform ${isAudienceDetailOpen ? 'rotate-180' : ''}`} />
                   </button>
                   <input
                     type="text"
@@ -4514,12 +4514,12 @@ export default function CulturalArchaeologist() {
                       }
                     }}
                     placeholder="Primary Audience (Required) *"
-                    className={`w-full h-14 pl-12 pr-12 py-0 bg-white border ${showValidation && !audience.trim() ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : 'border-zinc-200 focus:ring-indigo-500/20 focus:border-indigo-500'} rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 transition-all shadow-sm text-sm`}
+                    className={`w-full h-14 pl-4 pr-20 py-0 bg-white border ${showValidation && !audience.trim() ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : 'border-zinc-200 focus:ring-indigo-500/20 focus:border-indigo-500'} rounded-2xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 transition-all shadow-sm text-sm`}
                     disabled={isLoading}
                     required
                   />
                   {isDetecting && !audience.trim() && (
-                    <div className="absolute right-4 flex items-center justify-center">
+                    <div className="absolute right-12 flex items-center justify-center">
                       <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
                     </div>
                   )}
@@ -4529,9 +4529,6 @@ export default function CulturalArchaeologist() {
                 )}
                 {isAudienceDetailOpen && (
                   <div data-testid="cultural-audience-detail-box" className="mt-2 ml-2">
-                    <label htmlFor="cultural-audience-detail-input" className="mb-1 block text-xs font-medium text-zinc-500">
-                      Detailed audience definition (optional)
-                    </label>
                     <textarea
                       id="cultural-audience-detail-input"
                       data-testid="cultural-audience-detail-input"

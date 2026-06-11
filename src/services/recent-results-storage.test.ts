@@ -3,7 +3,6 @@ import {
   APP_RECENT_RESULTS_MODES,
   clearRecentResults,
   getRecentResults,
-  MAX_RECENT_RESULTS,
   replaceRecentResults,
   removeRecentResult,
   saveRecentResult,
@@ -79,8 +78,10 @@ describe('recent-results-storage', () => {
     expect(results[1]?.id).toBe('b');
   });
 
-  it('caps history at MAX_RECENT_RESULTS', () => {
-    for (let i = 0; i < MAX_RECENT_RESULTS + 3; i += 1) {
+  it('stores all recent history entries without a cap', () => {
+    const totalEntries = 25;
+
+    for (let i = 0; i < totalEntries; i += 1) {
       saveRecentResult(APP_RECENT_RESULTS_MODES.BRAND_NAVIGATOR, {
         id: `id-${i}`,
         title: `Title ${i}`,
@@ -90,9 +91,9 @@ describe('recent-results-storage', () => {
 
     const results = getRecentResults<MockResult>(APP_RECENT_RESULTS_MODES.BRAND_NAVIGATOR);
 
-    expect(results).toHaveLength(MAX_RECENT_RESULTS);
-    expect(results[0]?.id).toBe(`id-${MAX_RECENT_RESULTS + 2}`);
-    expect(results[MAX_RECENT_RESULTS - 1]?.id).toBe('id-3');
+    expect(results).toHaveLength(totalEntries);
+    expect(results[0]?.id).toBe(`id-${totalEntries - 1}`);
+    expect(results[totalEntries - 1]?.id).toBe('id-0');
   });
 
   it('clears history for a single mode', () => {
