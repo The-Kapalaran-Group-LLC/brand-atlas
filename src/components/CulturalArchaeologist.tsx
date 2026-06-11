@@ -3512,15 +3512,45 @@ export default function CulturalArchaeologist() {
       { title: 'Influencers', data: matrix.influencers },
     ].map((section) => ({
       title: section.title,
-      cards: section.data.map((item, index) => ({
-        title: `Insight ${index + 1}`,
-        lines: [
-          item.text,
-          `Confidence: ${(item.confidenceLevel || 'medium').toUpperCase()}`,
-          item.sourceType ? `Source Type: ${item.sourceType}` : '',
-          item.deepDive?.expandedContext ? `Context: ${item.deepDive.expandedContext}` : '',
-        ].filter(Boolean),
-      })),
+      cards: section.data.flatMap((item, index) => {
+        const insightCard = {
+          title: `Insight ${index + 1}`,
+          lines: [
+            item.text,
+            `Confidence: ${(item.confidenceLevel || 'medium').toUpperCase()}`,
+            item.sourceType ? `Source Type: ${item.sourceType}` : '',
+          ].filter(Boolean),
+        };
+
+        if (!item.deepDive) {
+          return [insightCard];
+        }
+
+        const deepDive = item.deepDive;
+        const deepDiveLines = [
+          deepDive.expandedContext ? `Expanded Context: ${deepDive.expandedContext}` : '',
+          deepDive.relevance ? `Relevance: ${deepDive.relevance}` : '',
+          deepDive.originationDate ? `Originated: ${deepDive.originationDate}` : '',
+          ...(deepDive.strategicImplications || []).map((implication, implicationIndex) =>
+            `Strategic Implication ${implicationIndex + 1}: ${implication}`
+          ),
+          ...(deepDive.realWorldExamples || []).map((example, exampleIndex) =>
+            `Real-World Example ${exampleIndex + 1}: ${example}`
+          ),
+        ].filter(Boolean);
+
+        if (deepDiveLines.length === 0) {
+          return [insightCard];
+        }
+
+        return [
+          insightCard,
+          {
+            title: `Insight ${index + 1} Deep Dive`,
+            lines: deepDiveLines,
+          },
+        ];
+      }),
     }));
 
     if ((matrix.sources || []).length > 0) {

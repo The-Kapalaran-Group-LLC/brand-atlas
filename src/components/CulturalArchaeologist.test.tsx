@@ -14,6 +14,8 @@ const {
   generateDeepDive,
   generateDeepDivesBatch,
   generateAudienceSegmentation,
+  exportBrandAtlasDocumentToPdf,
+  exportBrandAtlasDocumentToPptx,
   supabaseFrom,
   supabaseInsert,
   supabaseUpdate,
@@ -27,6 +29,8 @@ const {
   generateDeepDive: vi.fn(),
   generateDeepDivesBatch: vi.fn(),
   generateAudienceSegmentation: vi.fn(),
+  exportBrandAtlasDocumentToPdf: vi.fn(),
+  exportBrandAtlasDocumentToPptx: vi.fn(),
   supabaseFrom: vi.fn(),
   supabaseInsert: vi.fn(),
   supabaseUpdate: vi.fn(),
@@ -42,6 +46,11 @@ vi.mock('../services/azure-openai', () => ({
   generateDeepDive,
   generateDeepDivesBatch,
   generateAudienceSegmentation,
+}));
+
+vi.mock('../services/brand-atlas-themed-export', () => ({
+  exportBrandAtlasDocumentToPdf,
+  exportBrandAtlasDocumentToPptx,
 }));
 
 vi.mock('../services/telemetry', () => ({
@@ -209,6 +218,8 @@ describe('CulturalArchaeologist', () => {
         },
       ],
     });
+    exportBrandAtlasDocumentToPdf.mockResolvedValue(undefined);
+    exportBrandAtlasDocumentToPptx.mockResolvedValue(undefined);
   });
 
   it('gates admin route behind password popout and unlocks admin console with correct password', async () => {
@@ -999,6 +1010,59 @@ describe('CulturalArchaeologist', () => {
     fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
 
     expect(await screen.findByText('Insight deep dives are complete')).toBeInTheDocument();
+  });
+
+  it('includes insight deep-dive content in both PDF and PPTX themed export payloads', async () => {
+    generateDeepDivesBatch.mockResolvedValueOnce([
+      {
+        originationDate: '2026-06-02',
+        relevance: 'High relevance for purchase intent framing.',
+        expandedContext: 'Deep dive context from batch generation.',
+        strategicImplications: ['Prioritize confidence-building social proof at launch.'],
+        realWorldExamples: ['Competing title bundles creator clips with demo missions.'],
+        sources: [{ title: 'Example Source', url: 'https://example.com' }],
+      },
+    ]);
+
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    expect(await screen.findByText('Insight deep dives are complete')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /pdf/i }));
+    await waitFor(() => {
+      expect(exportBrandAtlasDocumentToPdf).toHaveBeenCalledTimes(1);
+    });
+
+    const pdfDocument = exportBrandAtlasDocumentToPdf.mock.calls[0]?.[0] as any;
+    const pdfMomentsSection = pdfDocument.sections.find((section: any) => section.title === 'Moments');
+    const pdfDeepDiveCard = pdfMomentsSection.cards.find((card: any) => card.title === 'Insight 1 Deep Dive');
+    expect(pdfDeepDiveCard.lines).toEqual(expect.arrayContaining([
+      'Expanded Context: Deep dive context from batch generation.',
+      'Relevance: High relevance for purchase intent framing.',
+      'Originated: 2026-06-02',
+      'Strategic Implication 1: Prioritize confidence-building social proof at launch.',
+      'Real-World Example 1: Competing title bundles creator clips with demo missions.',
+    ]));
+
+    fireEvent.click(screen.getByRole('button', { name: /pptx/i }));
+    await waitFor(() => {
+      expect(exportBrandAtlasDocumentToPptx).toHaveBeenCalledTimes(1);
+    });
+
+    const pptxDocument = exportBrandAtlasDocumentToPptx.mock.calls[0]?.[0] as any;
+    const pptxMomentsSection = pptxDocument.sections.find((section: any) => section.title === 'Moments');
+    const pptxDeepDiveCard = pptxMomentsSection.cards.find((card: any) => card.title === 'Insight 1 Deep Dive');
+    expect(pptxDeepDiveCard.lines).toEqual(expect.arrayContaining([
+      'Expanded Context: Deep dive context from batch generation.',
+      'Relevance: High relevance for purchase intent framing.',
+      'Originated: 2026-06-02',
+      'Strategic Implication 1: Prioritize confidence-building social proof at launch.',
+      'Real-World Example 1: Competing title bundles creator clips with demo missions.',
+    ]));
   });
 
   it('renders mobile results navigation for all cultural result sections', async () => {
