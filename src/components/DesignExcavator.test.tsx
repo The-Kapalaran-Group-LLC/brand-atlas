@@ -484,6 +484,29 @@ describe('BrandDeepDivePage', () => {
     expect(firstCallInput.targetAudience).toContain('ingredient transparency');
   });
 
+  it('supports keyboard shortcuts for bullets in expanded audience field', async () => {
+    render(<BrandDeepDivePage onBack={() => {}} />);
+
+    fireEvent.click(screen.getByTestId('design-audience-detail-toggle'));
+    const detailInput = screen.getByTestId('design-audience-detail-input') as HTMLTextAreaElement;
+
+    detailInput.focus();
+    detailInput.setSelectionRange(0, 0);
+    fireEvent.keyDown(detailInput, { key: '8', code: 'Digit8', ctrlKey: true, shiftKey: true });
+
+    await waitFor(() => {
+      expect(detailInput).toHaveValue('- ');
+    });
+
+    fireEvent.change(detailInput, { target: { value: '- Prefers premium packaging' } });
+    detailInput.setSelectionRange(detailInput.value.length, detailInput.value.length);
+    fireEvent.keyDown(detailInput, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => {
+      expect(detailInput).toHaveValue('- Prefers premium packaging\n- ');
+    });
+  });
+
   it('moves focus to the next brand name input when pressing Enter', () => {
     render(<BrandDeepDivePage onBack={() => {}} />);
 

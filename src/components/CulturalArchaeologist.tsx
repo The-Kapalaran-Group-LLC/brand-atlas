@@ -54,6 +54,7 @@ import {
   playCompletionSound,
   type CompletionSoundId,
 } from '../services/completion-sound';
+import { handleTextareaBulletShortcuts } from '../services/textarea-bullet-shortcuts';
 
 
 
@@ -4537,6 +4538,13 @@ export default function CulturalArchaeologist() {
                       value={audienceDetail}
                       onChange={(event) => {
                         setAudienceDetail(event.target.value);
+                      }}
+                      onKeyDown={(event) => {
+                        handleTextareaBulletShortcuts(event, {
+                          value: audienceDetail,
+                          onValueChange: setAudienceDetail,
+                          logPrefix: 'CulturalArchaeologist',
+                        });
                       }}
                       placeholder={`Add more audience details.\n- Demographics\n- Motivations\n- Behaviors`}
                       className="w-full min-h-[128px] rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-y"

@@ -1500,6 +1500,29 @@ describe('CulturalArchaeologist', () => {
     expect(sourcedAudience).toContain('Prioritizes peer validation');
   });
 
+  it('supports keyboard shortcuts for bullets in expanded audience field', async () => {
+    render(<CulturalArchaeologist />);
+
+    fireEvent.click(screen.getByTestId('cultural-audience-detail-toggle'));
+    const detailInput = screen.getByTestId('cultural-audience-detail-input') as HTMLTextAreaElement;
+
+    detailInput.focus();
+    detailInput.setSelectionRange(0, 0);
+    fireEvent.keyDown(detailInput, { key: '8', code: 'Digit8', ctrlKey: true, shiftKey: true });
+
+    await waitFor(() => {
+      expect(detailInput).toHaveValue('- ');
+    });
+
+    fireEvent.change(detailInput, { target: { value: '- First signal' } });
+    detailInput.setSelectionRange(detailInput.value.length, detailInput.value.length);
+    fireEvent.keyDown(detailInput, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => {
+      expect(detailInput).toHaveValue('- First signal\n- ');
+    });
+  });
+
   it('keeps brand chip entry and topic input behavior working with guidance UI', async () => {
     render(<CulturalArchaeologist />);
 

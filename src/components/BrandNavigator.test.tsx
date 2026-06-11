@@ -441,6 +441,31 @@ describe('BrandNavigator', () => {
     expect(sourcedAudience).toContain('Actively repairs gear');
   });
 
+  it('supports keyboard shortcuts for bullets in expanded audience field', async () => {
+    render(<BrandNavigator />);
+    fireEvent.click(screen.getByTestId('menu-page-card-brand-navigator'));
+    await screen.findByTestId('audience-input');
+
+    fireEvent.click(screen.getByTestId('brand-audience-detail-toggle'));
+    const detailInput = screen.getByTestId('brand-audience-detail-input') as HTMLTextAreaElement;
+
+    detailInput.focus();
+    detailInput.setSelectionRange(0, 0);
+    fireEvent.keyDown(detailInput, { key: '8', code: 'Digit8', ctrlKey: true, shiftKey: true });
+
+    await waitFor(() => {
+      expect(detailInput).toHaveValue('- ');
+    });
+
+    fireEvent.change(detailInput, { target: { value: '- Audience need state' } });
+    detailInput.setSelectionRange(detailInput.value.length, detailInput.value.length);
+    fireEvent.keyDown(detailInput, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => {
+      expect(detailInput).toHaveValue('- Audience need state\n- ');
+    });
+  });
+
   it('falls back to local suggestions when API suggestions are empty', async () => {
     suggestBrands.mockResolvedValue([]);
     render(<BrandNavigator />);

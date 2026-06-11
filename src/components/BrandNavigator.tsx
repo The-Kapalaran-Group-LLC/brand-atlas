@@ -81,6 +81,7 @@ import {
   playCompletionSound,
   type CompletionSoundId,
 } from '../services/completion-sound';
+import { handleTextareaBulletShortcuts } from '../services/textarea-bullet-shortcuts';
 
 const BRAND_NAVIGATOR_TABLE = 'Brand_Navigator';
 const BRAND_NAVIGATOR_SHOW_THINKING_TEXT = 'Used a RAG pipeline: retrieved high-signal brand/category sources, re-ranked for relevance, extracted structured positioning evidence, and generated recommendations grounded in cited inputs.';
@@ -2474,6 +2475,13 @@ export default function BrandNavigator() {
                       data-testid="brand-audience-detail-input"
                       value={audienceDetail}
                       onChange={(event) => setAudienceDetail(event.target.value)}
+                      onKeyDown={(event) => {
+                        handleTextareaBulletShortcuts(event, {
+                          value: audienceDetail,
+                          onValueChange: setAudienceDetail,
+                          logPrefix: 'BrandNavigator',
+                        });
+                      }}
                       placeholder={`Add more audience details.\n- Demographics\n- Motivations\n- Behaviors`}
                       className="w-full min-h-[128px] rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-y"
                       disabled={isLoading}
