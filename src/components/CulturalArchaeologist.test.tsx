@@ -1257,9 +1257,9 @@ describe('CulturalArchaeologist', () => {
 
     const layout = await screen.findByTestId('matrix-cards-layout');
     expect(layout.className).toContain('grid');
-    expect(layout.className).toContain('grid-cols-1');
-    expect(layout.className).toContain('md:grid-cols-2');
-    expect(layout.className).toContain('lg:grid-cols-3');
+    expect(layout.className).toContain('grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]');
+    expect(layout.className).not.toContain('md:grid-cols-2');
+    expect(layout.className).not.toContain('lg:grid-cols-3');
     expect(layout.className).not.toContain('columns-1');
   });
 
