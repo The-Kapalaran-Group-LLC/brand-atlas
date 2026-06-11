@@ -38,6 +38,11 @@ import {
   saveRecentResult,
   type RecentResultRecord,
 } from '../services/recent-results-storage';
+import {
+  APP_AUDIENCE_HISTORY_MODES,
+  getAudienceHistory,
+  saveAudienceHistoryEntry,
+} from '../services/audience-history';
 import { SourceLinkRow } from './SourceLinkRow';
 import { MobileTwoLineSubcopy } from './MobileTwoLineSubcopy';
 import { MobileResultsNav } from './MobileResultsNav';
@@ -102,6 +107,12 @@ interface OAuthTokenResponse {
   access_token: string;
   error?: string;
 }
+
+type UserTelemetry = {
+  device: string;
+  location: string;
+  ip_address: string;
+};
 
 type MatrixInsightKey =
   | 'moments'
@@ -1084,6 +1095,10 @@ export default function CulturalArchaeologist() {
   const [brandInput, setBrandInput] = useState('');
   const [audience, setAudience] = useState('');
   const [audienceDetail, setAudienceDetail] = useState('');
+  const [savedAudiencesByIp, setSavedAudiencesByIp] = useState<string[]>([]);
+  const [isAudienceHistoryOpen, setIsAudienceHistoryOpen] = useState(false);
+  const [userTelemetry, setUserTelemetry] = useState<UserTelemetry | null>(null);
+  const userTelemetryRef = useRef<UserTelemetry | null>(null);
   const [isAudienceDetailOpen, setIsAudienceDetailOpen] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
@@ -1145,6 +1160,7 @@ export default function CulturalArchaeologist() {
   const [savedMatrices, setSavedMatrices] = useState<SavedMatrix[]>([]);
   const [resolvedCulturalTable, setResolvedCulturalTable] = useState<string>(CULTURAL_ARCHAEOLOGIST_TABLE);
   const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState(false);
+  const audienceHistoryRef = useRef<HTMLDivElement>(null);
   const brandDropdownRef = useRef<HTMLDivElement>(null);
   
   const [isLoading, setIsLoading] = useState(false);
@@ -1203,6 +1219,41 @@ export default function CulturalArchaeologist() {
     );
   }, [brandInput, visibleSavedMatrices]);
 
+  const resolveTelemetryForSession = useCallback(async (): Promise<UserTelemetry> => {
+    if (userTelemetryRef.current) {
+      return userTelemetryRef.current;
+    }
+
+    const resolvedTelemetry = await getUserTelemetry();
+    userTelemetryRef.current = resolvedTelemetry;
+    setUserTelemetry(resolvedTelemetry);
+    console.log('[CulturalArchaeologist] Resolved telemetry for session.', {
+      device: resolvedTelemetry.device,
+      location: resolvedTelemetry.location,
+      hasIpAddress: Boolean((resolvedTelemetry.ip_address || '').trim()),
+    });
+    return resolvedTelemetry;
+  }, []);
+
+  const filteredAudienceHistory = useMemo(() => {
+    const query = (audience || '').trim().toLowerCase();
+    return savedAudiencesByIp
+      .filter((entry) => {
+        const normalizedEntry = (entry || '').trim().toLowerCase();
+        if (!normalizedEntry) {
+          return false;
+        }
+        if (!query) {
+          return true;
+        }
+        if (normalizedEntry === query) {
+          return false;
+        }
+        return normalizedEntry.includes(query);
+      })
+      .slice(0, 8);
+  }, [audience, savedAudiencesByIp]);
+
   const openResultsFiltersHeadingTooltip = useCallback((reason: string) => {
     setIsResultsFiltersHeadingTooltipOpen((wasOpen) => {
       if (!wasOpen) {
@@ -1248,6 +1299,39 @@ export default function CulturalArchaeologist() {
       document.removeEventListener('keydown', handleEscape);
     };
   }, [closeResultsFiltersHeadingTooltip, isResultsFiltersHeadingTooltipOpen]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAudienceHistoryForCurrentIp = async () => {
+      try {
+        const telemetryForHistory = userTelemetry ?? await resolveTelemetryForSession();
+        if (cancelled) {
+          return;
+        }
+        const history = getAudienceHistory(
+          APP_AUDIENCE_HISTORY_MODES.CULTURAL_ARCHAEOLOGIST,
+          telemetryForHistory.ip_address
+        );
+        setSavedAudiencesByIp(history);
+        console.log('[CulturalArchaeologist] Loaded IP-gated audience history.', {
+          ipAddress: (telemetryForHistory.ip_address || '').trim() || 'missing',
+          count: history.length,
+        });
+      } catch (error) {
+        console.warn('[CulturalArchaeologist] Failed to load IP-gated audience history.', error);
+        if (!cancelled) {
+          setSavedAudiencesByIp([]);
+        }
+      }
+    };
+
+    void loadAudienceHistoryForCurrentIp();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolveTelemetryForSession, userTelemetry]);
 
   const activeRerunFilters = useMemo<CulturalRerunFilters>(() => ({
     confidenceLevels: [...selectedConfidenceFilters],
@@ -1709,6 +1793,9 @@ export default function CulturalArchaeologist() {
       if (brandDropdownRef.current && !brandDropdownRef.current.contains(event.target as Node)) {
         setIsBrandDropdownOpen(false);
       }
+      if (audienceHistoryRef.current && !audienceHistoryRef.current.contains(event.target as Node)) {
+        setIsAudienceHistoryOpen(false);
+      }
       if (sourcesDropdownRef.current && !sourcesDropdownRef.current.contains(event.target as Node)) {
         setIsSourcesDropdownOpen(false);
       }
@@ -2050,6 +2137,25 @@ export default function CulturalArchaeologist() {
         sourcesType: sourcesTypeValue,
         hasUploadedDocuments,
       });
+      const telemetryForSession = userTelemetry ?? await resolveTelemetryForSession();
+      const ipAddressForAudienceHistory = (telemetryForSession.ip_address || '').trim();
+      if (ipAddressForAudienceHistory) {
+        const nextAudienceHistory = saveAudienceHistoryEntry(
+          APP_AUDIENCE_HISTORY_MODES.CULTURAL_ARCHAEOLOGIST,
+          ipAddressForAudienceHistory,
+          audienceValue
+        );
+        setSavedAudiencesByIp(nextAudienceHistory);
+        console.log('[CulturalArchaeologist] Updated IP-gated audience history after generation.', {
+          ipAddress: ipAddressForAudienceHistory,
+          audience: audienceValue,
+          nextCount: nextAudienceHistory.length,
+        });
+      } else {
+        console.log('[CulturalArchaeologist] Skipped audience history save because IP address is unavailable.', {
+          audience: audienceValue,
+        });
+      }
       const generatedRecentId = `generated:${brandContextValue.toLowerCase()}|${audienceValue.toLowerCase()}|${topicFocusValue.toLowerCase()}`;
       const generatedRecentItem: CulturalRecentResult = {
         id: generatedRecentId,
@@ -2074,7 +2180,7 @@ export default function CulturalArchaeologist() {
 
       let persistedSupabaseRowId: string | null = null;
       try {
-        const { device, location, ip_address } = await getUserTelemetry();
+        const { device, location, ip_address } = telemetryForSession;
         const { data: insertedRow, error: saveError } = await supabase
           .from(resolvedCulturalTable)
           .insert([
@@ -3740,7 +3846,9 @@ export default function CulturalArchaeologist() {
         <div className="absolute -bottom-[10%] left-[20%] w-[60%] h-[60%] rounded-full bg-fuchsia-200/20 blur-[120px]" />
       </div>
 
-      <main className={`relative z-10 flex-1 w-full max-w-6xl mx-auto px-6 ${activeExperience === null ? 'py-6 md:py-10' : 'py-16 md:py-24'}`}>
+      <main
+        className={`relative z-10 flex-1 w-full ${activeExperience === 'research' ? 'max-w-[calc(100vw-3rem)]' : 'max-w-6xl'} mx-auto px-6 ${activeExperience === null ? 'py-6 md:py-10' : 'py-16 md:py-24'}`}
+      >
         {activeExperience === null && (
           <MenuPage
             subtitle="Start with cultural research, run a brand audit, or jump into a visual identity analysis."
@@ -4481,7 +4589,7 @@ export default function CulturalArchaeologist() {
             className={`w-full max-w-4xl mt-4 sm:mt-10 relative flex flex-col gap-4 pb-24 sm:pb-0 ${isResearchControlsMinimized ? 'hidden' : ''}`}
           >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-              <div className="relative flex flex-col w-full self-start">
+              <div className="relative flex flex-col w-full self-start" ref={audienceHistoryRef}>
                 <div data-testid="cultural-audience-field" className="relative flex items-center w-full h-14">
                   <button
                     type="button"
@@ -4505,6 +4613,9 @@ export default function CulturalArchaeologist() {
                     onChange={(e) => {
                       const nextAudience = e.target.value.slice(0, MAX_CULTURAL_AUDIENCE_INPUT_LENGTH);
                       setAudience(nextAudience);
+                      if (savedAudiencesByIp.length > 0) {
+                        setIsAudienceHistoryOpen(true);
+                      }
                       if (
                         segmentRerunContext &&
                         nextAudience.trim().toLowerCase() !== segmentRerunContext.audience.trim().toLowerCase()
@@ -4512,6 +4623,11 @@ export default function CulturalArchaeologist() {
                         setSegmentRerunContext(null);
                       }
                       if (showValidation) setShowValidation(false);
+                    }}
+                    onFocus={() => {
+                      if (filteredAudienceHistory.length > 0) {
+                        setIsAudienceHistoryOpen(true);
+                      }
                     }}
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
@@ -4529,6 +4645,42 @@ export default function CulturalArchaeologist() {
                     </div>
                   )}
                 </div>
+                <AnimatePresence>
+                  {isAudienceHistoryOpen && filteredAudienceHistory.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.15 }}
+                      data-testid="cultural-audience-history-dropdown"
+                      className="absolute top-full left-0 z-20 mt-2 w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-lg"
+                    >
+                      <div className="border-b border-zinc-100 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                        Previous Audiences
+                      </div>
+                      <div className="max-h-56 overflow-y-auto p-2">
+                        {filteredAudienceHistory.map((savedAudience, index) => (
+                          <button
+                            key={`${savedAudience}-${index}`}
+                            type="button"
+                            data-testid={`cultural-audience-history-item-${index}`}
+                            onClick={() => {
+                              console.log('[CulturalArchaeologist] Applied saved audience from IP-gated history.', {
+                                audience: savedAudience,
+                                index,
+                              });
+                              setAudience(savedAudience);
+                              setIsAudienceHistoryOpen(false);
+                            }}
+                            className="w-full rounded-xl px-3 py-2 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-50 focus:bg-zinc-50 focus:outline-none"
+                          >
+                            {savedAudience}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 {showValidation && !audience.trim() && (
                   <span className="text-red-500 text-sm mt-1 ml-2 text-left">Audience is required to generate insights.</span>
                 )}
@@ -5672,7 +5824,7 @@ export default function CulturalArchaeologist() {
 
                   <div
                     data-testid="matrix-cards-layout"
-                    className="grid grid-cols-[repeat(auto-fit,minmax(20rem,1fr))] gap-6"
+                    className="grid grid-cols-[repeat(auto-fit,minmax(19rem,1fr))] gap-6"
                   >
                     <MatrixCard title="Moments" sectionKey="moments" sectionAnchorId="cultural-result-section-moments" subtext="External forces shaping their behavior" items={displayMatrix?.moments || []} delay={0.1} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.moments || []).length === 0 || (displayMatrix?.moments || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('moments', 'Moments'); }} />
                     <MatrixCard title="Beliefs" sectionKey="beliefs" sectionAnchorId="cultural-result-section-beliefs" subtext="Values they’re operating from" items={displayMatrix?.beliefs || []} delay={0.2} highlightedInsights={highlightedInsights} onDeepDive={handleDeepDive} showDocumentInsights={Boolean(matrixMeta?.hasUploadedDocuments)} showRefresh={(displayMatrix?.beliefs || []).length === 0 || (displayMatrix?.beliefs || []).every((item) => isMatrixItemMissing(item))} isRefreshing={isLoading} onRefresh={() => { void handleRefreshCulturalSection('beliefs', 'Beliefs'); }} />

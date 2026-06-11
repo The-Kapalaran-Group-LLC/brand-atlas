@@ -1,6 +1,11 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CulturalArchaeologist from './CulturalArchaeologist';
+import {
+  APP_AUDIENCE_HISTORY_MODES,
+  getAudienceHistory,
+  saveAudienceHistoryEntry,
+} from '../services/audience-history';
 
 const {
   generateCulturalMatrix,
@@ -1251,16 +1256,70 @@ describe('CulturalArchaeologist', () => {
   it('uses dynamic masonry-style layout for matrix cards so expanded cards can reflow without row gaps', async () => {
     render(<CulturalArchaeologist />);
 
+    const main = screen.getByRole('main');
+    expect(main.className).toContain('max-w-[calc(100vw-3rem)]');
+    expect(main.className).not.toContain('max-w-6xl');
+
     const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
     fireEvent.change(audienceInput, { target: { value: 'Gen Z sneaker culture' } });
     fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
 
     const layout = await screen.findByTestId('matrix-cards-layout');
     expect(layout.className).toContain('grid');
-    expect(layout.className).toContain('grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]');
+    expect(layout.className).toContain('grid-cols-[repeat(auto-fit,minmax(19rem,1fr))]');
     expect(layout.className).not.toContain('md:grid-cols-2');
     expect(layout.className).not.toContain('lg:grid-cols-3');
     expect(layout.className).not.toContain('columns-1');
+  });
+
+  it('shows previous audiences for the same IP in the audience field and allows reuse', async () => {
+    saveAudienceHistoryEntry(
+      APP_AUDIENCE_HISTORY_MODES.CULTURAL_ARCHAEOLOGIST,
+      '127.0.0.1',
+      'Gen Z sneaker culture'
+    );
+    saveAudienceHistoryEntry(
+      APP_AUDIENCE_HISTORY_MODES.CULTURAL_ARCHAEOLOGIST,
+      '127.0.0.1',
+      'Millennial home buyers'
+    );
+    saveAudienceHistoryEntry(
+      APP_AUDIENCE_HISTORY_MODES.CULTURAL_ARCHAEOLOGIST,
+      '10.0.0.7',
+      'Should not appear'
+    );
+
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *') as HTMLInputElement;
+    fireEvent.focus(audienceInput);
+
+    const audienceDropdown = await screen.findByTestId('cultural-audience-history-dropdown');
+    expect(within(audienceDropdown).getByText('Gen Z sneaker culture')).toBeInTheDocument();
+    expect(within(audienceDropdown).getByText('Millennial home buyers')).toBeInTheDocument();
+    expect(within(audienceDropdown).queryByText('Should not appear')).not.toBeInTheDocument();
+
+    fireEvent.click(within(audienceDropdown).getByRole('button', { name: 'Millennial home buyers' }));
+    expect(audienceInput.value).toBe('Millennial home buyers');
+  });
+
+  it('saves generated audience values into IP-gated audience history', async () => {
+    render(<CulturalArchaeologist />);
+
+    const audienceInput = await screen.findByPlaceholderText('Primary Audience (Required) *');
+    fireEvent.change(audienceInput, { target: { value: 'Creator-led skincare buyers' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    expect(await screen.findByText(/Results? Filters/i, {}, { timeout: 3000 })).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(
+        getAudienceHistory(
+          APP_AUDIENCE_HISTORY_MODES.CULTURAL_ARCHAEOLOGIST,
+          '127.0.0.1'
+        )
+      ).toContain('Creator-led skincare buyers');
+    });
   });
 
   it('uses a wrapping brand chip input shell like Brand Navigator', () => {
