@@ -60,21 +60,14 @@ import {
   type CompletionSoundId,
 } from '../services/completion-sound';
 import { handleTextareaBulletShortcuts } from '../services/textarea-bullet-shortcuts';
+import {
+  hasMatrixDeepDiveContent,
+  normalizeSavedMatrixRecord,
+  normalizeSavedMatrixRecords,
+  type SavedMatrixRecord,
+} from '../services/cultural-saved-projects';
 
-
-
-interface SavedMatrix {
-  id: string;
-  date: string;
-  brand: string;
-  audience: string;
-  generations: string[];
-  topicFocus?: string;
-  sourcesType?: string[];
-  hasUploadedDocuments?: boolean;
-  customName?: string;
-  matrix: CulturalMatrix;
-}
+type SavedMatrix = SavedMatrixRecord;
 
 type MatrixMetaState = {
   audience: string;
@@ -89,6 +82,7 @@ type CulturalRecentResult = RecentResultRecord & {
   savedMatrix?: SavedMatrix;
   matrix?: CulturalMatrix;
   matrixMeta?: MatrixMetaState;
+  savedRowId?: string;
 };
 
 interface MatrixContext {
@@ -1446,11 +1440,26 @@ export default function CulturalArchaeologist() {
     return () => window.removeEventListener('scroll', handleMobileHeaderScroll);
   }, []);
 
-  const loadSavedMatrix = (sm: SavedMatrix, shouldScroll = false) => {
-    console.log('[CulturalArchaeologist] Loading saved matrix and resetting segmentation tab state.', {
-      id: sm.id,
-      shouldScroll,
-    });
+  const applyDeepDivePersistenceFromRowId = (
+    rowIdValue: string | number | null | undefined
+  ): string | null => {
+    const savedRowId = toSupabaseRowId(rowIdValue);
+    setDeepDivePersistenceContext(
+      savedRowId
+        ? {
+            tableName: resolvedCulturalTable,
+            rowId: savedRowId,
+          }
+        : null
+    );
+    return savedRowId;
+  };
+
+  const applySavedMatrixSelection = (
+    sm: SavedMatrix,
+    shouldScroll = false,
+    options?: { skipRecentTracking?: boolean; recentResultId?: string }
+  ) => {
     resetSegmentationWorkspace('insights');
     const parsedBrands = parseBrandsInput(sm.brand || '');
     if (parsedBrands.length > 1) {
@@ -1460,6 +1469,7 @@ export default function CulturalArchaeologist() {
       setSelectedBrands([]);
       setBrandInput(sm.brand || '');
     }
+
     setAudience(sm.audience);
     setAudienceDetail('');
     setIsAudienceDetailOpen(false);
@@ -1475,27 +1485,135 @@ export default function CulturalArchaeologist() {
       sourcesType: sm.sourcesType || [],
       hasUploadedDocuments: sm.hasUploadedDocuments || false,
     });
-    const persistedRowId = toSupabaseRowId(sm.id);
-    setDeepDivePersistenceContext(
-      persistedRowId
-        ? {
-            tableName: resolvedCulturalTable,
-            rowId: persistedRowId,
-          }
-        : null
-    );
-    const recentItem: CulturalRecentResult = {
-      id: sm.id,
-      title: (sm.customName || sm.brand || 'Saved Cultural Result').trim(),
-      description: `Audience: ${(sm.audience || 'Not specified').trim()}`,
-      savedMatrix: sm,
-    };
-    console.log('[CulturalArchaeologist] Tracking recently viewed saved matrix.', { id: sm.id, title: recentItem.title });
-    saveRecentResult(APP_RECENT_RESULTS_MODES.CULTURAL_ARCHAEOLOGIST, recentItem);
-    setRecentResultsRefreshNonce((prev) => prev + 1);
+
+    const persistedRowId = applyDeepDivePersistenceFromRowId(sm.id);
+
+    if (!options?.skipRecentTracking) {
+      const recentItem: CulturalRecentResult = {
+        id: options?.recentResultId || sm.id,
+        title: (sm.customName || sm.brand || 'Saved Cultural Result').trim(),
+        description: `Audience: ${(sm.audience || 'Not specified').trim()}`,
+        savedMatrix: sm,
+        savedRowId: persistedRowId || undefined,
+      };
+      console.log('[CulturalArchaeologist] Tracking recently viewed saved matrix.', {
+        id: recentItem.id,
+        savedRowId: recentItem.savedRowId || null,
+        title: recentItem.title,
+      });
+      saveRecentResult(APP_RECENT_RESULTS_MODES.CULTURAL_ARCHAEOLOGIST, recentItem);
+      setRecentResultsRefreshNonce((prev) => prev + 1);
+    }
 
     if (shouldScroll) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const hydrateSavedProjectFromSupabase = async (
+    savedRowIdValue: string | null | undefined,
+    options?: { recentResultId?: string; shouldScroll?: boolean }
+  ) => {
+    const savedRowId = toSupabaseRowId(savedRowIdValue);
+    if (!savedRowId) {
+      console.log('[CulturalArchaeologist] Skipping saved-project hydration because row id is unavailable.', {
+        savedRowIdValue: savedRowIdValue || null,
+      });
+      return;
+    }
+
+    console.log('[CulturalArchaeologist] Reloading saved project from Supabase to restore original deep dives.', {
+      tableName: resolvedCulturalTable,
+      rowId: savedRowId,
+    });
+
+    try {
+      const { data, error } = await supabase
+        .from(resolvedCulturalTable)
+        .select('*')
+        .eq('id', savedRowId)
+        .maybeSingle();
+
+      if (error) {
+        logger.warn('Failed to reload saved cultural project from Supabase', error);
+        return;
+      }
+
+      const normalizedSavedMatrix = normalizeSavedMatrixRecord(data);
+      if (!normalizedSavedMatrix) {
+        console.log('[CulturalArchaeologist] Saved-project hydration returned no normalizable matrix payload.', {
+          tableName: resolvedCulturalTable,
+          rowId: savedRowId,
+        });
+        return;
+      }
+
+      const hadDeepDivesBeforeReload = hasMatrixDeepDiveContent(matrix);
+      const hasDeepDivesAfterReload = hasMatrixDeepDiveContent(normalizedSavedMatrix.matrix);
+      console.log('[CulturalArchaeologist] Saved-project hydration complete.', {
+        rowId: savedRowId,
+        hadDeepDivesBeforeReload,
+        hasDeepDivesAfterReload,
+      });
+
+      applySavedMatrixSelection(
+        normalizedSavedMatrix,
+        Boolean(options?.shouldScroll),
+        { recentResultId: options?.recentResultId }
+      );
+      setSavedMatrices((prev) =>
+        prev.map((entry) =>
+          String(entry.id) === String(savedRowId)
+            ? normalizedSavedMatrix
+            : entry
+        )
+      );
+
+      if (!hadDeepDivesBeforeReload && hasDeepDivesAfterReload) {
+        setToast('Loaded saved insight deep dives.');
+      }
+    } catch (error) {
+      logger.warn('Unexpected error while reloading saved cultural project from Supabase', error);
+    }
+  };
+
+  const loadSavedMatrix = (sm: SavedMatrix, shouldScroll = false, recentResultId?: string) => {
+    console.log('[CulturalArchaeologist] Loading saved matrix and resetting segmentation tab state.', {
+      id: sm.id,
+      recentResultId: recentResultId || null,
+      shouldScroll,
+      hasLocalDeepDives: hasMatrixDeepDiveContent(sm.matrix),
+    });
+
+    applySavedMatrixSelection(sm, shouldScroll, { recentResultId });
+    void hydrateSavedProjectFromSupabase(sm.id, {
+      recentResultId: recentResultId || sm.id,
+      shouldScroll: false,
+    });
+  };
+
+  const applyRecentResultMatrixSelection = (
+    item: CulturalRecentResult,
+    shouldScroll = true
+  ) => {
+    if (!item.matrix || !item.matrixMeta) {
+      return;
+    }
+
+    resetSegmentationWorkspace('insights');
+    const savedRowId = applyDeepDivePersistenceFromRowId(item.savedRowId);
+    setMatrix(item.matrix);
+    setMatrixMeta(item.matrixMeta);
+
+    if (shouldScroll) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    if (savedRowId) {
+      void hydrateSavedProjectFromSupabase(savedRowId, {
+        recentResultId: String(item.id),
+        shouldScroll: false,
+      });
     }
   };
 
@@ -1834,13 +1952,15 @@ export default function CulturalArchaeologist() {
             .limit(20);
 
           if (!error) {
+            const normalizedSavedMatrices = normalizeSavedMatrixRecords(Array.isArray(data) ? data : []);
             console.log('[CulturalArchaeologist] Loaded saved matrices from Supabase.', {
               tableName,
               orderColumn,
               count: Array.isArray(data) ? data.length : 0,
+              normalizedCount: normalizedSavedMatrices.length,
             });
             setResolvedCulturalTable(tableName);
-            setSavedMatrices((data as SavedMatrix[]) || []);
+            setSavedMatrices(normalizedSavedMatrices);
             return;
           }
 
@@ -2227,10 +2347,29 @@ export default function CulturalArchaeologist() {
             table: resolvedCulturalTable,
           });
         } else {
-          setDeepDivePersistenceContext({
-            tableName: resolvedCulturalTable,
-            rowId: insertedRowId,
+          applyDeepDivePersistenceFromRowId(insertedRowId);
+          const generatedSavedMatrix: SavedMatrix = {
+            id: insertedRowId,
+            date: new Date().toISOString(),
+            brand: brandContextValue,
+            audience: audienceValue,
+            generations: generationsValue,
+            topicFocus: topicFocusValue,
+            sourcesType: sourcesTypeValue,
+            hasUploadedDocuments,
+            matrix: nextMatrix,
+          };
+          const generatedRecentSavedItem: CulturalRecentResult = {
+            ...generatedRecentItem,
+            savedRowId: insertedRowId,
+            savedMatrix: generatedSavedMatrix,
+          };
+          console.log('[CulturalArchaeologist] Updating generated recent result with saved project row id.', {
+            id: generatedRecentSavedItem.id,
+            savedRowId: insertedRowId,
           });
+          saveRecentResult(APP_RECENT_RESULTS_MODES.CULTURAL_ARCHAEOLOGIST, generatedRecentSavedItem);
+          setRecentResultsRefreshNonce((prev) => prev + 1);
         }
       } catch (saveErr) {
         logger.warn('Failed to save cultural search to Supabase', saveErr);
@@ -2431,13 +2570,37 @@ export default function CulturalArchaeologist() {
         
         // Update local storage progressively
         setSavedMatrices(prev => {
-          const updated = [...prev];
-          if (updated.length > 0) {
-            updated[0].matrix = { ...updatedMatrix };
-            if (!persistSavedMatrices(updated)) {
-              setToast('Deep dives updated, but local save failed in this browser.');
-            }
+          if (prev.length === 0) {
+            return prev;
           }
+
+          const targetRowId = toSupabaseRowId(persistenceContext?.rowId);
+          let didUpdateAnyEntry = false;
+          const updated = prev.map((entry, index) => {
+            const shouldUpdateEntry = targetRowId
+              ? String(entry.id) === targetRowId
+              : index === 0;
+            if (!shouldUpdateEntry) {
+              return entry;
+            }
+            didUpdateAnyEntry = true;
+            return {
+              ...entry,
+              matrix: { ...updatedMatrix },
+            };
+          });
+
+          if (!didUpdateAnyEntry && prev.length > 0) {
+            updated[0] = {
+              ...updated[0],
+              matrix: { ...updatedMatrix },
+            };
+          }
+
+          if (!persistSavedMatrices(updated)) {
+            setToast('Deep dives updated, but local save failed in this browser.');
+          }
+
           return updated;
         });
 
@@ -5310,16 +5473,10 @@ export default function CulturalArchaeologist() {
               onSelectItem={(item) => {
                 console.log('[CulturalArchaeologist] Recent result selected.', { id: item.id, title: item.title });
                 if (item.savedMatrix) {
-                  loadSavedMatrix(item.savedMatrix, true);
+                  loadSavedMatrix(item.savedMatrix, true, String(item.id));
                   return;
                 }
-                if (item.matrix && item.matrixMeta) {
-                  resetSegmentationWorkspace('insights');
-                  setDeepDivePersistenceContext(null);
-                  setMatrix(item.matrix);
-                  setMatrixMeta(item.matrixMeta);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
+                applyRecentResultMatrixSelection(item, true);
               }}
               className="mt-8"
             />
@@ -5998,16 +6155,10 @@ export default function CulturalArchaeologist() {
               onSelectItem={(item) => {
                 console.log('[CulturalArchaeologist] Recent result selected.', { id: item.id, title: item.title });
                 if (item.savedMatrix) {
-                  loadSavedMatrix(item.savedMatrix, true);
+                  loadSavedMatrix(item.savedMatrix, true, String(item.id));
                   return;
                 }
-                if (item.matrix && item.matrixMeta) {
-                  resetSegmentationWorkspace('insights');
-                  setDeepDivePersistenceContext(null);
-                  setMatrix(item.matrix);
-                  setMatrixMeta(item.matrixMeta);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
+                applyRecentResultMatrixSelection(item, true);
               }}
             />
           </div>
