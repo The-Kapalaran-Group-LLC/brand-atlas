@@ -3354,7 +3354,7 @@ Influencer mandate:
   2) 3-4 breakout, high-velocity micro-creators making waves right now.
 - Evaluate each influencer using this framework:
   1) Resonance (growth speed),
-  2) Conversion (niche fit), and
+  2) Relevance (niche fit), and
   3) Penetration (visibility).
 - If a Social Blade integration is available, query both:
   1) "Top Followers" (long standing), and

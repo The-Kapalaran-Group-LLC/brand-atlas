@@ -275,7 +275,8 @@ describe('category role block prompts', () => {
     expect(block).toContain('established, legacy authorities');
     expect(block).toContain('breakout, high-velocity micro-creators');
     expect(block).toContain('Resonance');
-    expect(block).toContain('Conversion');
+    expect(block).toContain('Relevance');
+    expect(block).not.toContain('Conversion');
     expect(block).toContain('Penetration');
     expect(block).toContain('Top Followers');
     expect(block).toContain('Highest 30-Day Growth');

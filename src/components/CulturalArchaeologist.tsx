@@ -4524,9 +4524,9 @@ export default function CulturalArchaeologist() {
                 {deepDiveCategory === 'Influencers' && (
                   <div className="bg-rose-50 rounded-xl p-4 mb-8 border border-rose-100" data-testid="influencer-score-definitions">
                     <h4 className="font-bold text-zinc-900 mb-2">Influencer Scores</h4>
-                    <p className="text-zinc-700 text-sm mb-2"><strong>Scores:</strong> Resonance: high. Conversion: high. Penetration: medium.</p>
+                    <p className="text-zinc-700 text-sm mb-2"><strong>Scores:</strong> Resonance: high. Relevance: high. Penetration: medium.</p>
                     <p className="text-zinc-700 text-sm"><strong>Resonance:</strong> how quickly the creator is gaining momentum and attention.</p>
-                    <p className="text-zinc-700 text-sm"><strong>Conversion:</strong> how tightly the creator fits this audience niche and can drive action.</p>
+                    <p className="text-zinc-700 text-sm"><strong>Relevance:</strong> how tightly the creator fits this audience niche and can drive action.</p>
                     <p className="text-zinc-700 text-sm"><strong>Penetration:</strong> how broadly visible the creator is across relevant channels.</p>
                   </div>
                 )}
