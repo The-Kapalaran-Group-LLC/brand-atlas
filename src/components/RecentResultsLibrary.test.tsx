@@ -11,6 +11,8 @@ type MockResult = {
   id: string;
   title: string;
   description: string;
+  matrixMeta?: { topicFocus?: string };
+  savedMatrix?: { topicFocus?: string };
 };
 
 describe('RecentResultsLibrary', () => {
@@ -43,6 +45,53 @@ describe('RecentResultsLibrary', () => {
       id: '1',
       title: 'Result One',
       description: 'First description',
+    });
+  });
+
+  describe.each([
+    APP_RECENT_RESULTS_MODES.CULTURAL_ARCHAEOLOGIST,
+    APP_RECENT_RESULTS_MODES.BRAND_NAVIGATOR,
+  ])('%s project titles', (mode) => {
+    it.each(['matrixMeta', 'savedMatrix'] as const)(
+      'uses the searched Topic Focus from %s for the title and delete/undo actions',
+      (metadataKey) => {
+        const item: MockResult = {
+          id: 'topic-project',
+          title: 'Old Brand Project Name',
+          description: 'Audience: Sneaker enthusiasts',
+          [metadataKey]: { topicFocus: '  Sneaker launches  ' },
+        };
+        saveRecentResult(mode, item);
+        const onSelect = vi.fn();
+
+        render(<RecentResultsLibrary<MockResult> mode={mode} onSelectItem={onSelect} />);
+
+        const projectButton = screen.getByRole('button', { name: 'Sneaker launches' });
+        expect(screen.getByTestId('recent-result-title-topic-project')).toHaveTextContent(/^Sneaker launches$/);
+        expect(projectButton).toHaveTextContent(item.description);
+        expect(screen.queryByText(item.title)).not.toBeInTheDocument();
+        fireEvent.click(projectButton);
+        expect(onSelect).toHaveBeenCalledWith(item);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Delete Sneaker launches' }));
+        expect(screen.getByTestId('recent-results-undo-toast')).toHaveTextContent('Deleted Sneaker launches.');
+        fireEvent.click(screen.getByRole('button', { name: 'Undo delete Sneaker launches' }));
+        expect(screen.getByRole('button', { name: 'Sneaker launches' })).toBeInTheDocument();
+      }
+    );
+
+    it.each([undefined, '', '   '])('keeps the existing title when Topic Focus is %j', (topicFocus) => {
+      saveRecentResult<MockResult>(mode, {
+        id: 'no-topic',
+        title: 'Original Project Name',
+        description: 'Audience: Sneaker enthusiasts',
+        matrixMeta: { topicFocus },
+        savedMatrix: { topicFocus },
+      });
+
+      render(<RecentResultsLibrary<MockResult> mode={mode} onSelectItem={vi.fn()} />);
+
+      expect(screen.getByRole('button', { name: 'Original Project Name' })).toBeInTheDocument();
     });
   });
 

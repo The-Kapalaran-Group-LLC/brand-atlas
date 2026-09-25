@@ -38,7 +38,7 @@ export function Accordion({ items, defaultOpenFirst = true, className = '' }: Ac
                 aria-expanded={isOpen}
                 aria-controls={panelId}
                 onClick={() => setOpenId((prev) => (prev === item.id ? null : item.id))}
-                className="w-full px-4 py-3 text-left flex items-center justify-between gap-3"
+                className="pointer-events-auto w-full px-4 py-3 text-left flex items-center justify-between gap-3"
               >
                 <span className="text-sm font-semibold text-zinc-900 flex items-center gap-2">{item.title}</span>
                 <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />

@@ -10,6 +10,16 @@ import {
   saveRecentResult,
 } from '../services/recent-results-storage';
 
+const getRecentProjectTitle = (item: RecentResultRecord): string => {
+  for (const metadata of [item.savedMatrix, item.matrixMeta]) {
+    if (metadata && typeof metadata === 'object' && 'topicFocus' in metadata) {
+      const topicFocus = typeof metadata.topicFocus === 'string' ? metadata.topicFocus.trim() : '';
+      if (topicFocus) return topicFocus;
+    }
+  }
+  return item.title;
+};
+
 type RecentResultsLibraryProps<T extends RecentResultRecord> = {
   mode: RecentResultsMode;
   title?: string;
@@ -115,13 +125,13 @@ export function RecentResultsLibrary<T extends RecentResultRecord>({
       delete deleteTimersRef.current[key];
     }
 
-    console.log('[RecentResultsLibrary] Deleting recent result with undo window.', { mode, id: item.id, title: item.title });
+    console.log('[RecentResultsLibrary] Deleting recent result with undo window.', { mode, id: item.id, title: getRecentProjectTitle(item) });
     setPendingDeletes((prev) => ({ ...prev, [key]: item }));
     const next = removeRecentResult<T>(mode, item.id);
     setRecentResults(next);
 
     deleteTimersRef.current[key] = setTimeout(() => {
-      console.log('[RecentResultsLibrary] Deletion undo window expired.', { mode, id: item.id, title: item.title });
+      console.log('[RecentResultsLibrary] Deletion undo window expired.', { mode, id: item.id, title: getRecentProjectTitle(item) });
       setPendingDeletes((prev) => {
         const updated = { ...prev };
         delete updated[key];
@@ -141,7 +151,7 @@ export function RecentResultsLibrary<T extends RecentResultRecord>({
       delete deleteTimersRef.current[itemId];
     }
 
-    console.log('[RecentResultsLibrary] Undoing recent result deletion.', { mode, id: item.id, title: item.title });
+    console.log('[RecentResultsLibrary] Undoing recent result deletion.', { mode, id: item.id, title: getRecentProjectTitle(item) });
     const next = saveRecentResult<T>(mode, item);
     setRecentResults(next);
     setPendingDeletes((prev) => {
@@ -195,13 +205,13 @@ export function RecentResultsLibrary<T extends RecentResultRecord>({
           className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-4 text-sm no-print"
           data-testid="recent-results-undo-toast"
         >
-          <span>Deleted {latestPendingDelete[1].title}.</span>
+          <span>Deleted {getRecentProjectTitle(latestPendingDelete[1])}.</span>
           <button
             type="button"
             onClick={() => undoDelete(latestPendingDelete[0])}
             className="underline font-semibold hover:text-zinc-200 transition-colors"
             data-testid={`undo-delete-recent-result-${latestPendingDelete[0]}`}
-            aria-label={`Undo delete ${latestPendingDelete[1].title}`}
+            aria-label={`Undo delete ${getRecentProjectTitle(latestPendingDelete[1])}`}
           >
             <RotateCcw className="inline-block h-3 w-3 mr-1" />
             Undo
@@ -242,14 +252,14 @@ export function RecentResultsLibrary<T extends RecentResultRecord>({
                 <button
                   type="button"
                   onClick={() => {
-                    console.log('[RecentResultsLibrary] Selected recent result item.', { mode, id: item.id, title: item.title });
+                    console.log('[RecentResultsLibrary] Selected recent result item.', { mode, id: item.id, title: getRecentProjectTitle(item) });
                     onSelectItem(item);
                   }}
                   className="flex-1 min-w-0 text-left hover:text-zinc-900 transition-colors"
                   data-testid={`recent-result-item-${String(item.id)}`}
-                  aria-label={item.title}
+                  aria-label={getRecentProjectTitle(item)}
                 >
-                  <p className="truncate text-sm font-medium text-zinc-900">{item.title}</p>
+                  <p className="truncate text-sm font-medium text-zinc-900" data-testid={`recent-result-title-${String(item.id)}`}>{getRecentProjectTitle(item)}</p>
                   {item.description ? (
                     <p className="mt-1 line-clamp-2 text-xs text-zinc-600">{item.description}</p>
                   ) : null}
@@ -259,7 +269,7 @@ export function RecentResultsLibrary<T extends RecentResultRecord>({
                   onClick={() => deleteResultWithUndo(item)}
                   className="inline-flex items-center justify-center rounded-md border border-zinc-200 bg-white p-1.5 text-zinc-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors"
                   data-testid={`delete-recent-result-${String(item.id)}`}
-                  aria-label={`Delete ${item.title}`}
+                  aria-label={`Delete ${getRecentProjectTitle(item)}`}
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>

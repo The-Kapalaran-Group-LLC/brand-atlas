@@ -4,7 +4,7 @@ import { getUserTelemetry } from '../services/telemetry';
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useState, useEffect, useRef, useMemo } from 'react';
+import React, { useCallback, useState, useEffect, useRef, useMemo, useId } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { Search, Loader2, Sparkles, FileText, Presentation, ExternalLink, Info, Tag, Users, Filter, ChevronDown, Check, Clock, Trash2, Target, Upload, X, RefreshCw, Calendar, Activity, Palette, ArrowLeft, Menu, Shield } from 'lucide-react';
 import { CompassRoseIcon } from './icons/CompassRoseIcon';
@@ -159,6 +159,7 @@ const MATRIX_INSIGHT_KEYS: MatrixInsightKey[] = [
 const CONFIDENCE_FILTERS: ConfidenceLevelFilter[] = ['high', 'medium', 'low'];
 const EVIDENCE_FILTERS: EvidenceLabelFilter[] = ['known', 'inferred', 'speculative'];
 const MAX_RESULT_ITEMS_PER_CATEGORY = 10;
+const INITIAL_RESULT_ITEMS_PER_CATEGORY = 4;
 const CULTURAL_ARCHAEOLOGIST_TABLE = 'Cultural_Archaeologist';
 const CULTURAL_ARCHAEOLOGIST_TABLE_CANDIDATES = [CULTURAL_ARCHAEOLOGIST_TABLE, 'CulturalArchaeologist', 'searches'] as const;
 const TREND_STAGE_FILTERS: TrendStageFilter[] = ['peaking', 'emerging', 'declining'];
@@ -609,6 +610,31 @@ type AskAnswerSection = {
     labels: EvidenceTagLabel[];
   }>;
 };
+
+type AskAnswerSource = { title: string; url: string };
+
+const renderAskAnswerCitations = (text: string, sources: Array<AskAnswerSource | null>): React.ReactNode => (
+  text.split(/(\[\d+\])/g).map((part, index) => {
+    const citation = part.match(/^\[(\d+)\]$/);
+    const sourceNumber = citation ? Number(citation[1]) : 0;
+    const source = sources[sourceNumber - 1];
+    if (!source) return part;
+    return (
+      <a
+        key={`citation-${index}`}
+        href={source.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`Source ${sourceNumber}: ${source.title}`}
+        title={source.title}
+        data-testid={`ask-inline-citation-${sourceNumber}`}
+        className="font-medium text-indigo-700 underline decoration-indigo-300 underline-offset-2 hover:text-indigo-900"
+      >
+        {part}
+      </a>
+    );
+  })
+);
 
 const splitIntoAskAnswerSentences = (value: string): string[] => {
   if (!value || !value.trim()) return [];
@@ -1243,6 +1269,23 @@ export default function CulturalArchaeologist() {
   const [matrixAnswer, setMatrixAnswer] = useState('');
   const [isAskingQuestion, setIsAskingQuestion] = useState(false);
   const [highlightedInsights, setHighlightedInsights] = useState<string[]>([]);
+  const [matrixAnswerSources, setMatrixAnswerSources] = useState<Array<AskAnswerSource | null>>([]);
+  const [matrixWebSearchStatus, setMatrixWebSearchStatus] = useState<'completed' | 'unavailable' | null>(null);
+  const [matrixQuestionError, setMatrixQuestionError] = useState<string | null>(null);
+  const askRequestIdRef = useRef(0);
+  const clearAskResponse = useCallback(() => {
+    askRequestIdRef.current += 1;
+    setMatrixAnswer('');
+    setMatrixAnswerSources([]);
+    setMatrixWebSearchStatus(null);
+    setMatrixQuestionError(null);
+    setHighlightedInsights([]);
+    setIsAskingQuestion(false);
+  }, []);
+  const resetAskQuestion = useCallback(() => {
+    clearAskResponse();
+    setMatrixQuestion('');
+  }, [clearAskResponse]);
   
   const [deepDiveInsight, setDeepDiveInsight] = useState<MatrixItem | null>(null);
   const [deepDiveCategory, setDeepDiveCategory] = useState<string | null>(null);
@@ -1587,6 +1630,7 @@ export default function CulturalArchaeologist() {
     shouldScroll = false,
     options?: { skipRecentTracking?: boolean; recentResultId?: string }
   ) => {
+    resetAskQuestion();
     resetSegmentationWorkspace('insights');
     const parsedBrands = parseBrandsInput(sm.brand || '');
     if (parsedBrands.length > 1) {
@@ -1727,6 +1771,7 @@ export default function CulturalArchaeologist() {
       return;
     }
 
+    resetAskQuestion();
     resetSegmentationWorkspace('insights');
     const savedRowId = applyDeepDivePersistenceFromRowId(item.savedRowId);
     setMatrix(item.matrix);
@@ -1910,9 +1955,7 @@ export default function CulturalArchaeologist() {
     setSelectedTrendStageFilters(snapshot.selectedTrendStageFilters || []);
     setSelectedSourceFilters(snapshot.selectedSourceFilters || []);
     setShowHighlyUniqueOnly(Boolean(snapshot.showHighlyUniqueOnly));
-    setMatrixQuestion('');
-    setMatrixAnswer('');
-    setHighlightedInsights([]);
+    resetAskQuestion();
     setDeepDivePersistenceContext(null);
     setActiveResultsTab('segmentation');
     const hydratedSegmentationAccess = Boolean(snapshot.isSegmentationAuthorized);
@@ -2291,9 +2334,7 @@ export default function CulturalArchaeologist() {
     setMatrix(null);
     setMatrixMeta(null);
     setError(null);
-    setMatrixQuestion('');
-    setMatrixAnswer('');
-    setHighlightedInsights([]);
+    resetAskQuestion();
     setIsResearchControlsMinimized(false);
     setSaveWarning(null);
     setSuggestionsError(null);
@@ -2351,9 +2392,7 @@ export default function CulturalArchaeologist() {
     setExportError(null);
     setFileReadErrors([]);
     setShowValidation(false);
-    setMatrixQuestion('');
-    setMatrixAnswer('');
-    setHighlightedInsights([]);
+    resetAskQuestion();
     resetSegmentationWorkspace('insights');
     const hasUploadedDocuments = filesValue.length > 0;
     try {
@@ -2828,13 +2867,14 @@ export default function CulturalArchaeologist() {
   };
 
   const handleAskQuestion = async () => {
-    if (!matrix || !matrixQuestion.trim()) return;
+    if (!matrix || !matrixQuestion.trim() || isAskingQuestion) return;
+    const question = matrixQuestion.trim();
+    clearAskResponse();
+    const requestId = askRequestIdRef.current;
+    setIsAskingQuestion(true);
 
     if (isSegmentationTabActive && isSegmentationAuthorized) {
-      const refinementPrompt = matrixQuestion.trim();
-      setIsAskingQuestion(true);
-      setMatrixAnswer('');
-      setHighlightedInsights([]);
+      const refinementPrompt = question;
       try {
         await runSegmentationAnalysis(displayMatrix || matrix, { refinementPrompt });
         console.log('[CulturalArchaeologist] Segmentation refined via Ask prompt.', {
@@ -2842,18 +2882,21 @@ export default function CulturalArchaeologist() {
         });
         setToast('Segmentation updated from prompt.');
       } finally {
-        setIsAskingQuestion(false);
+        if (requestId === askRequestIdRef.current) setIsAskingQuestion(false);
       }
       return;
     }
 
-    setIsAskingQuestion(true);
+    console.log('[CulturalArchaeologist] Searching analysis and web for an audience question.', {
+      requestId,
+      questionLength: question.length,
+    });
     try {
       const audienceForSourcing = buildDetailedAudiencePrompt(matrixMeta?.audience || audience, audienceDetail);
       const result = await runUserAction({
         actionName: 'ask-cultural-question',
         action: () =>
-          askMatrixQuestion(matrix, matrixQuestion, {
+          askMatrixQuestion(matrix, question, {
             audience: audienceForSourcing,
             brand: matrixMeta?.brand,
             topicFocus: matrixMeta?.topicFocus,
@@ -2861,18 +2904,35 @@ export default function CulturalArchaeologist() {
             sourcesType: matrixMeta?.sourcesType,
           }),
       });
+      if (requestId !== askRequestIdRef.current) {
+        console.log('[CulturalArchaeologist] Discarded question response after the active research changed.', { requestId });
+        return;
+      }
+      // Keep positions intact so rejecting an unsafe URL cannot renumber citations.
+      const sources = (result.sources || []).map((source) => {
+        const url = /^https?:\/\//i.test(source.url) ? normalizeExternalHttpUrl(source.url) : null;
+        return url ? { title: source.title || new URL(url).hostname, url } : null;
+      });
       setMatrixAnswer(result.answer);
+      setMatrixAnswerSources(sources);
+      setMatrixWebSearchStatus(result.webSearchStatus || null);
       setHighlightedInsights(result.relevantInsights || []);
+      console.log('[CulturalArchaeologist] Audience question answered.', {
+        requestId,
+        sourceCount: sources.filter(Boolean).length,
+        webSearchStatus: result.webSearchStatus || 'unknown',
+      });
     } catch (err) {
+      if (requestId !== askRequestIdRef.current) return;
       const normalized = normalizeAppError(err);
       logger.error('Failed to answer cultural question', { err, normalized });
-      setMatrixAnswer(
+      setMatrixQuestionError(
         normalized.kind === 'quota'
           ? 'Quota limit reached. Please check billing and try again.'
-          : "Sorry, I couldn't answer that question right now."
+          : "Sorry, I couldn't answer that question right now. Please try again."
       );
     } finally {
-      setIsAskingQuestion(false);
+      if (requestId === askRequestIdRef.current) setIsAskingQuestion(false);
     }
   };
 
@@ -5713,6 +5773,7 @@ export default function CulturalArchaeologist() {
                     setSelectedGenerations(sm.generations || []);
                     setTopicFocus(sm.topicFocus || '');
                     setSourcesType(sm.sourcesType || []);
+                    resetAskQuestion();
                     resetSegmentationWorkspace('insights');
                     setMatrix(sm.matrix);
                     setMatrixMeta({ audience: sm.audience, brand: sm.brand, generations: sm.generations || [], topicFocus: sm.topicFocus, sourcesType: sm.sourcesType || [] });
@@ -5848,13 +5909,22 @@ export default function CulturalArchaeologist() {
                 testId="mobile-results-nav-culture"
                 items={culturalResultNavItems}
               />
-              <div id="cultural-results-ask" className="mb-10 bg-indigo-50 rounded-3xl p-6 md:p-8 border border-indigo-100 shadow-sm no-print">
-                <h3 className="text-xl font-bold text-indigo-900 mb-4 flex items-center gap-2">
+              <SectionErrorBoundary title="Ask the Archaeologist">
+              <div id="cultural-results-ask" data-testid="ask-archaeologist" className="mb-10 bg-indigo-50 rounded-3xl p-6 md:p-8 border border-indigo-100 shadow-sm no-print">
+                <h3 className="text-xl font-bold text-indigo-900 mb-2 flex items-center gap-2">
                   <Search className="w-6 h-6" /> Ask the Archaeologist
                 </h3>
+                <p id="ask-question-help" data-testid="ask-question-help" className="mb-4 text-sm text-indigo-900/75">
+                  {isSegmentationTabActive && isSegmentationAuthorized
+                    ? 'Describe how you want to refine the audience segments.'
+                    : 'Search your existing results and the web for answers with linked sources.'}
+                </p>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <input
                     type="text"
+                    data-testid="ask-question-input"
+                    aria-label="Ask the Archaeologist"
+                    aria-describedby="ask-question-help"
                     value={matrixQuestion}
                     onChange={(e) => setMatrixQuestion(e.target.value.slice(0, 400))}
                     placeholder="Ask a question about this audience (e.g., what are their main anxieties?)"
@@ -5863,6 +5933,9 @@ export default function CulturalArchaeologist() {
                     disabled={isAskingQuestion}
                   />
                   <button
+                    type="button"
+                    data-testid="ask-question-submit"
+                    aria-label={isAskingQuestion ? 'Searching' : 'Ask'}
                     onClick={handleAskQuestion}
                     disabled={isAskingQuestion || !matrixQuestion.trim()}
                     className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-medium hover:bg-indigo-700 hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-2 disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none transition-all flex items-center justify-center gap-2 shadow-sm"
@@ -5870,6 +5943,29 @@ export default function CulturalArchaeologist() {
                     {isAskingQuestion ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Ask'}
                   </button>
                 </div>
+                {isAskingQuestion && (
+                  <p role="status" data-testid="ask-loading-status" className="mt-4 text-sm text-indigo-800">
+                    {isSegmentationTabActive && isSegmentationAuthorized
+                      ? 'Refining your audience segments…'
+                      : 'Searching your results and the web…'}
+                  </p>
+                )}
+                {matrixQuestionError && (
+                  <div role="alert" data-testid="ask-question-error" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p>{matrixQuestionError}</p>
+                    <button type="button" data-testid="ask-question-retry" onClick={handleAskQuestion} className="mt-2 font-semibold underline underline-offset-2">
+                      Retry question
+                    </button>
+                  </div>
+                )}
+                {matrixWebSearchStatus === 'unavailable' && (
+                  <div role="status" data-testid="ask-web-search-warning" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p>Web search is temporarily unavailable. This answer uses your existing results.</p>
+                    <button type="button" data-testid="ask-web-search-retry" onClick={handleAskQuestion} className="mt-2 font-semibold underline underline-offset-2">
+                      Retry web search
+                    </button>
+                  </div>
+                )}
                 {matrixAnswer && (
                   <motion.div 
                     initial={{ opacity: 0, y: 10 }}
@@ -5891,7 +5987,7 @@ export default function CulturalArchaeologist() {
                                   data-testid={`ask-answer-sentence-${index}-${sentenceIndex}`}
                                   className="inline"
                                 >
-                                  {sentence.text}
+                                  {renderAskAnswerCitations(sentence.text, matrixAnswerSources)}
                                   {sentence.labels.map((label) => (
                                     <span
                                       key={`ask-label-${index}-${sentenceIndex}-${label}`}
@@ -5908,12 +6004,27 @@ export default function CulturalArchaeologist() {
                           </div>
                         ))
                       ) : (
-                        <p className="text-zinc-700 text-[15px] leading-7 whitespace-pre-wrap">{matrixAnswer}</p>
+                        <p className="text-zinc-700 text-[15px] leading-7 whitespace-pre-wrap">{renderAskAnswerCitations(matrixAnswer, matrixAnswerSources)}</p>
                       )}
                     </div>
+                    {matrixAnswerSources.some(Boolean) && (
+                      <div data-testid="ask-answer-sources" className="mt-5 border-t border-zinc-100 pt-4">
+                        <h4 className="mb-2 text-sm font-semibold text-zinc-900">Sources</h4>
+                        <ul className="space-y-2 text-sm">
+                          {matrixAnswerSources.map((source, index) => source && (
+                            <li key={`${source.url}-${index}`}>
+                              <a href={source.url} target="_blank" rel="noopener noreferrer" data-testid={`ask-source-${index + 1}`} className="text-indigo-700 underline decoration-indigo-200 underline-offset-2 hover:text-indigo-900">
+                                [{index + 1}] {source.title}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </div>
+              </SectionErrorBoundary>
 
               {/* Demographics */}
               <div id="cultural-results-demographics" className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 no-print">
@@ -6417,6 +6528,7 @@ export default function CulturalArchaeologist() {
               </div>
               <button 
                 onClick={() => {
+                  resetAskQuestion();
                   resetSegmentationWorkspace('insights');
                   setMatrix(null);
                   setMatrixMeta(null);
@@ -6607,8 +6719,20 @@ function MatrixCard({
   onRefresh?: () => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const INITIAL_SHOW = MAX_RESULT_ITEMS_PER_CATEGORY;
+  const resultsListId = useId();
   const cardTestId = `matrix-card-${title.toLowerCase().replace(/\s+/g, '-')}`;
+  const safeItems = items || [];
+  // Deep-dive enrichment replaces item objects without changing the visible results.
+  const itemsContentKey = JSON.stringify(safeItems.map((item) => item.text));
+
+  useEffect(() => {
+    setIsExpanded(false);
+    console.log('[CulturalArchaeologist] Reset category results to collapsed preview.', {
+      sectionKey,
+      itemCount: safeItems.length,
+      initialVisibleCount: INITIAL_RESULT_ITEMS_PER_CATEGORY,
+    });
+  }, [itemsContentKey, sectionKey, safeItems.length]);
 
   const confidenceChipClass = (confidence?: string) => {
     if (confidence === 'high') {
@@ -6692,10 +6816,9 @@ function MatrixCard({
     ];
   };
   
-  const safeItems = items || [];
   const hasItems = safeItems.length > 0;
-  const visibleItems = isExpanded ? safeItems : safeItems.slice(0, INITIAL_SHOW);
-  const hasMoreItems = safeItems.length > INITIAL_SHOW;
+  const visibleItems = isExpanded ? safeItems : safeItems.slice(0, INITIAL_RESULT_ITEMS_PER_CATEGORY);
+  const hasMoreItems = safeItems.length > INITIAL_RESULT_ITEMS_PER_CATEGORY;
   
   return (
     <motion.div
@@ -6733,7 +6856,7 @@ function MatrixCard({
       </div>
       <p className="subheader-copy text-xs text-zinc-500 mb-4">{subtext}</p>
       {hasItems ? (
-        <ul className="space-y-3">
+        <ul id={resultsListId} data-testid={`matrix-card-results-${sectionKey}`} className="space-y-3">
           <AnimatePresence>
             {visibleItems.map((item, index) => {
               const isHighlighted = highlightedInsights.includes(item.text);
@@ -6808,15 +6931,28 @@ function MatrixCard({
       
       {hasMoreItems && (
         <motion.button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors duration-200"
+          type="button"
+          data-testid={`matrix-card-toggle-${sectionKey}`}
+          aria-expanded={isExpanded}
+          aria-controls={resultsListId}
+          onClick={() => {
+            const nextExpanded = !isExpanded;
+            console.log('[CulturalArchaeologist] Toggled category results.', {
+              sectionKey,
+              expanded: nextExpanded,
+              visibleCount: nextExpanded ? safeItems.length : INITIAL_RESULT_ITEMS_PER_CATEGORY,
+              totalCount: safeItems.length,
+            });
+            setIsExpanded(nextExpanded);
+          }}
+          className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 no-print"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
         >
           <span>
             {isExpanded 
-              ? `Show less (${INITIAL_SHOW}/${items.length})` 
-              : `Show all ${items.length} items`}
+              ? 'Show less'
+              : `Show all ${safeItems.length} items`}
           </span>
           <motion.div
             animate={{ rotate: isExpanded ? 180 : 0 }}

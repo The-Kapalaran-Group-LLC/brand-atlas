@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CulturalArchaeologist from './CulturalArchaeologist';
 import {
@@ -940,7 +940,7 @@ describe('CulturalArchaeologist', () => {
     expect(await screen.findByText('General signal')).toBeInTheDocument();
   });
 
-  it('shows up to 10 insights per section and exposes the unique observations filter', async () => {
+  it('shows four insights per section and independently expands, collapses, and filters the remaining results', async () => {
     generateCulturalMatrix.mockResolvedValueOnce({
       ...mockMatrix,
       moments: Array.from({ length: 12 }, (_, index) => ({
@@ -949,6 +949,10 @@ describe('CulturalArchaeologist', () => {
         sourceType: 'Mainstream',
         confidenceLevel: 'high' as const,
         trendLifecycle: 'peaking' as const,
+      })),
+      beliefs: Array.from({ length: 6 }, (_, index) => ({
+        ...mockMatrix.moments[0],
+        text: `[KNOWN] Belief ${index + 1}`,
       })),
     });
 
@@ -959,14 +963,85 @@ describe('CulturalArchaeologist', () => {
     fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
 
     expect(await screen.findByText('Signal 1')).toBeInTheDocument();
-    expect(screen.getAllByText(/Signal \d+/).length).toBe(10);
+    const momentsCard = within(screen.getByTestId('matrix-card-moments'));
+    const beliefsCard = within(screen.getByTestId('matrix-card-beliefs'));
+    expect(momentsCard.getAllByRole('listitem')).toHaveLength(4);
+    expect(beliefsCard.getAllByRole('listitem')).toHaveLength(4);
+    expect(screen.queryByText('Signal 5')).not.toBeInTheDocument();
     expect(screen.queryByText('Signal 11')).not.toBeInTheDocument();
 
+    const toggle = momentsCard.getByRole('button', { name: /show all 10 items/i });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls', momentsCard.getByRole('list').id);
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(momentsCard.getAllByRole('listitem')).toHaveLength(10);
+    expect(beliefsCard.getAllByRole('listitem')).toHaveLength(4);
+    expect(screen.queryByText('Signal 11')).not.toBeInTheDocument();
+
+    fireEvent.click(momentsCard.getByRole('button', { name: /show less/i }));
+    await waitFor(() => expect(momentsCard.getAllByRole('listitem')).toHaveLength(4));
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(toggle);
     fireEvent.click(screen.getByRole('button', { name: /unique observations/i }));
 
-    await waitFor(() => {
-      expect(screen.getAllByText(/Signal \d+/).length).toBeLessThanOrEqual(10);
+    await waitFor(() => expect(momentsCard.getAllByRole('listitem')).toHaveLength(4));
+    fireEvent.click(momentsCard.getByRole('button', { name: /show all 9 items/i }));
+    expect(momentsCard.getAllByRole('listitem')).toHaveLength(9);
+  });
+
+  it.each([0, 3, 4])('omits the results collapse control for a category with %i insights', async (count) => {
+    generateCulturalMatrix.mockResolvedValueOnce({
+      ...mockMatrix,
+      moments: Array.from({ length: count }, (_, index) => ({
+        ...mockMatrix.moments[0],
+        text: `[KNOWN] Signal ${index + 1}`,
+      })),
     });
+
+    render(<CulturalArchaeologist />);
+    fireEvent.change(await screen.findByPlaceholderText('Primary Audience (Required) *'), {
+      target: { value: 'Gen Z sneaker culture' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    const momentsCard = within(await screen.findByTestId('matrix-card-moments'));
+    expect(momentsCard.queryAllByRole('listitem')).toHaveLength(count);
+    expect(momentsCard.queryByRole('button', { name: /show all|show less/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps every insight in PDF and PPTX exports while the results are collapsed', async () => {
+    generateCulturalMatrix.mockResolvedValueOnce({
+      ...mockMatrix,
+      moments: Array.from({ length: 6 }, (_, index) => ({
+        ...mockMatrix.moments[0],
+        text: `[KNOWN] Signal ${index + 1}`,
+      })),
+    });
+
+    render(<CulturalArchaeologist />);
+    fireEvent.change(await screen.findByPlaceholderText('Primary Audience (Required) *'), {
+      target: { value: 'Gen Z sneaker culture' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+
+    const momentsCard = within(await screen.findByTestId('matrix-card-moments'));
+    expect(momentsCard.getAllByRole('listitem')).toHaveLength(4);
+
+    for (const [format, exportMock] of [
+      ['pdf', exportBrandAtlasDocumentToPdf],
+      ['pptx', exportBrandAtlasDocumentToPptx],
+    ] as const) {
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(format, 'i') }));
+      await waitFor(() => expect(exportMock).toHaveBeenCalledTimes(1));
+      const document = exportMock.mock.calls[0][0];
+      const momentsSection = document.sections.find((section: { title: string }) => section.title === 'Moments');
+      expect(momentsSection.cards).toHaveLength(6);
+      expect(momentsSection.cards[5].lines).toContain('[KNOWN] Signal 6');
+    }
+    expect(momentsCard.getAllByRole('listitem')).toHaveLength(4);
   });
 
   it('shows per-section refresh for incomplete results and reruns a fresh search when clicked', async () => {
@@ -2053,6 +2128,150 @@ describe('CulturalArchaeologist', () => {
     await screen.findByText('Real World Examples');
     expect(screen.queryByText('Provided Evidence Digest')).not.toBeInTheDocument();
     expect(screen.queryByTestId('deep-dive-real-world-source-link-desktop-0')).not.toBeInTheDocument();
+  });
+
+  it('searches existing results and the web with accessible progress and safe inline citations', async () => {
+    let finishAnswer: (value: unknown) => void;
+    askMatrixQuestion.mockImplementationOnce(() => new Promise((resolve) => { finishAnswer = resolve; }));
+
+    render(<CulturalArchaeologist />);
+    fireEvent.change(await screen.findByPlaceholderText('Primary Audience (Required) *'), {
+      target: { value: 'Gen Z sneaker culture' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+    const askInput = await screen.findByTestId('ask-question-input');
+    expect(screen.getByTestId('ask-question-help')).toHaveTextContent(/existing results and the web/i);
+    fireEvent.change(askInput, { target: { value: 'What has changed recently?' } });
+    fireEvent.click(screen.getByRole('button', { name: /^ask$/i }));
+
+    const progress = screen.getByTestId('ask-loading-status');
+    expect(progress).toHaveAttribute('role', 'status');
+    expect(progress).toHaveTextContent(/searching.*results.*web/i);
+    expect(askInput).toBeDisabled();
+    await act(async () => finishAnswer({
+      answer: '[KNOWN] New evidence supports the audience findings [1]. [INFERRED] Another perspective [2] [3].',
+      relevantInsights: ['[KNOWN] First signal'],
+      sources: [
+        { title: 'Recent Reuters research', url: 'https://www.reuters.com/recent' },
+        { title: 'Unsafe source', url: 'javascript:alert(1)' },
+        { title: 'Culture study', url: 'https://example.org/study' },
+      ],
+      webSearchStatus: 'completed',
+    }));
+
+    const answer = await screen.findByTestId('ask-answer-card');
+    expect(within(answer).getByRole('link', { name: 'Source 1: Recent Reuters research' }))
+      .toHaveAttribute('href', 'https://www.reuters.com/recent');
+    expect(within(answer).getByRole('link', { name: 'Source 3: Culture study' }))
+      .toHaveAttribute('href', 'https://example.org/study');
+    expect(within(answer).queryByRole('link', { name: /Unsafe source/i })).not.toBeInTheDocument();
+    const sources = within(answer).getByTestId('ask-answer-sources');
+    expect(within(sources).getByRole('link', { name: '[1] Recent Reuters research' }))
+      .toHaveAttribute('rel', 'noopener noreferrer');
+    expect(within(sources).getByRole('link', { name: '[3] Culture study' })).toBeInTheDocument();
+    expect(within(answer).getByTestId('ask-answer-sentence-0-0')).toHaveTextContent('known');
+    expect(screen.queryByTestId('ask-loading-status')).not.toBeInTheDocument();
+  });
+
+  it('explains unavailable web search and retries the question while clearing the previous answer', async () => {
+    askMatrixQuestion.mockResolvedValueOnce({
+      answer: 'Existing audience results indicate community matters.',
+      relevantInsights: [],
+      sources: [],
+      webSearchStatus: 'unavailable',
+    });
+    let finishRetry: (value: unknown) => void;
+    askMatrixQuestion.mockImplementationOnce(() => new Promise((resolve) => { finishRetry = resolve; }));
+
+    render(<CulturalArchaeologist />);
+    fireEvent.change(await screen.findByPlaceholderText('Primary Audience (Required) *'), {
+      target: { value: 'Gen Z sneaker culture' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+    fireEvent.change(await screen.findByPlaceholderText(/Ask a question about this audience/i), {
+      target: { value: 'What drives community now?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^ask$/i }));
+
+    const warning = await screen.findByTestId('ask-web-search-warning');
+    expect(warning).toHaveTextContent(/web search.*unavailable/i);
+    expect(warning).toHaveTextContent(/existing results/i);
+    fireEvent.click(within(warning).getByRole('button', { name: /retry web search/i }));
+    expect(screen.queryByTestId('ask-answer-card')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ask-web-search-warning')).not.toBeInTheDocument();
+    await act(async () => finishRetry({
+      answer: 'Fresh research confirms this finding [1].',
+      relevantInsights: [],
+      sources: [{ title: 'Community research', url: 'https://example.org/community' }],
+      webSearchStatus: 'completed',
+    }));
+    expect(await screen.findByRole('link', { name: 'Source 1: Community research' })).toBeInTheDocument();
+    expect(askMatrixQuestion).toHaveBeenCalledTimes(2);
+    expect(askMatrixQuestion.mock.calls[1][1]).toBe('What drives community now?');
+  });
+
+  it('clears stale Ask sources on a new question and offers recovery after a failed answer', async () => {
+    askMatrixQuestion.mockResolvedValueOnce({
+      answer: 'Earlier evidence [1].',
+      relevantInsights: ['[KNOWN] First signal'],
+      sources: [{ title: 'Earlier source', url: 'https://example.org/earlier' }],
+      webSearchStatus: 'completed',
+    });
+    let failAnswer: (error: Error) => void;
+    askMatrixQuestion.mockImplementationOnce(() => new Promise((_resolve, reject) => { failAnswer = reject; }));
+
+    render(<CulturalArchaeologist />);
+    fireEvent.change(await screen.findByPlaceholderText('Primary Audience (Required) *'), {
+      target: { value: 'Gen Z sneaker culture' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+    const askInput = await screen.findByPlaceholderText(/Ask a question about this audience/i);
+    fireEvent.change(askInput, { target: { value: 'First question' } });
+    fireEvent.click(screen.getByRole('button', { name: /^ask$/i }));
+    await screen.findByRole('link', { name: 'Source 1: Earlier source' });
+    fireEvent.change(askInput, { target: { value: 'New question' } });
+    fireEvent.click(screen.getByRole('button', { name: /^ask$/i }));
+    expect(screen.queryByTestId('ask-answer-card')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ask-answer-sources')).not.toBeInTheDocument();
+
+    await act(async () => failAnswer(new Error('Network connection unavailable')));
+    const error = await screen.findByTestId('ask-question-error');
+    expect(error).toHaveAttribute('role', 'alert');
+    expect(within(error).getByRole('button', { name: /retry question/i })).toBeInTheDocument();
+    expect(screen.queryByTestId('ask-answer-card')).not.toBeInTheDocument();
+    fireEvent.click(within(error).getByRole('button', { name: /retry question/i }));
+    expect(await screen.findByTestId('ask-answer-card')).toHaveTextContent('ok');
+    expect(screen.queryByTestId('ask-question-error')).not.toBeInTheDocument();
+  });
+
+  it('discards a pending Ask answer after starting a new search', async () => {
+    let finishAnswer: (value: unknown) => void;
+    askMatrixQuestion.mockImplementationOnce(() => new Promise((resolve) => { finishAnswer = resolve; }));
+    render(<CulturalArchaeologist />);
+    fireEvent.change(await screen.findByPlaceholderText('Primary Audience (Required) *'), {
+      target: { value: 'Gen Z sneaker culture' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+    fireEvent.change(await screen.findByPlaceholderText(/Ask a question about this audience/i), {
+      target: { value: 'Original question' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^ask$/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: /^new search$/i })[0]);
+    fireEvent.change(await screen.findByPlaceholderText('Primary Audience (Required) *'), {
+      target: { value: 'New audience' },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /generate insights/i }));
+    const newAskInput = await screen.findByPlaceholderText(/Ask a question about this audience/i);
+    await act(async () => finishAnswer({
+      answer: 'Outdated answer [1].',
+      relevantInsights: [],
+      sources: [{ title: 'Outdated source', url: 'https://example.org/old' }],
+      webSearchStatus: 'completed',
+    }));
+    expect(screen.queryByTestId('ask-answer-card')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ask-answer-sources')).not.toBeInTheDocument();
+    expect(newAskInput).toHaveValue('');
+    expect(newAskInput).toBeEnabled();
   });
 
   it('attaches ask-answer evidence chips to the specific sentence they belong to', async () => {

@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { compile } from 'tailwindcss';
 import { Accordion } from './Accordion';
 
 describe('Accordion', () => {
@@ -26,5 +28,26 @@ describe('Accordion', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /second section/i }));
     expect(screen.getByText('Second content')).not.toBeVisible();
+  });
+
+  it('keeps category toggles interactive when app heading styles disable pointer events', async () => {
+    const style = document.createElement('style');
+    const appStyles = readFileSync('src/index.css', 'utf8');
+    const utilities = await compile('@tailwind utilities;');
+    style.textContent = `${appStyles}\n${utilities.build(['pointer-events-auto'])}`;
+    document.head.append(style);
+
+    try {
+      render(<Accordion items={items} />);
+      const toggle = screen.getByRole('button', { name: /second section/i });
+
+      expect(getComputedStyle(toggle.closest('h4')!).pointerEvents).toBe('none');
+      expect(getComputedStyle(toggle).pointerEvents).toBe('auto');
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByText('Second content')).toBeVisible();
+    } finally {
+      style.remove();
+    }
   });
 });

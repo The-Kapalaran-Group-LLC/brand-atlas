@@ -30,6 +30,7 @@ import {
   type RawLogoCandidate,
 } from './extract-assets';
 import { extractBrandWebContext, type BrandWebContextResult } from './brand-web-context';
+import { createArchaeologistWebSearchHandler } from './archaeologist-web-search';
 import {
   buildLanguageMethodologySnapshotDigest,
   fetchLanguageMethodologyComparison,
@@ -1309,6 +1310,8 @@ app.get('/api/brand-web-context', async (req, res) => {
     return res.status(502).json({ error: `Failed to extract brand web context: ${message}` });
   }
 });
+
+app.post('/api/archaeologist/web-search', createArchaeologistWebSearchHandler());
 
 app.get('/api/search', async (req, res) => {
   const query = req.query.q as string;

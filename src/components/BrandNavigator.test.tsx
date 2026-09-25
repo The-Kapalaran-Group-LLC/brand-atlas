@@ -1369,7 +1369,7 @@ describe('BrandNavigator', () => {
             {
               headline: 'Patagonia expands retail footprint',
               url: 'https://www.foxnews.com/lifestyle/patagonia-expands-retail-footprint',
-              publishedAt: '2026-03-10T10:00:00.000Z',
+              publishedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
               outlet: 'Fox News',
             },
           ],
