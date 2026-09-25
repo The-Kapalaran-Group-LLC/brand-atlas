@@ -1,7 +1,7 @@
 import { AzureOpenAI } from 'openai';
 import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
-import { fetchSubredditQuotes, fetchSubredditQuotesFresh } from './fetchSubredditQuotes';
+import { fetchSubredditQuotes, fetchSubredditQuotesFresh } from './fetchSubredditQuotes.js';
 
 const BING_SEARCH_ENDPOINT = 'https://api.bing.microsoft.com/v7.0/search';
 const GOOGLE_SEARCH_ENDPOINT = 'https://www.googleapis.com/customsearch/v1';

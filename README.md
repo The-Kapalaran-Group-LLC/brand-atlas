@@ -44,6 +44,12 @@ For the feedback chat widget (bottom-right popup), configure:
 
 The frontend runs on `http://localhost:3000` and the Express server runs on `http://localhost:3001`.
 
+### Web search on Vercel
+
+Vercel runs the handlers in `api/`; it does not start `server/index.ts`. Deploy the frontend and these functions together: `/api/archaeologist/web-search`, `/api/search`, and `/api/reddit`. The Ask endpoint uses Azure web search directly; general research also uses Azure when Google/Bing search is unavailable.
+
+Set `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, and `AZURE_OPENAI_DEPLOYMENT` (or `AZURE_OPENAI_DEPLOYMENT_NAME`) in the Vercel environment used for deployment. The configured deployment must support Responses API web search. Function duration is configured in `vercel.json`. API handlers are included in type checking and a native Node ESM runtime test, so local Vite import resolution cannot hide broken deployment imports.
+
 ## Validation
 
 - Run tests with `npm test`.

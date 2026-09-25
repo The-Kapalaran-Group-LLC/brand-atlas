@@ -31,6 +31,7 @@ import {
 } from './extract-assets';
 import { extractBrandWebContext, type BrandWebContextResult } from './brand-web-context';
 import { createArchaeologistWebSearchHandler } from './archaeologist-web-search';
+import searchApiHandler from '../api/search.js';
 import {
   buildLanguageMethodologySnapshotDigest,
   fetchLanguageMethodologyComparison,
@@ -1313,44 +1314,7 @@ app.get('/api/brand-web-context', async (req, res) => {
 
 app.post('/api/archaeologist/web-search', createArchaeologistWebSearchHandler());
 
-app.get('/api/search', async (req, res) => {
-  const query = req.query.q as string;
-  const mode = String(req.query.mode || '').trim().toLowerCase();
-  const providerRaw = String(req.query.provider || '').trim().toLowerCase();
-  const provider = providerRaw === 'google' || providerRaw === 'bing' ? providerRaw : undefined;
-  if (!query) return res.status(400).json({ error: 'Missing query' });
-  try {
-    const context = await fetchAudienceContext(query, { behaviorFocus: mode === 'behaviors', provider });
-    res.json({ context });
-  } catch (err: any) {
-    const primaryMessage = err?.message || 'Search provider unavailable.';
-    console.warn('[search] Primary web search failed, attempting GPT fallback.', {
-      query,
-      mode,
-      provider: provider || 'auto',
-      error: primaryMessage,
-    });
-    try {
-      const gptContext = await fetchAudienceContextWithGptSearch(query, 'current');
-      return res.json({
-        context: gptContext,
-        fallback: 'gpt',
-      });
-    } catch (fallbackErr: any) {
-      const fallbackMessage = fallbackErr?.message || 'GPT fallback unavailable.';
-      console.error('[search] GPT fallback failed.', {
-        query,
-        mode,
-        provider: provider || 'auto',
-        error: fallbackMessage,
-      });
-      return res.json({
-        context: `No web results returned for: "${query}".`,
-        fallback: 'none',
-      });
-    }
-  }
-});
+app.get('/api/search', searchApiHandler);
 
 app.get('/api/cultural-methodology-compare', async (req, res) => {
   const audience = (Array.isArray(req.query.audience) ? req.query.audience[0] : req.query.audience) as string;
