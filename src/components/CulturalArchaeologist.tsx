@@ -5638,7 +5638,7 @@ export default function CulturalArchaeologist() {
             <p className="subheader-copy text-xs text-zinc-400 text-center mt-8">
               AI models can make mistakes. Always double check your work. Remember to think critically.
               <br />
-              Powered by OpenAI's GPT-5.6-Sol.
+              Powered by OpenAI's GPT-6-Astra.
             </p>
             <RecentResultsLibrary<CulturalRecentResult>
               mode={APP_RECENT_RESULTS_MODES.CULTURAL_ARCHAEOLOGIST}
