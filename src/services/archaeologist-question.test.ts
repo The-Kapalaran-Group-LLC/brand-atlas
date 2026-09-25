@@ -60,6 +60,47 @@ describe('Ask the Archaeologist web research', () => {
     expect(result).toMatchObject({ answer, sources, webSearchStatus: 'completed', relevantInsights: [matrix.moments[0].text] });
   });
 
+  it.each([true, false])('requests a scannable answer with web research available: %s', async (webAvailable) => {
+    if (!webAvailable) vi.mocked(fetch).mockResolvedValue({ ok: false, status: 503 } as Response);
+
+    await askMatrixQuestion(matrix, 'Why are running clubs growing?');
+
+    const request = createCompletion.mock.calls.at(-1)![0];
+    const systemPrompt = request.messages.find((message) => message.role === 'system').content;
+    expect(systemPrompt).toMatch(/start with.*direct answer.*1.?2 short sentences/i);
+    expect(systemPrompt).toContain('##');
+    expect(systemPrompt).toMatch(/bullet.*numbered lists/i);
+    expect(systemPrompt).toContain('**bold**');
+    expect(systemPrompt).toMatch(/simple questions.*short paragraph/i);
+    expect(systemPrompt).toMatch(/caveats.*brief.*natural language/i);
+    expect(systemPrompt).toMatch(/exact insight text.*only in.*relevantInsights/i);
+    expect(systemPrompt).toMatch(/do not.*sources section/i);
+    expect(systemPrompt).not.toContain('Connect present signals to at least one historical or cross-industry parallel.');
+  });
+
+  it('preserves Markdown formatting and verified citations while filtering unsupported references and insights', async () => {
+    const formattedAnswer = [
+      '**Running clubs** offer an affordable way to meet people [1].',
+      '',
+      '## Why they appeal',
+      '',
+      '- **Community:** Shared activity makes socializing easier [1].',
+      '- **Cost:** Participation can be affordable [7].',
+      '',
+      'The cultural analysis suggests growing interest; it does not establish a universal trend.',
+    ].join('\n');
+    createCompletion.mockResolvedValue({ choices: [{ message: { content: JSON.stringify({
+      answer: formattedAnswer,
+      relevantInsights: [matrix.moments[0].text, 'Invented insight', matrix.moments[0].text],
+    }) } }] });
+
+    const result = await askMatrixQuestion(matrix, 'Why are running clubs growing?');
+
+    expect(result.answer).toBe(formattedAnswer.replace('[7]', ''));
+    expect(result.sources).toEqual(sources);
+    expect(result.relevantInsights).toEqual([matrix.moments[0].text]);
+  });
+
   it.each(['http', 'network', 'malformed', 'empty', 'unsafe'])('answers from existing results and reports unavailable search on %s failure', async (failure) => {
     const fetchMock = vi.mocked(fetch);
     if (failure === 'network') fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));

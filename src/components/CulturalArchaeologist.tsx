@@ -44,6 +44,7 @@ import {
   saveAudienceHistoryEntry,
 } from '../services/audience-history';
 import { SourceLinkRow } from './SourceLinkRow';
+import { AskAnswer, type AskAnswerSource } from './AskAnswer';
 import { MobileTwoLineSubcopy } from './MobileTwoLineSubcopy';
 import { MobileResultsNav } from './MobileResultsNav';
 import { ShowThinkingDropdown } from './ShowThinkingDropdown';
@@ -601,97 +602,6 @@ const normalizeDeepDiveSourceLinks = (
       };
     })
     .filter((source): source is RealWorldExampleSourceLink => Boolean(source));
-};
-
-type AskAnswerSection = {
-  title?: string;
-  sentences: Array<{
-    text: string;
-    labels: EvidenceTagLabel[];
-  }>;
-};
-
-type AskAnswerSource = { title: string; url: string };
-
-const renderAskAnswerCitations = (text: string, sources: Array<AskAnswerSource | null>): React.ReactNode => (
-  text.split(/(\[\d+\])/g).map((part, index) => {
-    const citation = part.match(/^\[(\d+)\]$/);
-    const sourceNumber = citation ? Number(citation[1]) : 0;
-    const source = sources[sourceNumber - 1];
-    if (!source) return part;
-    return (
-      <a
-        key={`citation-${index}`}
-        href={source.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={`Source ${sourceNumber}: ${source.title}`}
-        title={source.title}
-        data-testid={`ask-inline-citation-${sourceNumber}`}
-        className="font-medium text-indigo-700 underline decoration-indigo-300 underline-offset-2 hover:text-indigo-900"
-      >
-        {part}
-      </a>
-    );
-  })
-);
-
-const splitIntoAskAnswerSentences = (value: string): string[] => {
-  if (!value || !value.trim()) return [];
-  const normalized = value.replace(/\r\n/g, '\n').replace(/\n+/g, ' ').trim();
-  if (!normalized) return [];
-  const parts = normalized
-    .split(/(?<=[.!?])\s+/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-  return parts.length > 0 ? parts : [normalized];
-};
-
-const constrainSentenceEvidenceLabels = (labels: EvidenceTagLabel[]): EvidenceTagLabel[] => {
-  if (labels.length <= 1) return labels;
-  // Keep exactly one evidence chip per sentence to avoid contradictory multi-tagging.
-  return [labels[0]];
-};
-
-const parseAskAnswerSentences = (value: string): AskAnswerSection['sentences'] => {
-  const sentenceParts = splitIntoAskAnswerSentences(value);
-  return sentenceParts
-    .map((sentence) => {
-      const parsed = extractEvidenceTags(sentence);
-      return {
-        text: parsed.cleanText,
-        labels: constrainSentenceEvidenceLabels(parsed.labels),
-      };
-    })
-    .filter((sentence) => sentence.text);
-};
-
-const structureAskAnswer = (value: string): AskAnswerSection[] => {
-  if (!value || !value.trim()) {
-    return [];
-  }
-
-  const normalized = value.replace(/\r\n/g, '\n').trim();
-  const byOptions = normalized
-    .split(/(?=\bOption\s+\d+\s*:)/gi)
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  const baseChunks = byOptions.length > 1 ? byOptions : normalized.split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean);
-
-  return baseChunks.map((chunk) => {
-    const optionMatch = chunk.match(/^(Option\s+\d+)\s*:\s*(.*)$/is);
-    if (optionMatch) {
-      return {
-        title: optionMatch[1],
-        sentences: parseAskAnswerSentences(optionMatch[2].trim()),
-      };
-    }
-
-    return {
-      sentences: parseAskAnswerSentences(chunk),
-    };
-  }).filter((section) => section.sentences.length > 0);
 };
 
 const evidenceLabelChipClass = (label: EvidenceTagLabel): string => {
@@ -1556,7 +1466,6 @@ export default function CulturalArchaeologist() {
     [segmentationResult, segmentationCustomInfoByIndex]
   );
   const hasSegmentationCustomizationInstructions = segmentationCustomizationInstructions.length > 0;
-  const structuredMatrixAnswer = useMemo(() => structureAskAnswer(matrixAnswer), [matrixAnswer]);
   const culturalResultNavItems = useMemo(() => {
     if (!matrix) {
       return [];
@@ -5910,11 +5819,11 @@ export default function CulturalArchaeologist() {
                 items={culturalResultNavItems}
               />
               <SectionErrorBoundary title="Ask the Archaeologist">
-              <div id="cultural-results-ask" data-testid="ask-archaeologist" className="mb-10 bg-indigo-50 rounded-3xl p-6 md:p-8 border border-indigo-100 shadow-sm no-print">
-                <h3 className="text-xl font-bold text-indigo-900 mb-2 flex items-center gap-2">
-                  <Search className="w-6 h-6" /> Ask the Archaeologist
+              <div id="cultural-results-ask" data-testid="ask-archaeologist" className="mb-10 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-6 md:p-8 no-print">
+                <h3 className="mb-2 flex items-center gap-2 text-xl font-semibold tracking-tight text-zinc-900">
+                  <Search aria-hidden="true" className="h-5 w-5 text-indigo-500" /> Ask the Archaeologist
                 </h3>
-                <p id="ask-question-help" data-testid="ask-question-help" className="mb-4 text-sm text-indigo-900/75">
+                <p id="ask-question-help" data-testid="ask-question-help" className="mb-5 text-sm leading-6 text-zinc-500">
                   {isSegmentationTabActive && isSegmentationAuthorized
                     ? 'Describe how you want to refine the audience segments.'
                     : 'Search your existing results and the web for answers with linked sources.'}
@@ -5928,7 +5837,7 @@ export default function CulturalArchaeologist() {
                     value={matrixQuestion}
                     onChange={(e) => setMatrixQuestion(e.target.value.slice(0, 400))}
                     placeholder="Ask a question about this audience (e.g., what are their main anxieties?)"
-                    className="flex-1 px-5 py-4 rounded-2xl border border-indigo-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-zinc-900 shadow-sm text-sm"
+                    className="min-w-0 flex-1 rounded-2xl border border-zinc-200 bg-zinc-50/70 px-5 py-4 text-sm text-zinc-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15"
                     onKeyDown={(e) => e.key === 'Enter' && handleAskQuestion()}
                     disabled={isAskingQuestion}
                   />
@@ -5967,61 +5876,7 @@ export default function CulturalArchaeologist() {
                   </div>
                 )}
                 {matrixAnswer && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    data-testid="ask-answer-card"
-                    className="mt-6 p-6 bg-white rounded-2xl border border-indigo-100 text-zinc-700 shadow-sm leading-relaxed"
-                  >
-                    <div className="space-y-4">
-                      {structuredMatrixAnswer.length > 0 ? (
-                        structuredMatrixAnswer.map((section, index) => (
-                          <div key={`ask-section-${index}`} className={section.title ? 'rounded-xl border border-zinc-200 bg-zinc-50 p-4' : ''}>
-                            {section.title && (
-                              <h4 className="text-sm font-semibold text-zinc-900 mb-2">{section.title}</h4>
-                            )}
-                            <div className="text-zinc-700 text-[15px] leading-7 whitespace-pre-wrap">
-                              {section.sentences.map((sentence, sentenceIndex) => (
-                                <span
-                                  key={`ask-sentence-${index}-${sentenceIndex}`}
-                                  data-testid={`ask-answer-sentence-${index}-${sentenceIndex}`}
-                                  className="inline"
-                                >
-                                  {renderAskAnswerCitations(sentence.text, matrixAnswerSources)}
-                                  {sentence.labels.map((label) => (
-                                    <span
-                                      key={`ask-label-${index}-${sentenceIndex}-${label}`}
-                                      data-testid={`ask-answer-chip-${index}-${sentenceIndex}-${label}`}
-                                      className={`inline-flex items-center h-[18px] ml-2 px-1.5 leading-none text-[10px] uppercase tracking-wider font-semibold rounded-md align-middle ${evidenceLabelChipClass(label)}`}
-                                    >
-                                      {label}
-                                    </span>
-                                  ))}
-                                  {sentenceIndex < section.sentences.length - 1 ? ' ' : ''}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-zinc-700 text-[15px] leading-7 whitespace-pre-wrap">{renderAskAnswerCitations(matrixAnswer, matrixAnswerSources)}</p>
-                      )}
-                    </div>
-                    {matrixAnswerSources.some(Boolean) && (
-                      <div data-testid="ask-answer-sources" className="mt-5 border-t border-zinc-100 pt-4">
-                        <h4 className="mb-2 text-sm font-semibold text-zinc-900">Sources</h4>
-                        <ul className="space-y-2 text-sm">
-                          {matrixAnswerSources.map((source, index) => source && (
-                            <li key={`${source.url}-${index}`}>
-                              <a href={source.url} target="_blank" rel="noopener noreferrer" data-testid={`ask-source-${index + 1}`} className="text-indigo-700 underline decoration-indigo-200 underline-offset-2 hover:text-indigo-900">
-                                [{index + 1}] {source.title}
-                              </a>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </motion.div>
+                  <AskAnswer answer={matrixAnswer} sources={matrixAnswerSources} />
                 )}
               </div>
               </SectionErrorBoundary>

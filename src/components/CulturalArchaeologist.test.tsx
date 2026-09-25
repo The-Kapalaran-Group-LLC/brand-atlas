@@ -2169,7 +2169,7 @@ describe('CulturalArchaeologist', () => {
     expect(within(sources).getByRole('link', { name: '[1] Recent Reuters research' }))
       .toHaveAttribute('rel', 'noopener noreferrer');
     expect(within(sources).getByRole('link', { name: '[3] Culture study' })).toBeInTheDocument();
-    expect(within(answer).getByTestId('ask-answer-sentence-0-0')).toHaveTextContent('known');
+    expect(within(answer).getByTestId('ask-evidence-known').nextSibling?.textContent).toContain('New evidence supports the audience findings');
     expect(screen.queryByTestId('ask-loading-status')).not.toBeInTheDocument();
   });
 
@@ -2291,16 +2291,36 @@ describe('CulturalArchaeologist', () => {
     fireEvent.click(screen.getByRole('button', { name: /^ask$/i }));
 
     const askCard = await screen.findByTestId('ask-answer-card');
-    const sentenceOne = within(askCard).getByTestId('ask-answer-sentence-0-0');
-    const sentenceTwo = within(askCard).getByTestId('ask-answer-sentence-0-1');
+    const known = within(askCard).getByTestId('ask-evidence-known');
+    const inferred = within(askCard).getByTestId('ask-evidence-inferred');
 
-    expect(sentenceOne).toHaveTextContent('Gen Z is using AI pragmatically in school and work contexts.');
-    expect(within(sentenceOne).getByText(/^known$/i)).toBeInTheDocument();
-    expect(within(sentenceOne).queryByText(/^inferred$/i)).not.toBeInTheDocument();
+    expect(known.nextSibling?.textContent).toContain('Gen Z is using AI pragmatically in school and work contexts.');
+    expect(known.nextSibling?.textContent).not.toContain('Direct cross-generation');
+    expect(inferred.nextSibling?.textContent).toContain('Direct cross-generation preference claims are not supported by this data.');
+    expect(inferred.nextSibling?.textContent).not.toContain('Gen Z is using AI');
+  });
 
-    expect(sentenceTwo).toHaveTextContent('Direct cross-generation preference claims are not supported by this data.');
-    expect(within(sentenceTwo).getByText(/^inferred$/i)).toBeInTheDocument();
-    expect(within(sentenceTwo).queryByText(/^known$/i)).not.toBeInTheDocument();
+  it('shows a formatted AI overview with distinct answer sections and source cards', async () => {
+    askMatrixQuestion.mockResolvedValueOnce({
+      answer: '**Community** is a major motivation [1].\n\n## What matters most\n\n- **Connection:** Shared activities build relationships [1].\n- **Access:** Low costs make participation easier.',
+      relevantInsights: [],
+      sources: [{ title: 'Community research', url: 'https://example.org/community' }],
+      webSearchStatus: 'completed',
+    });
+    render(<CulturalArchaeologist />);
+    fireEvent.change(await screen.findByPlaceholderText('Primary Audience (Required) *'), {
+      target: { value: 'Gen Z sneaker culture' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate insights/i }));
+    fireEvent.change(await screen.findByTestId('ask-question-input'), { target: { value: 'What motivates them?' } });
+    fireEvent.click(screen.getByRole('button', { name: /^ask$/i }));
+
+    const card = await screen.findByTestId('ask-answer-card');
+    expect(within(card).getByRole('heading', { name: 'AI overview' })).toBeInTheDocument();
+    expect(within(card).getByRole('heading', { name: 'What matters most' })).toBeInTheDocument();
+    expect(within(card).getByTestId('ask-answer-content').querySelectorAll('li')).toHaveLength(2);
+    expect(within(card).getByTestId('ask-source-1')).toHaveTextContent('example.org');
+    expect(within(card).getByTestId('ask-answer-content')).not.toHaveTextContent('**');
   });
 
   it('does not show methodology comparison launchers in the research view navigation', async () => {
