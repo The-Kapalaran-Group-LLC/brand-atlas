@@ -90,4 +90,21 @@ describe('Ask the Archaeologist web research', () => {
     expect(result.answer).toContain('[1]');
     expect(result.answer).not.toContain('[8]');
   });
+
+  it('uses the deployment default temperature when composing a web-grounded answer', async () => {
+    createCompletion.mockImplementation(async (request) => {
+      if (request.temperature !== undefined) {
+        throw Object.assign(new Error('Only the default temperature is supported by this model.'), {
+          status: 400, code: 'unsupported_value', param: 'temperature',
+        });
+      }
+      return { choices: [{ message: { content: JSON.stringify({ answer, relevantInsights: [] }) } }] };
+    });
+
+    await expect(askMatrixQuestion(matrix, 'What is happening now?')).resolves.toMatchObject({
+      answer, sources, webSearchStatus: 'completed',
+    });
+    expect(createCompletion).toHaveBeenCalledTimes(1);
+    expect(createCompletion.mock.calls[0][0]).not.toHaveProperty('temperature');
+  });
 });

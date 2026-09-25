@@ -1231,6 +1231,7 @@ async function runStructuredCall<T extends z.ZodTypeAny>(params: {
   mode: SessionMode;
   outputType: OutputType;
   modelTier?: ModelTier;
+  useDefaultTemperature?: boolean;
   qualityGate?: (parsed: z.infer<T>) => boolean;
   maxRetries?: number;
 }): Promise<z.infer<T>> {
@@ -1240,7 +1241,7 @@ async function runStructuredCall<T extends z.ZodTypeAny>(params: {
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
       const response = await createChatCompletionWithFallback({
-        temperature: outputTemperature(params.outputType),
+        ...(params.useDefaultTemperature ? {} : { temperature: outputTemperature(params.outputType) }),
         messages: params.messages,
         response_format: zodResponseFormat(params.schema, params.schemaName),
       }, params.modelTier || 'default');
@@ -2894,6 +2895,8 @@ export async function askMatrixQuestion(
     schemaName: 'matrix_answer',
     mode: 'matrix-qa',
     outputType: 'analysis',
+    // The configured reasoning deployment only supports its default sampling temperature.
+    useDefaultTemperature: true,
     messages: [
       {
         role: 'system',
